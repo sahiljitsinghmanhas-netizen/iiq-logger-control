@@ -84,10 +84,20 @@
     // ------------------------------------------------------------------
 
     function xsrf() {
-        if (window.SailPoint && typeof window.SailPoint === 'object' && window.SailPoint.XSRF_TOKEN) {
-            return window.SailPoint.XSRF_TOKEN;
-        }
-        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        // window.SailPoint is a FUNCTION in IIQ 8.5, not a plain object, and it
+        // carries the token as a property. Guarding on typeof === 'object'
+        // meant the token was never found, so no header was sent and every REST
+        // call came back as the login page - which this code then reported as
+        // "session expired" on a perfectly good session.
+        try {
+            if (window.SailPoint && window.SailPoint.XSRF_TOKEN) {
+                return window.SailPoint.XSRF_TOKEN;
+            }
+        } catch (e) { /* fall through to the cookie */ }
+
+        // And the cookie is CSRF-TOKEN, not XSRF-TOKEN. Both are accepted here
+        // so this keeps working whichever name a given IIQ build uses.
+        var m = document.cookie.match(/(?:^|;\s*)[XC]SRF-TOKEN=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : null;
     }
 
@@ -96,6 +106,12 @@
         // session sends IIQ into a redirect loop to exception.jsf and fetch
         // dies with ERR_TOO_MANY_REDIRECTS instead of something diagnosable.
         var opts = { method: method, headers: {}, credentials: 'same-origin', redirect: 'manual' };
+        // IIQ accepts either of these to treat the call as an API request. With
+        // neither it hands back the login page as HTML, which this code then
+        // reports as "session expired" - a confusing lie when the session is
+        // perfectly good and only the token lookup came up empty. Sending both
+        // means the API works even if window.SailPoint.XSRF_TOKEN is missing.
+        opts.headers['X-Requested-With'] = 'XMLHttpRequest';
         var t = xsrf();
         if (t) opts.headers['X-XSRF-TOKEN'] = t;
         if (body !== undefined) {

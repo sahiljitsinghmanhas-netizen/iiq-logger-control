@@ -18,6 +18,8 @@ to production, which developers usually should not.
 
 This plugin turns that into: pick a logger, pick a level, pick how long, click.
 
+![The Logger Manager page](docs/screenshots/logger-manager.png)
+
 ---
 
 ## How it works
@@ -385,7 +387,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.17.0.zip` from the
+Download `TurnOnLoggers-2.18.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

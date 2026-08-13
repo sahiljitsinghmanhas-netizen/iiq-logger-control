@@ -2,3 +2,5 @@
 build/
 lib/
 *.zip
+docs/screenshots/help.png
+docs/screenshots/configure.png
