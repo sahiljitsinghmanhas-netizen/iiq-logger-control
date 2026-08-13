@@ -77,7 +77,7 @@
 
 <h2 id="what">What this page does<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/logger-manager.png" alt="The Logger Manager page: the Turn on a logger form, Overrides in effect, Loggers live in the JVM with per-host tables, and the Hosts table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/01-logger-manager.png" alt="The Logger Manager page: the Turn on a logger form, Overrides in effect, Loggers live in the JVM with per-host tables, and the Hosts table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>The page in full.</figcaption>
 </figure>
 <p>Sets logger levels across every host in the deployment without shell access, without editing
@@ -88,6 +88,16 @@ reconciles itself against it on a timer - which is also how a host that restarts
 overrides back up.</p>
 
 <h2 id="sections">The sections<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/03-overrides.png" alt="Overrides in effect showing three overrides with their level, hosts, expiry and confirming hosts" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Overrides in effect. Live on shows which hosts have actually confirmed each one.</figcaption>
+</figure>
+
+<figure>
+  <img src="img/02-turn-on-form.png" alt="The Turn on a logger form: logger name, level, expiry, hosts and note" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>The form. Every field carries its own hint - the logger box is free text, the dropdown only suggests.</figcaption>
+</figure>
+
 <figure>
 <svg viewBox="0 0 640 300" width="100%" height="auto" role="img"
      aria-label="Diagram of the page layout: header, then Turn on a logger, Overrides in effect, Loggers live in the JVM, and Hosts">
@@ -151,6 +161,11 @@ overrides; the third is the truth of what log4j2 has configured, whoever put it 
 </dl>
 
 <h2 id="sources">Where a logger came from<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/04-live-loggers.png" alt="Loggers live in the JVM with source tags, file levels and per-row actions" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Every live logger with its source. root and sailpoint are in the untouchable list, so their controls are greyed out; net.sf.ehcache is held at OFF, shown by the green toggle.</figcaption>
+</figure>
+
 <figure>
 <svg viewBox="0 0 640 74" width="100%" height="auto" role="img"
      aria-label="The four source tags: log4j2.properties, this plugin, left over, and set at runtime">
@@ -293,6 +308,11 @@ this causes an incident.</p>
 
 <h2 id="hosts">Hosts and propagation<a class="top" href="#">top</a></h2>
 <figure>
+  <img src="img/05-hosts.png" alt="The Hosts table showing OS, JVM, state, last sync, what is applied and the log4j2 paths" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Each host reports its own OS, JVM, config path and log files - the host-specific part.</figcaption>
+</figure>
+
+<figure>
 <svg viewBox="0 0 640 250" width="100%" height="auto" role="img"
      aria-label="How a change propagates: the browser calls one host, which writes the desired state to the IIQ database; every host reconciles against it on a timer and applies levels to its own log4j2 runtime">
   <defs><style>
@@ -358,6 +378,11 @@ the same log4j2 call everywhere. What differs per host - the OS, the config file
 logs are written - is reported in the Hosts table rather than acted on.</p>
 
 <h2 id="audit">Audit<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/09-audit-search.png" alt="IIQ Advanced Analytics with Search Type set to Audit" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Advanced Analytics, Search Type Audit. Refine on Action equals Logger Manager change.</figcaption>
+</figure>
+
 <p>Every button press is recorded as an IIQ audit event under the action
 <code>LoggerManagerChange</code>: who, what happened, the logger, level, target hosts, expiry, and
 the note you typed.</p>
@@ -371,6 +396,11 @@ header.</p>
 actions that matter.</p>
 
 <h2 id="settings">Plugin settings<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/07-configure.png" alt="The plugin settings page with every setting and its help text" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>gear icon then Plugins then Logger Manager then Configure.</figcaption>
+</figure>
+
 <dl>
   <dt>Enabled</dt><dd>Master switch. Off means every host reverts to its own
   <code>log4j2.properties</code> on its next sync, without losing the stored configuration.</dd>

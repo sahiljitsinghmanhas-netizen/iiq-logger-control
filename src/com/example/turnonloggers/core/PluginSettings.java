@@ -27,6 +27,7 @@ public final class PluginSettings {
     public static final String S_MAX_TTL       = "maxTtlMinutes";
     public static final String S_ALLOW_ROOT    = "allowRootLogger";
     public static final String S_PERMANENT     = "permanentLoggers";
+    public static final String S_UNTOUCHABLE   = "untouchableLoggers";
 
     private PluginSettings() {
     }
@@ -40,6 +41,27 @@ public final class PluginSettings {
         } catch (Throwable t) {
             return "";
         }
+    }
+
+    /**
+     * Loggers this plugin refuses to touch, from the untouchableLoggers
+     * setting. Matched exactly, not by prefix - protecting "sailpoint" must not
+     * protect every logger beneath it, or the plugin would be useless.
+     */
+    public static java.util.Set<String> untouchable(SailPointContext ctx) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        String raw = getString(ctx, S_UNTOUCHABLE, "root,sailpoint");
+        if (raw == null) return out;
+        for (String s : raw.split(",")) {
+            String t = s.trim();
+            if (!t.isEmpty()) out.add(t.toLowerCase(Locale.ROOT));
+        }
+        return out;
+    }
+
+    public static boolean isUntouchable(SailPointContext ctx, String logger) {
+        if (logger == null) return false;
+        return untouchable(ctx).contains(logger.trim().toLowerCase(Locale.ROOT));
     }
 
     public static String getString(SailPointContext ctx, String name, String dflt) {

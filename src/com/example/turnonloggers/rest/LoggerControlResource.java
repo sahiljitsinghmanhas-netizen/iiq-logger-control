@@ -312,6 +312,11 @@ public class LoggerControlResource extends BasePluginResource {
 
             SailPointContext ctx = getContext();
             String target = str(body, "logger");
+            if (target != null && !target.trim().isEmpty()
+                    && PluginSettings.isUntouchable(ctx, target)) {
+                return error(Response.Status.BAD_REQUEST, target
+                        + " is in the untouchable loggers list and cannot be cleared from here.");
+            }
             LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName(), target);
             AuditWriter.log(ctx, user.getName(), "removed from the live configuration",
                     (target == null || target.trim().isEmpty()) ? "(loggers left over)" : target,
@@ -380,6 +385,7 @@ public class LoggerControlResource extends BasePluginResource {
             if (Log4jAgent.isQuieting(l)) quieting.add(l);
         }
         out.put("quietingLevels", quieting);
+        out.put("untouchableLoggers", new ArrayList<>(PluginSettings.untouchable(ctx)));
         out.put("user", user.getName());
         out.put("log4jAvailable", Log4jAgent.available());
         out.put("pluginVersion", PluginSettings.getVersion(ctx));
@@ -585,6 +591,13 @@ public class LoggerControlResource extends BasePluginResource {
         }
         if (level == null || Log4jAgent.parseLevel(level) == null) {
             return "Level must be one of " + Log4jAgent.LEVELS + ".";
+        }
+        // Greying the button out is a courtesy; this is the enforcement. A
+        // protected logger cannot be changed through the API either.
+        if (PluginSettings.isUntouchable(ctx, Log4jAgent.display(normalized))) {
+            return Log4jAgent.display(normalized) + " is in the untouchable loggers list and cannot "
+                    + "be changed from here. Edit 'Untouchable loggers' in the plugin settings if "
+                    + "you really need to.";
         }
         return null;
     }

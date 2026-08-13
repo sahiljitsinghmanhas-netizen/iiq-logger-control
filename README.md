@@ -18,7 +18,31 @@ to production, which developers usually should not.
 
 This plugin turns that into: pick a logger, pick a level, pick how long, click.
 
-![The Logger Manager page](docs/screenshots/logger-manager.png)
+![The Logger Manager page](docs/screenshots/01-logger-manager.png)
+
+<details>
+<summary>More of the page</summary>
+
+**Every logger live in the JVM, with where it came from.** `root` and `sailpoint`
+are in the untouchable list, so their controls are greyed out; `net.sf.ehcache`
+is held at `OFF`, shown by the green toggle.
+
+![Loggers live in the JVM](docs/screenshots/04-live-loggers.png)
+
+**Overrides in effect** - what this plugin is holding, and which hosts have
+confirmed it.
+
+![Overrides in effect](docs/screenshots/03-overrides.png)
+
+**Hosts** - each one reports its own OS, JVM, log4j2 config path and log files.
+
+![Hosts](docs/screenshots/05-hosts.png)
+
+**Settings.**
+
+![Plugin settings](docs/screenshots/07-configure.png)
+
+</details>
 
 ---
 
@@ -387,7 +411,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.18.0.zip` from the
+Download `TurnOnLoggers-2.19.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

@@ -149,26 +149,66 @@ try {
     }
     Invoke-Cdp $ws "Page.enable" @{} | Out-Null
 
-    $shots = @(
-        @{ file = "logger-manager.png"; url = "$BaseUrl/plugins/pluginPage.jsf?pn=TurnOnLoggers"; wait = 6 },
-        @{ file = "help.png";           url = "$BaseUrl/plugin/TurnOnLoggers/ui/help.html";       wait = 2 },
-        @{ file = "configure.png";      url = "$BaseUrl/plugins/pluginConfig.jsf#/configuration?pn=TurnOnLoggers"; wait = 5 }
-    )
+    # Element-level shots need the box model, so DOM has to be enabled.
+    Invoke-Cdp $ws "DOM.enable" @{} | Out-Null
 
-    foreach ($s in $shots) {
-        Invoke-Cdp $ws "Page.navigate" @{ url = $s.url } | Out-Null
-        Start-Sleep -Seconds $s.wait     # the page fetches /state and renders client-side
-        $metrics = Invoke-Cdp $ws "Page.getLayoutMetrics" @{}
-        $h = [int][Math]::Min($metrics.cssContentSize.height, 4000)
-        Invoke-Cdp $ws "Emulation.setDeviceMetricsOverride" @{
-            width = $Width; height = $h; deviceScaleFactor = 1; mobile = $false
-        } | Out-Null
-        $shot = Invoke-Cdp $ws "Page.captureScreenshot" @{ format = "png"; captureBeyondViewport = $true }
-        $out = Join-Path $OutDir $s.file
+    function Save-Shot {
+        param($ws, $OutDir, $File, $Selector, $Width)
+        $clip = $null
+        if ($Selector) {
+            $doc = Invoke-Cdp $ws "DOM.getDocument" @{ depth = -1 }
+            $node = Invoke-Cdp $ws "DOM.querySelector" @{ nodeId = $doc.root.nodeId; selector = $Selector }
+            if ($node.nodeId -gt 0) {
+                $box = Invoke-Cdp $ws "DOM.getBoxModel" @{ nodeId = $node.nodeId }
+                $q = $box.model.border
+                $clip = @{ x = $q[0]; y = $q[1]; width = ($q[2] - $q[0]); height = ($q[5] - $q[1]); scale = 1 }
+            } else {
+                Write-Host ("  skip {0}: no element matching {1}" -f $File, $Selector); return
+            }
+        }
+        $p = @{ format = "png"; captureBeyondViewport = $true }
+        if ($clip) { $p.clip = $clip }
+        $shot = Invoke-Cdp $ws "Page.captureScreenshot" $p
+        $out = Join-Path $OutDir $File
         [IO.File]::WriteAllBytes($out, [Convert]::FromBase64String($shot.data))
         $kb = [Math]::Round((Get-Item $out).Length / 1KB)
-        Write-Host ("shot    : {0}  {1}x{2}  {3} KB" -f $s.file, $Width, $h, $kb)
+        Write-Host ("  shot {0,-28} {1} KB" -f $File, $kb)
     }
+
+    function Go {
+        param($ws, $Url, $Seconds, $Width, $MaxHeight = 4000)
+        Invoke-Cdp $ws "Page.navigate" @{ url = $Url } | Out-Null
+        Start-Sleep -Seconds $Seconds
+        $m = Invoke-Cdp $ws "Page.getLayoutMetrics" @{}
+        $h = [int][Math]::Min($m.cssContentSize.height, $MaxHeight)
+        Invoke-Cdp $ws "Emulation.setDeviceMetricsOverride" @{
+            width = $Width; height = $h; deviceScaleFactor = 1; mobile = $false } | Out-Null
+        Start-Sleep -Milliseconds 700
+    }
+
+    $page   = "$BaseUrl/plugins/pluginPage.jsf?pn=TurnOnLoggers"
+    $config = "$BaseUrl/plugins/pluginConfig.jsf#/configuration?pn=TurnOnLoggers"
+
+    Write-Host "the plugin page"
+    Go $ws $page 7 $Width
+    Save-Shot $ws $OutDir "01-logger-manager.png" $null $Width
+    Save-Shot $ws $OutDir "02-turn-on-form.png"    "#turn-on-loggers-root section.tol-card:nth-of-type(1)" $Width
+    Save-Shot $ws $OutDir "03-overrides.png"       "#turn-on-loggers-root section.tol-card:nth-of-type(2)" $Width
+    Save-Shot $ws $OutDir "04-live-loggers.png"    "#turn-on-loggers-root section.tol-card:nth-of-type(3)" $Width
+    Save-Shot $ws $OutDir "05-hosts.png"           "#turn-on-loggers-root section.tol-card:nth-of-type(4)" $Width
+    Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
+
+    Write-Host "the settings page"
+    Go $ws $config 6 $Width
+    Save-Shot $ws $OutDir "07-configure.png" $null $Width
+
+    Write-Host "the help page"
+    Go $ws "$BaseUrl/plugin/TurnOnLoggers/ui/help.html" 2 $Width 2600
+    Save-Shot $ws $OutDir "08-help.png" $null $Width
+
+    Write-Host "the audit search"
+    Go $ws "$BaseUrl/analyze/analyzeTabs.jsf" 8 $Width 2200
+    Save-Shot $ws $OutDir "09-audit-search.png" $null $Width
 
     $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done",
                    [System.Threading.CancellationToken]::None).Wait()
