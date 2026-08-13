@@ -165,8 +165,22 @@ automatically, which is what starts the per-host sync service. **No Tomcat
 restart is needed** - each host's `Servicer` picks the new ServiceDefinition up
 on its next cycle, typically within a minute of the install.
 
-Open it at **gear icon → Logger Control**, or
-`/identityiq/plugins/pluginPage.jsf?pn=TurnOnLoggers`.
+### Where the page is
+
+**gear icon → Plugins → click "Logger Control"**, or go straight to:
+
+```
+/identityiq/plugins/pluginPage.jsf?pn=TurnOnLoggers
+```
+
+Plugin full pages do not get their own top-level menu entry, so the Plugins
+screen (or a bookmark) is how you reach it.
+
+**This page is where you turn loggers on.** The top card, *Turn on a logger*,
+takes a logger name (with a picker of the loggers people usually reach for), a
+level, how long to keep it on, which hosts, and an optional note. The
+`permanentLoggers` setting under **Settings** is not the normal route - see
+[Settings](#settings) for when to use it.
 
 ### Uninstalling
 
@@ -216,10 +230,10 @@ next read; no restart.
 
 ### `permanentLoggers`
 
-For turning a logger on **from the plugin's configuration settings** instead of
-the Logger Control page. Same effect - the only difference is that these have
-**no expiry**, so they stay on until you edit the field. Use it for a logger you
-want on indefinitely, or to enable one without opening the page.
+**Not the normal way to turn a logger on** - use the Logger Control page for
+that. This field exists for the one case the page deliberately does not cover:
+a logger with **no expiry**, which stays on until you edit the box. Everything
+set on the page expires; anything listed here does not.
 
 Comma-separated `logger=LEVEL`, with an optional `@host` suffix to restrict one
 item to a single host:

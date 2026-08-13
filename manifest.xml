@@ -89,7 +89,7 @@
                      dataType="string"
                      defaultValue=""
                      label="Permanent loggers (never expire)"
-                     helpText="Loggers enabled from this settings page instead of the Logger Control page. Same effect - the only difference is that these have no TTL, so they stay on until you edit this field. Use it for a logger you want on indefinitely, or to enable one without opening the page. They also show up in the Logger Control page's table, marked 'from settings', so there is still a single list of everything that is on. Format: comma-separated logger=LEVEL, with an optional @host suffix to restrict one item to a single host. Example: sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02"/>
+                     helpText="NOT the normal way to turn a logger on. For day-to-day use, open the Logger Control page (gear icon -> Plugins -> click 'Logger Control', or go straight to plugins/pluginPage.jsf?pn=TurnOnLoggers) and use the 'Turn on a logger' form there - it has a logger picker, per-host targeting and an expiry. This field is the exception: loggers listed here have NO expiry, so they stay on until you edit this box. Use it only for a logger you want on indefinitely. They still appear in the Logger Control page's table marked 'from settings', so that page remains a single list of everything that is on. Format: comma-separated logger=LEVEL, with an optional @host suffix to restrict one item to a single host. Example: sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02"/>
           </List>
         </value>
       </entry>
