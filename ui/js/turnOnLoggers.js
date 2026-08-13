@@ -549,6 +549,29 @@
         bits.push('Levels are set in each JVM\'s live log4j2 runtime, so no file on any host is modified; ' +
             'the list is stored in the Custom object "TurnOnLoggers Configuration" and re-applied after a restart.');
         f.appendChild(document.createTextNode(bits.join(' ')));
+
+        // Attribution line. Deliberately a repo link rather than a personal
+        // email address: this footer renders inside the customer's IIQ, and a
+        // link sends questions somewhere they can be answered once, publicly,
+        // instead of into one person's inbox forever.
+        var credit = el('div', 'tol-credit');
+        credit.appendChild(document.createTextNode('Logger Control'));
+        if (state.pluginVersion) {
+            credit.appendChild(document.createTextNode(' ' + state.pluginVersion));
+        }
+        if (state.author) {
+            credit.appendChild(document.createTextNode(' · ' + state.author));
+        }
+        if (state.projectUrl) {
+            credit.appendChild(document.createTextNode(' · '));
+            var a = document.createElement('a');
+            a.href = state.projectUrl;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.appendChild(document.createTextNode('Documentation and issues'));
+            credit.appendChild(a);
+        }
+        f.appendChild(credit);
         return f;
     }
 

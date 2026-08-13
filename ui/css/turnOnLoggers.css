@@ -432,3 +432,18 @@
     border-top: 1px solid #e4e7eb;
     max-width: 100ch;
 }
+
+.tol-credit {
+    margin-top: 6px;
+    color: #9aa5b1;
+    font-size: 11px;
+}
+
+.tol-credit a {
+    color: #7b8794;
+    text-decoration: underline;
+}
+
+.tol-credit a:hover {
+    color: #2186eb;
+}

@@ -31,6 +31,17 @@ public final class PluginSettings {
     private PluginSettings() {
     }
 
+    /** Version from the installed Plugin object, so the UI cannot drift from it. */
+    public static String getVersion(SailPointContext ctx) {
+        try {
+            Plugin p = ctx.getObjectByName(Plugin.class, PLUGIN_NAME);
+            if (p == null || p.getVersion() == null) return "";
+            return p.getVersion();
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
     public static String getString(SailPointContext ctx, String name, String dflt) {
         try {
             Plugin p = ctx.getObjectByName(Plugin.class, PLUGIN_NAME);

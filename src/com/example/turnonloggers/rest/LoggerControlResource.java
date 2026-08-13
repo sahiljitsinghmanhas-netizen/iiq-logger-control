@@ -328,6 +328,9 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("levels", Log4jAgent.LEVELS);
         out.put("user", user.getName());
         out.put("log4jAvailable", Log4jAgent.available());
+        out.put("pluginVersion", PluginSettings.getVersion(ctx));
+        out.put("author", "Sahiljit Singh Manhas");
+        out.put("projectUrl", "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control");
 
         // --- entries, decorated for display -------------------------------
         List<Map<String, Object>> rows = new ArrayList<>();
