@@ -216,8 +216,6 @@
         sync.onclick = function () {
             mutate(api('POST', '/sync'), 'This host reconciled against the stored configuration.');
         };
-        right.appendChild(sync);
-
         // A link to a separate page, not an overlay. The overlay version could
         // not be hidden reliably - .tol-hidden was declared before .tol-help in
         // the stylesheet, so display:flex won and Close did nothing.
@@ -230,6 +228,7 @@
         helpBtn.setAttribute('aria-label', 'Help');
         helpBtn.appendChild(document.createTextNode('?'));
         right.appendChild(helpBtn);
+        right.appendChild(sync);
 
         var panic = el('button', 'tol-btn tol-btn-danger', 'Remove all overrides');
         panic.title = 'Remove every override this plugin holds, on every host';
