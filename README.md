@@ -89,10 +89,39 @@ the original level, or deletes the `LoggerConfig` it created so the logger goes
 back to inheriting from its ancestor. Turning an override off leaves the host
 exactly as `log4j2.properties` says it should be - not quieter, not noisier.
 
-IIQ ships `monitorInterval=20` in `log4j2.properties`, so log4j2 rebuilds its
-configuration if someone edits that file on a host. The plugin detects that the
-`Configuration` instance was replaced, discards its now-meaningless snapshots,
-and re-applies from scratch on the next tick.
+### If someone edits log4j2.properties by hand
+
+They still can, and it still works - but the two do not see each other.
+
+IIQ ships `monitorInterval=20`, and log4j2 really does hot-reload: a logger
+added to the file starts producing output about 30 seconds later, with no
+restart. That reload rebuilds the entire `Configuration` from the file, which
+throws away the plugin's in-memory overrides on that host.
+
+The plugin notices the `Configuration` instance was replaced, discards its now
+meaningless snapshots, and re-applies from scratch on its next tick. Measured
+on a live instance:
+
+| Moment | a logger the plugin had set to DEBUG |
+|---|---|
+| plugin sets it | `DEBUG` |
+| immediately after a manual file edit | `WARN` - wiped by the reload |
+| after one sync tick (≤ 60s) | `DEBUG` - restored automatically |
+
+So a hand edit knocks the plugin's overrides out on that host for **up to one
+sync interval**, then they come back on their own. Nobody has to do anything.
+
+Two consequences worth knowing:
+
+- **For a logger both control, the plugin wins**, because it re-asserts every
+  tick. And since it re-snapshots against the new configuration, removing the
+  override later reverts to whatever the file *now* says, not the stale
+  pre-edit value.
+- **Loggers set in the file do not appear in Logger Control.** The page shows
+  only what the plugin manages. The Hosts table tells you *which*
+  `log4j2.properties` each host loaded, but not what is in it - so a colleague
+  hand-editing a file on one host is invisible here. If levels on a host are
+  not what you expect, read that file.
 
 ---
 
@@ -144,7 +173,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.0.0.zip` from the
+Download `TurnOnLoggers-2.1.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
