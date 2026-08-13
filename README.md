@@ -142,8 +142,19 @@ important way:
   every sync, so it holds even against a rule that keeps switching its own
   logger back on. This is the durable answer.
 
-Neither changes anything on disk, and removing the Silence override hands the
-logger back to whatever sets it.
+Neither changes anything on disk.
+
+**Silence is reversible from the same place.** Once silenced, the row's source
+becomes `this plugin` and the button becomes **Un-silence** - press it again and
+the override is gone. What happens next depends on where the logger came from:
+
+- a logger from `log4j2.properties` returns to its file level immediately
+- a logger a rule sets returns when that rule next runs; un-silencing only
+  stops the suppression, it cannot make the rule run
+
+The same action in *Overrides in effect* is called **Remove override** (or
+**Un-silence** for an `OFF` one). It used to say "Turn off", which on an
+override that is already `OFF` read like the opposite of what it does.
 
 ### Silencing a noisy logger
 
@@ -333,7 +344,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.9.0.zip` from the
+Download `TurnOnLoggers-2.10.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

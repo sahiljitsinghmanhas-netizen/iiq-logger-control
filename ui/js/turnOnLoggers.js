@@ -491,10 +491,12 @@
                 // delete here - editing the setting is the way to turn it off.
                 c7.appendChild(el('span', 'tol-small', 'edit in plugin settings'));
             } else {
-                var del = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Turn off');
+                var del = el('button', 'tol-btn tol-btn-small tol-btn-danger',
+                    String(e.level).toUpperCase() === 'OFF' ? 'Un-silence' : 'Remove override');
+                del.title = 'Remove this override; the logger goes back to its log4j2.properties level';
                 del.onclick = function () {
                     mutate(api('DELETE', '/entries/' + encodeURIComponent(e.id)),
-                        e.logger + ' reverted on this host; other hosts follow within a minute.');
+                        e.logger + ' override removed here; other hosts follow within a minute.');
                 };
                 c7.appendChild(del);
             }
@@ -518,6 +520,19 @@
         return wrap;
     }
     var liveFilter = 'all';
+
+    /**
+     * The UI-managed override behind a live logger row, if there is exactly
+     * one. Ambiguous cases (the same logger pinned to several host subsets)
+     * are left to the Overrides table rather than guessed at here.
+     */
+    function overrideFor(loggerName) {
+        var m = (state.entries || []).filter(function (e) {
+            return e.logger === loggerName && !e.permanent && e.id;
+        });
+        return m.length === 1 ? m[0] : null;
+    }
+
 
     /**
      * Everything log4j2 currently has configured in each host's JVM, whatever
@@ -717,6 +732,37 @@
                         };
                     })(r.logger, r.source);
                     c5.appendChild(rm);
+                }
+                // A logger this plugin is holding can be released from the same
+                // place it was silenced, instead of hunting for it in the
+                // Overrides table - where the action reads "remove override",
+                // which on an OFF override is the opposite of what it sounds.
+                if (r.source === 'plugin') {
+                    var ov = overrideFor(r.logger);
+                    if (ov) {
+                        var isOff = String(r.level).toUpperCase() === 'OFF';
+                        var undo = el('button', 'tol-btn tol-btn-small',
+                            isOff ? 'Un-silence' : 'Remove override');
+                        undo.title = isOff
+                            ? 'Stop suppressing ' + r.logger + ' on every host'
+                            : 'Remove this plugin override on every host';
+                        undo.onclick = (function (entry, name, off) {
+                            return function () {
+                                var after = off
+                                    ? ' It goes back to whatever sets it: its log4j2.properties level'
+                                      + ' straight away, or, if a rule sets it, the next time that rule runs.'
+                                    : ' It goes back to its log4j2.properties level.';
+                                if (!window.confirm((off ? 'Stop silencing ' : 'Remove the override on ')
+                                    + name + ' on every host?' + after)) return;
+                                mutate(api('DELETE', '/entries/' + encodeURIComponent(entry.id)),
+                                    off ? name + ' is no longer being silenced.'
+                                        : name + ' override removed.');
+                            };
+                        })(ov, r.logger, isOff);
+                        c5.appendChild(undo);
+                    } else {
+                        c5.appendChild(el('span', 'tol-small', 'manage in Overrides in effect'));
+                    }
                 }
                 tr.appendChild(c5);
                 tb.appendChild(tr);
