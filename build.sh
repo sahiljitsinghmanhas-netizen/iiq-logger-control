@@ -44,6 +44,17 @@ find "$HERE/src" -name '*.java' > "$OUT_DIR/sources.txt"
     -d "$CLASSES_DIR" \
     "@$OUT_DIR/sources.txt"
 
+# Execute the page script against a stub DOM before packaging. A parse-only
+# check is not enough - 2.2.0-2.4.0 shipped a script that never parsed.
+JJS="${JAVA_HOME:-}/bin/jjs"
+[[ -x "$JJS" ]] || JJS="$(command -v jjs || true)"
+if [[ -x "$JJS" ]]; then
+    echo "Running render check..."
+    "$JJS" "$HERE/tools/render-check.js" -- "$HERE/ui/js/turnOnLoggers.js" "$HERE/tools/state-fixture.json"         || { echo "ERROR: render check failed - the page would not load. Build aborted." >&2; exit 1; }
+else
+    echo "WARNING: jjs not found, skipping render check." >&2
+fi
+
 echo "Packaging $JAR_NAME..."
 (cd "$CLASSES_DIR" && "$JAR_EXE" cf "$LIB_DIR/$JAR_NAME" com)
 

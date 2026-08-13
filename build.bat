@@ -51,6 +51,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM ---- Render check -----------------------------------------------------
+REM Executes the page script against a stub DOM. A parse-only check is not
+REM enough: 2.2.0-2.4.0 shipped a script that failed to parse at all, because
+REM the check grepped for text jjs never printed. This runs the real thing and
+REM fails the build if the page does not render.
+set "JJS=%JAVA_HOME%\bin\jjs.exe"
+if exist "%JJS%" (
+    echo Running render check...
+    "%JJS%" "%~dp0tools\render-check.js" -- "%~dp0ui\js\turnOnLoggers.js" "%~dp0tools\state-fixture.json"
+    if errorlevel 1 (
+        echo ERROR: render check failed - the page would not load. Build aborted.
+        exit /b 1
+    )
+) else (
+    echo WARNING: jjs not found, skipping render check.
+)
+
 REM ---- Jar --------------------------------------------------------------
 echo Packaging %JAR_NAME%...
 pushd "%CLASSES_DIR%"

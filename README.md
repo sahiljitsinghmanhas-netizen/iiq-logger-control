@@ -250,7 +250,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.4.0.zip` from the
+Download `TurnOnLoggers-2.4.1.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

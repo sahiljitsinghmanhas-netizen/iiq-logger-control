@@ -128,6 +128,15 @@
             if (!quiet) say(null);
         }).catch(function (e) {
             say(e.message, 'error');
+            // Before the first successful render there is no banner to write
+            // into, so without this the page sits on "Loading logger control..."
+            // forever and the real error is never seen.
+            if (!state && root) {
+                clear(root);
+                var b = el('div', 'tol-banner tol-error');
+                b.appendChild(document.createTextNode('Could not load Logger Control: ' + e.message));
+                root.appendChild(b);
+            }
         });
     }
 
@@ -747,7 +756,7 @@
             'Turning a logger on only adds to the list - other overrides and anything '
             + 'in log4j2.properties are left alone.'));
         f.appendChild(el('div', 'tol-footer-line',
-            'Levels are set in each JVM's live log4j2 runtime, so no file is ever modified. '
+            "Levels are set in each JVM's live log4j2 runtime, so no file is ever modified. "
             + 'The list survives restarts.'));
 
         var credit = el('div', 'tol-credit');
@@ -847,6 +856,7 @@
         root.appendChild(el('div', 'tol-boot', 'Loading logger control...'));
 
         load().then(function () {
+            if (!state) return;
             if (pollTimer) window.clearInterval(pollTimer);
             pollTimer = window.setInterval(function () {
                 // Do not yank the form out from under someone mid-type.
