@@ -492,8 +492,10 @@
                 c7.appendChild(el('span', 'tol-small', 'edit in plugin settings'));
             } else {
                 var del = el('button', 'tol-btn tol-btn-small tol-btn-danger',
-                    String(e.level).toUpperCase() === 'OFF' ? 'Un-silence' : 'Remove override');
-                del.title = 'Remove this override; the logger goes back to its log4j2.properties level';
+                    String(e.level).toUpperCase() === 'OFF' ? 'Un-suppress' : 'Remove override');
+                del.title = String(e.level).toUpperCase() === 'OFF'
+                    ? 'Stop holding this logger at OFF. It goes back to whatever sets it.'
+                    : 'Remove this override; the logger goes back to its log4j2.properties level.';
                 del.onclick = function () {
                     mutate(api('DELETE', '/entries/' + encodeURIComponent(e.id)),
                         e.logger + ' override removed here; other hosts follow within a minute.');
@@ -563,7 +565,7 @@
             });
         });
         if (anyLeftover) {
-            var clr = el('button', 'tol-btn tol-btn-danger', 'Clear left over');
+            var clr = el('button', 'tol-btn tol-btn-danger', 'Clear all left over');
             clr.onclick = function () {
                 if (!window.confirm('Remove the loggers this plugin left behind, on every host?'
                     + '\n\nOnly loggers this plugin created are removed. Anything in '
@@ -580,6 +582,18 @@
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
             + 'Counts are distinct logger names; the tables list them per host, so the same '
             + 'logger on several hosts appears once per host.'));
+        var legend = el('div', 'tol-hint');
+        legend.appendChild(el('strong', '', 'Suppress'));
+        legend.appendChild(document.createTextNode(
+            ' holds a logger at OFF and keeps it there - the plugin re-applies it every sync, and '
+            + 'Un-suppress lifts it. '));
+        legend.appendChild(el('strong', '', 'Clear'));
+        legend.appendChild(document.createTextNode(
+            ' deletes it from the running configuration once and then lets go, so whatever created '
+            + 'it can create it again. Loggers declared in log4j2.properties have no Clear: the file '
+            + 'would simply put them back on its next reload, so Suppress is the only thing that '
+            + 'holds for them.'));
+        box.appendChild(legend);
 
         var unparsed = [];
         (state.hosts || []).forEach(function (h) {
@@ -693,8 +707,10 @@
                 // a one-shot Remove does not.
                 if (r.logger !== 'root' && r.source !== 'plugin'
                         && String(r.level).toUpperCase() !== 'OFF') {
-                    var silence = el('button', 'tol-btn tol-btn-small', 'Silence');
-                    silence.title = 'Set ' + r.logger + ' to OFF on every host, permanently';
+                    var silence = el('button', 'tol-btn tol-btn-small', 'Suppress');
+                    silence.title = 'Hold ' + r.logger + ' at OFF on every host. The plugin re-applies '
+                        + 'it every sync, so it stays off even if a rule keeps switching it back on. '
+                        + 'Reversible with Un-suppress.';
                     silence.onclick = (function (name, was) {
                         return function () {
                             if (!window.confirm('Silence ' + name + ' on all hosts?'
@@ -714,8 +730,10 @@
                     // not touch 'set at runtime' rows, because something else
                     // configured them - so removing one has to be an explicit
                     // choice about that specific logger.
-                    var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Remove');
-                    rm.title = 'Remove ' + r.logger + ' from the live configuration on every host';
+                    var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Clear');
+                    rm.title = 'Delete ' + r.logger + ' from the running configuration on every host. '
+                        + 'One-shot: nothing is enforced afterwards, so whatever created it can create '
+                        + 'it again. Use Suppress if you need it to stay off.';
                     rm.onclick = (function (name, src) {
                         return function () {
                             var extra = src === 'runtime'
@@ -742,10 +760,11 @@
                     if (ov) {
                         var isOff = String(r.level).toUpperCase() === 'OFF';
                         var undo = el('button', 'tol-btn tol-btn-small',
-                            isOff ? 'Un-silence' : 'Remove override');
+                            isOff ? 'Un-suppress' : 'Remove override');
                         undo.title = isOff
-                            ? 'Stop suppressing ' + r.logger + ' on every host'
-                            : 'Remove this plugin override on every host';
+                            ? 'Stop holding ' + r.logger + ' at OFF. It goes back to whatever sets it.'
+                            : 'Remove this plugin override on every host. The logger goes back to its '
+                              + 'log4j2.properties level.';
                         undo.onclick = (function (entry, name, off) {
                             return function () {
                                 var after = off

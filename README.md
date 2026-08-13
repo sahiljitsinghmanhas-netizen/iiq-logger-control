@@ -130,31 +130,44 @@ Overriding a logger the file already sets does not delete anything: ownership
 moves to the plugin while the override lives, and the file's own level is put
 back exactly when it is removed.
 
-### Remove versus Silence
+### Suppress versus Clear
 
-For a logger something else set at runtime, the two actions differ in an
-important way:
+Two different things can be done to a logger this plugin did not set, and the
+difference is what happens afterwards:
 
-- **Remove** deletes it from the live configuration now. The logger falls back
-  to inheriting from its parent and the output stops - but it is **one-shot**.
-  The next time the rule that set it runs, it sets it again.
-- **Silence** adds a permanent `OFF` override. The plugin re-asserts it on
-  every sync, so it holds even against a rule that keeps switching its own
-  logger back on. This is the durable answer.
+| | Suppress | Clear |
+|---|---|---|
+| The logger entry | stays, held at `OFF` | deleted |
+| Enforced afterwards? | yes, re-applied every sync | no |
+| Survives a rule re-setting it? | **yes** | no - it comes back |
+| Reversible? | yes, **Un-suppress** | nothing to reverse |
 
-Neither changes anything on disk.
+*Suppress holds it; Clear deletes it and lets go.*
 
-**Silence is reversible from the same place.** Once silenced, the row's source
-becomes `this plugin` and the button becomes **Un-silence** - press it again and
-the override is gone. What happens next depends on where the logger came from:
+Use **Suppress** when something must stop logging and stay stopped - almost
+always the right choice for a logger a rule sets. Use **Clear** to tidy up an
+entry that should not exist and that nothing will recreate, such as a
+`left over` row from an older plugin install.
 
-- a logger from `log4j2.properties` returns to its file level immediately
-- a logger a rule sets returns when that rule next runs; un-silencing only
-  stops the suppression, it cannot make the rule run
+**Loggers declared in `log4j2.properties` have no Clear.** Deleting one would
+achieve nothing: log4j2 rebuilds its configuration from that file on every
+change and restart, so the logger would return - and the plugin would be
+quietly fighting the host's declared configuration. Overriding it to `OFF`
+is the honest option, and it stays visible and reversible.
 
-The same action in *Overrides in effect* is called **Remove override** (or
-**Un-silence** for an `OFF` one). It used to say "Turn off", which on an
-override that is already `OFF` read like the opposite of what it does.
+### Which button appears where
+
+The same action carries the same label in both tables. *Overrides in effect*
+holds only this plugin's own overrides, so it never offers Suppress or Clear -
+there is nothing of anyone else's there to act on.
+
+| Acting on | Action | Where it appears |
+|---|---|---|
+| Someone else's logger | **Suppress** | Loggers live in the JVM |
+| Someone else's logger | **Clear** | Loggers live in the JVM, runtime and left over rows only |
+| This plugin's `OFF` override | **Un-suppress** | both tables |
+| This plugin's other overrides | **Remove override** | both tables |
+| A new override | **Turn on** | the form at the top |
 
 ### Silencing a noisy logger
 
@@ -344,7 +357,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.10.0.zip` from the
+Download `TurnOnLoggers-2.11.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
