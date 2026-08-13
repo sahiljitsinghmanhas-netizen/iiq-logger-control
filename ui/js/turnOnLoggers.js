@@ -618,8 +618,64 @@
         });
     }
 
+    // ------------------------------------------------------------------
+    // signpost on this plugin's own Configure page
+    //
+    // "Configure" on the Plugins screen opens pluginConfig.jsf, which is where
+    // people reasonably go looking for somewhere to add a logger - and it is
+    // the wrong screen. The settings there are policy (who may use it, how long
+    // overrides live); loggers get turned on from the Logger Control page. This
+    // puts a link to it right at the top of that form.
+    // ------------------------------------------------------------------
+
+    function isOurConfigPage() {
+        if (document.location.pathname.indexOf('/plugins/pluginConfig.jsf') < 0) return false;
+        // IIQ routes this page client-side, so pn= can be in the query string
+        // or in the hash (#/configuration?pn=TurnOnLoggers&...).
+        var where = (document.location.search || '') + ' ' + (document.location.hash || '');
+        return /[?&]pn=TurnOnLoggers(?:[&\s]|$)/.test(where);
+    }
+
+    function addConfigBanner() {
+        if (!isOurConfigPage()) return;
+        if (document.getElementById('tol-config-banner')) return;
+
+        var main = document.querySelector('div[role="main"].sp-body')
+                || document.getElementById('mainContent');
+        if (!main) return;
+
+        var box = el('div', 'tol-config-banner');
+        box.id = 'tol-config-banner';
+
+        var text = el('div', 'tol-config-banner-text');
+        text.appendChild(el('strong', '', 'Looking for where to turn a logger on? '));
+        text.appendChild(document.createTextNode(
+            'Not here. These settings control who may use the plugin and how long '
+            + 'overrides live. Loggers are turned on from the Logger Control page, '
+            + 'which has a logger picker, per-host targeting and an expiry.'));
+        box.appendChild(text);
+
+        var link = document.createElement('a');
+        link.href = PAGE_URL;
+        link.className = 'tol-btn tol-btn-primary tol-config-banner-link';
+        link.appendChild(document.createTextNode('Open Logger Control'));
+        box.appendChild(link);
+
+        // Slot in under the "Back" header bar rather than above it, so it does
+        // not displace IIQ's own chrome.
+        var header = main.querySelector('header');
+        if (header && header.nextSibling) {
+            main.insertBefore(box, header.nextSibling);
+        } else {
+            main.insertBefore(box, main.firstChild);
+        }
+    }
+
     function start() {
         ensureNavLink();
+        addConfigBanner();
+        // The config screen is a hash-routed SPA; re-check when the route moves.
+        window.addEventListener('hashchange', addConfigBanner);
 
         root = document.getElementById(ROOT_ID);
         if (!root) return; // not our page - every other IIQ page lands here

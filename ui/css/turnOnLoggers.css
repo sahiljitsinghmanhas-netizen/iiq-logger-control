@@ -387,6 +387,44 @@
     color: #ab091e;
 }
 
+/* ---------- signpost on the plugin's Configure page ---------- */
+/* Lives outside .tol-root, so it carries its own font stack. */
+
+.tol-config-banner {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: #f0f4f8;
+    border: 1px solid #bcccdc;
+    border-left: 4px solid #2186eb;
+    border-radius: 4px;
+    color: #243b53;
+    padding: 12px 16px;
+    margin: 12px 16px 0 16px;
+}
+
+.tol-config-banner-text {
+    flex: 1 1 420px;
+    line-height: 1.5;
+    max-width: 90ch;
+}
+
+.tol-config-banner-link {
+    flex: 0 0 auto;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.tol-config-banner-link:hover,
+.tol-config-banner-link:focus {
+    color: #fff;
+    text-decoration: none;
+}
+
 .tol-footer {
     color: #7b8794;
     font-size: 11px;
