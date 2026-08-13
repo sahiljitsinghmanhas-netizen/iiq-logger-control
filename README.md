@@ -144,7 +144,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-1.0.0.zip` from the
+Download `TurnOnLoggers-2.0.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
@@ -214,6 +214,35 @@ takes a logger name (with a picker of the loggers people usually reach for), a
 level, how long to keep it on, which hosts, and an optional note. The
 `permanentLoggers` setting under **Settings** is not the normal route - see
 [Settings](#settings) for when to use it.
+
+### Upgrading and rolling back
+
+**To upgrade**, just upload the newer zip - **gear icon → Plugins → New**. Do
+not uninstall first. IIQ replaces the plugin in place and **your settings are
+preserved** (verified upgrading 1.0.0 → 2.0.0 with a non-default
+`permanentLoggers` and `defaultTtlMinutes`; both survived).
+
+**To roll back, you must uninstall first.** IIQ refuses to install an older
+version over a newer one:
+
+```
+HTTP 400  {"message":"The installed plugin does not meet the
+           minimum upgradable version requirements."}
+```
+
+So the rollback is: **gear icon → Plugins → uninstall**, then install the older
+zip. Two consequences of that extra step:
+
+- **Plugin settings are reset to defaults by the uninstall.** Note down any
+  non-blank `permanentLoggers`, and any changed capability or TTL values,
+  *before* you roll back.
+- **Your logger overrides are not affected.** They live in the
+  `Custom "TurnOnLoggers Configuration"` object, which is independent of the
+  plugin - verified by creating an override, uninstalling, reinstalling a
+  different version, and finding it intact, note and all.
+
+There is no need to delete the ServiceDefinition when moving between versions;
+every version registers the same service name and executor class.
 
 ### Uninstalling
 
@@ -415,9 +444,8 @@ Other limitations:
   table until it either heartbeats a `Server` object or ticks once.
 - Overrides live in the IIQ database, so an environment refresh that copies the
   database carries them along. The TTL cap limits how long that can matter.
-- Changes to plugin settings are lost on reinstall, since IIQ resets a plugin's
-  settings to their defaults when it is installed. Note down a non-blank
-  `permanentLoggers` value before upgrading.
+- Plugin settings survive an in-place upgrade but are reset to defaults by an
+  uninstall. See [Upgrading and rolling back](#upgrading-and-rolling-back).
 
 ---
 
