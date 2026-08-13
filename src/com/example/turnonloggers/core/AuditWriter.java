@@ -39,23 +39,18 @@ public final class AuditWriter {
     private AuditWriter() {
     }
 
-    /** True when IIQ will actually persist our events. */
-    public static boolean isEnabled() {
-        try {
-            return Auditor.isEnabled(ACTION);
-        } catch (Throwable t) {
-            return false;
-        }
-    }
+    /** Registration is attempted once per JVM, not on every write. */
+    private static volatile boolean registrationTried = false;
 
     /**
-     * Add our action to the AuditConfig if it is not already there, and enable
-     * it. Purely additive - existing actions are read, kept, and written back
-     * exactly as they were.
+     * Make sure the action appears in Audit Configuration, so these events show
+     * up in the Audit Search action list like any other.
      *
-     * @return true if auditing is on afterwards
+     * This is presentation only. Whether or not it succeeds, events are written
+     * regardless - see {@link #log}. Purely additive: existing actions are read,
+     * kept, and written back exactly as they were.
      */
-    public static boolean enable(SailPointContext ctx) {
+    static boolean ensureRegistered(SailPointContext ctx) {
         try {
             AuditConfig cfg = ctx.getObjectByName(AuditConfig.class, AuditConfig.OBJ_NAME);
             if (cfg == null) {
@@ -93,14 +88,17 @@ public final class AuditWriter {
      */
     public static void log(SailPointContext ctx, String user, String what, String logger,
                            String level, String hosts, long expires, String note) {
-        // Always in the application log, whether or not auditing is on.
+        // Always in the application log too.
         LOG.info("[TurnOnLoggers] " + user + " " + what + " " + logger
                 + (level == null ? "" : "=" + level)
                 + (hosts == null ? "" : " hosts=" + hosts)
                 + (expires <= 0 ? "" : " until=" + new Date(expires))
                 + (note == null || note.isEmpty() ? "" : " note=" + note));
         try {
-            if (!Auditor.isEnabled(ACTION)) return;
+            if (!registrationTried) {
+                registrationTried = true;
+                ensureRegistered(ctx);
+            }
             AuditEvent e = new AuditEvent();
             e.setAction(ACTION);
             e.setSource(user);
@@ -111,8 +109,19 @@ public final class AuditWriter {
             e.setString4(expires <= 0 ? "never" : String.valueOf(new Date(expires)));
             if (note != null && !note.isEmpty()) e.setAttribute("note", note);
             e.setAttribute("plugin", PluginSettings.PLUGIN_NAME);
-            boolean written = Auditor.log(e, ctx);
-            if (!written) ctx.saveObject(e);
+            // Written unconditionally, NOT gated on the action being enabled in
+            // Audit Configuration. These are privileged changes to what a
+            // production system logs; whether they are recorded must not be
+            // something the person making them can switch off. Auditor.log is
+            // tried first so IIQ's own handling applies where it is enabled,
+            // and the event is persisted directly when it is not.
+            boolean written = false;
+            try {
+                written = Auditor.log(e, ctx);
+            } catch (Throwable ignored) {
+                written = false;
+            }
+            if (!written || e.getId() == null) ctx.saveObject(e);
             // Auditor.log only puts the event in the Hibernate session; it does
             // not commit. The very next thing the sync does is decache(), which
             // threw the pending event away - events were being written and

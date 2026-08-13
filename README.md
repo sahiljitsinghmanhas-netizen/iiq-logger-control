@@ -245,18 +245,24 @@ The note you type when enabling a logger is carried into the event.
 | string2 / string3 / string4 | level, target hosts, expiry |
 | attribute `note` | the note from the form |
 
-IIQ only stores events whose action is enabled in **Audit Configuration**, and
-that object - `AuditConfig` - is a global singleton. A plugin that imported one
-would replace the whole configuration and silently switch off every other audit
-action in the environment, so this plugin never does that.
+**There is no switch for this.** Changing what a production system logs is a
+privileged action, so whether it gets recorded is deliberately not something
+the person making the change can turn off. The plugin has no audit on/off
+control, and the events are written whatever Audit Configuration says.
 
-Instead the page shows an **Audit** chip, and a **Start audit logging** button
-when it is off. That adds the single `LoggerManagerChange` action to the
-existing list and enables it; nothing else in Audit Configuration is touched.
-You can equally add it by hand under
-**gear icon → Global Settings → Audit Configuration**.
+IIQ normally only persists an event whose action is enabled under
+**gear icon → Global Settings → Audit Configuration**. The plugin registers
+`LoggerManagerChange` there - additively, once, leaving every other action
+untouched - so its events appear in the Audit Search action list like anything
+else. But registration is presentation only: if the action is disabled, or
+registration fails, the event is still written. Verified by forcing the action
+to `enabled="false"` in the database and confirming the row still landed in
+`spt_audit_event`.
 
-Changes are always written to `sailpoint.log` regardless, and an audit failure
+Note the plugin does not re-enable an action an administrator has deliberately
+switched off - it simply does not depend on it.
+
+Changes are always written to `sailpoint.log` as well, and an audit failure
 never blocks the level change itself.
 
 ## Safety
@@ -280,7 +286,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.6.0.zip` from the
+Download `TurnOnLoggers-2.7.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

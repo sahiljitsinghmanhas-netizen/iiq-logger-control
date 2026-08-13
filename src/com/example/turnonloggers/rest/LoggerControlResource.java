@@ -321,39 +321,6 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
-    /**
-     * Register this plugin's audit action so IIQ starts persisting its events.
-     *
-     * Additive: the existing AuditConfig actions are kept exactly as they are.
-     * Deliberately an explicit request rather than something the plugin does
-     * on install, because AuditConfig is a global singleton.
-     */
-    @POST
-    @Path("audit/enable")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response enableAudit() {
-        try {
-            Identity user = requireUser();
-            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
-            String denied = capabilityDenial(user);
-            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
-
-            SailPointContext ctx = getContext();
-            boolean ok = AuditWriter.enable(ctx);
-            if (!ok) {
-                return error(Response.Status.INTERNAL_SERVER_ERROR,
-                        "Could not enable the audit action. Add '" + AuditWriter.ACTION
-                                + "' by hand under gear icon -> Global Settings -> Audit Configuration.");
-            }
-            AuditWriter.log(ctx, user.getName(), "enabled audit logging", "(audit configuration)",
-                    null, null, 0L, null);
-            return json(Response.Status.OK, buildState(user));
-        } catch (Throwable t) {
-            LOG.error("[TurnOnLoggers] enableAudit failed", t);
-            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
-        }
-    }
-
     /** Forget a decommissioned host's status row so it stops showing up. */
     @DELETE
     @Path("hosts/{host}")
@@ -413,7 +380,6 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("user", user.getName());
         out.put("log4jAvailable", Log4jAgent.available());
         out.put("pluginVersion", PluginSettings.getVersion(ctx));
-        out.put("auditEnabled", AuditWriter.isEnabled());
         out.put("auditAction", AuditWriter.ACTION);
         out.put("author", "Sahiljit Singh Manhas");
         out.put("projectUrl", "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control");

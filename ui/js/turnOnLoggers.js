@@ -205,7 +205,6 @@
         chips.appendChild(chip('Serving host', state.thisHost));
         chips.appendChild(chip(OS_ICON[facts.osFamily] || 'OS', facts.os || '?'));
         chips.appendChild(chip('Config revision', String(state.revision)));
-        chips.appendChild(chip('Audit', state.auditEnabled ? 'recording' : 'not recording'));
         left.appendChild(chips);
         h.appendChild(left);
 
@@ -223,22 +222,6 @@
         };
         right.appendChild(panic);
 
-        if (!state.auditEnabled) {
-            // Off by default because switching it on edits the AuditConfig
-            // singleton, which is not something a plugin should do unasked.
-            var au = el('button', 'tol-btn', 'Start audit logging');
-            au.title = 'Register the ' + (state.auditAction || 'LoggerManagerChange')
-                + ' action so IIQ records who changes logger levels';
-            au.onclick = function () {
-                if (!window.confirm('Start recording changes to the IIQ audit log?'
-                    + ' This adds one action to Global Settings -> Audit Configuration.'
-                    + ' Existing audit actions are not affected.')) return;
-                mutate(api('POST', '/audit/enable'),
-                    'Audit logging on. Changes from here are recorded as '
-                    + (state.auditAction || 'LoggerManagerChange') + '.');
-            };
-            right.appendChild(au);
-        }
         h.appendChild(right);
         return h;
     }
@@ -594,7 +577,7 @@
             });
         });
         var bar = el('div', 'tol-filters');
-        [['all', 'All'], ['file', 'From the file'], ['plugin', 'This plugin'],
+        [['all', 'All'], ['file', 'From the file (log4j2.properties)'], ['plugin', 'This plugin'],
             ['leftover', 'Left over'], ['runtime', 'Set at runtime']].forEach(function (f) {
             if (f[0] !== 'all' && !counts[f[0]]) return;
             var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
