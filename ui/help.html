@@ -26,6 +26,28 @@
   footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e4e7eb;
            color: #9aa5b1; font-size: 12px; }
   a { color: #2186eb; }
+
+  /* layout: sticky menu beside the content, stacked on narrow screens */
+  .wrap { display: flex; gap: 32px; align-items: flex-start; }
+  nav.toc { position: sticky; top: 24px; flex: 0 0 210px; font-size: 13px; }
+  nav.toc h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+               color: #7b8794; margin: 0 0 8px 0; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  nav.toc li { counter-increment: s; margin: 0 0 2px 0; }
+  nav.toc a { display: block; padding: 4px 8px; border-radius: 4px;
+              text-decoration: none; color: #3e4c59; border-left: 2px solid transparent; }
+  nav.toc a:before { content: counter(s) ". "; color: #9aa5b1; }
+  nav.toc a:hover { background: #f0f4f8; color: #102a43; border-left-color: #2186eb; }
+  main { flex: 1 1 auto; min-width: 0; }
+  h2 { scroll-margin-top: 20px; }
+  .top { font-size: 11px; text-decoration: none; float: right; font-weight: 400;
+         color: #9aa5b1; }
+  figure { margin: 14px 0 18px 0; }
+  figcaption { font-size: 12px; color: #7b8794; margin-top: 6px; }
+  @media (max-width: 820px) {
+    .wrap { display: block; }
+    nav.toc { position: static; margin-bottom: 28px; }
+  }
 </style>
 </head>
 <body>
@@ -33,7 +55,27 @@
 <h1>Logger Manager</h1>
 <p class="sub">Turn IIQ log4j2 loggers on and off across every host, from the UI.</p>
 
-<h2>What this page does</h2>
+<div class="wrap">
+<nav class="toc">
+  <h3>On this page</h3>
+  <ol>
+    <li><a href="#what">What this page does</a></li>
+    <li><a href="#sections">The sections</a></li>
+    <li><a href="#sources">Where a logger came from</a></li>
+    <li><a href="#buttons">The buttons</a></li>
+    <li><a href="#suppress-clear">Suppress versus Clear</a></li>
+    <li><a href="#nofileclear">Why file loggers cannot be cleared</a></li>
+    <li><a href="#levels">Levels and expiry</a></li>
+    <li><a href="#hosts">Hosts and propagation</a></li>
+    <li><a href="#audit">Audit</a></li>
+    <li><a href="#settings">Plugin settings</a></li>
+    <li><a href="#trouble">If something looks wrong</a></li>
+    <li><a href="#limits">Limitations</a></li>
+  </ol>
+</nav>
+<main>
+
+<h2 id="what">What this page does<a class="top" href="#">top</a></h2>
 <p>Sets logger levels across every host in the deployment without shell access, without editing
 <code>log4j2.properties</code>, and without a restart.</p>
 <p>Levels are set in each JVM's live log4j2 runtime, so <strong>no file on any host is ever
@@ -41,7 +83,49 @@ modified</strong>. The list of what should be on lives in the IIQ database, and 
 reconciles itself against it on a timer - which is also how a host that restarts picks the
 overrides back up.</p>
 
-<h2>The sections</h2>
+<h2 id="sections">The sections<a class="top" href="#">top</a></h2>
+<figure>
+<svg viewBox="0 0 640 300" width="100%" height="auto" role="img"
+     aria-label="Diagram of the page layout: header, then Turn on a logger, Overrides in effect, Loggers live in the JVM, and Hosts">
+  <defs><style>
+    .bx{fill:#fff;stroke:#cbd2d9}
+    .hd{fill:#f0f4f8;stroke:#bcccdc}
+    .t{font:600 12px "Segoe UI",Arial;fill:#102a43}
+    .d{font:11px "Segoe UI",Arial;fill:#7b8794}
+    .btn{fill:#2186eb;stroke:#1d7ad6}
+    .bt{font:600 10px "Segoe UI",Arial;fill:#fff}
+  </style></defs>
+
+  <rect class="hd" x="8" y="8" width="624" height="46" rx="4"/>
+  <text class="t" x="20" y="30">Logger Manager</text>
+  <text class="d" x="20" y="46">serving host - OS - config revision</text>
+  <rect class="bx" x="404" y="18" width="104" height="20" rx="3"/>
+  <text class="d" x="416" y="32">Sync this host</text>
+  <circle cx="527" cy="28" r="10" class="bx"/><text class="t" x="524" y="32">?</text>
+  <rect class="btn" x="548" y="18" width="76" height="20" rx="3"/>
+  <text class="bt" x="556" y="32">Remove all</text>
+
+  <rect class="bx" x="8" y="64" width="624" height="46" rx="4"/>
+  <text class="t" x="20" y="86">Turn on a logger</text>
+  <text class="d" x="20" y="102">logger name - level - expiry - hosts - note</text>
+
+  <rect class="bx" x="8" y="120" width="624" height="52" rx="4"/>
+  <text class="t" x="20" y="142">Overrides in effect</text>
+  <text class="d" x="20" y="158">what this plugin is holding - action: Remove override</text>
+
+  <rect class="bx" x="8" y="182" width="624" height="58" rx="4"/>
+  <text class="t" x="20" y="204">Loggers live in the JVM</text>
+  <text class="d" x="20" y="220">every logger, its level, its source - actions: Suppress toggle, Clear</text>
+  <text class="d" x="20" y="234">grouped by host, filter chips above</text>
+
+  <rect class="bx" x="8" y="250" width="624" height="42" rx="4"/>
+  <text class="t" x="20" y="272">Hosts</text>
+  <text class="d" x="20" y="286">OS - JVM - log4j2 config path - log files - last sync</text>
+</svg>
+<figcaption>The page, top to bottom. The first two sections are about this plugin&#39;s own
+overrides; the third is the truth of what log4j2 has configured, whoever put it there.</figcaption>
+</figure>
+
 <dl>
   <dt>Turn on a logger</dt>
   <dd>The form. Type <strong>any</strong> logger name - the dropdown is only a list of common IIQ
@@ -62,7 +146,38 @@ overrides back up.</p>
   writes logs, and when it last reconciled.</dd>
 </dl>
 
-<h2>Where a logger came from</h2>
+<h2 id="sources">Where a logger came from<a class="top" href="#">top</a></h2>
+<figure>
+<svg viewBox="0 0 640 74" width="100%" height="auto" role="img"
+     aria-label="The four source tags: log4j2.properties, this plugin, left over, and set at runtime">
+  <defs><style>
+    .s{font:600 10px "Segoe UI",Arial}
+    .c{font:11px "Segoe UI",Arial;fill:#7b8794}
+  </style></defs>
+  <rect x="6" y="14" width="118" height="20" rx="3" fill="#e0e8f9" stroke="#c3cfe8"/>
+  <text class="s" x="14" y="28" fill="#35469c">log4j2.properties</text>
+  <text class="c" x="6" y="52">the host&#39;s own file</text>
+  <text class="c" x="6" y="66">never touched</text>
+
+  <rect x="166" y="14" width="80" height="20" rx="3" fill="#e3f9e5" stroke="#a3d9a5"/>
+  <text class="s" x="174" y="28" fill="#207227">this plugin</text>
+  <text class="c" x="166" y="52">an override</text>
+  <text class="c" x="166" y="66">yours to remove</text>
+
+  <rect x="306" y="14" width="72" height="20" rx="3" fill="#ffe3e3" stroke="#f29b9b"/>
+  <text class="s" x="314" y="28" fill="#ab091e">left over</text>
+  <text class="c" x="306" y="52">ours, lost track of</text>
+  <text class="c" x="306" y="66">safe to clear</text>
+
+  <rect x="446" y="14" width="92" height="20" rx="3" fill="#fffbea" stroke="#f7d070"/>
+  <text class="s" x="454" y="28" fill="#8d2b0b">set at runtime</text>
+  <text class="c" x="446" y="52">a rule or custom code</text>
+  <text class="c" x="446" y="66">never cleared automatically</text>
+</svg>
+<figcaption>The Source column states where each logger came from as a fact, read from the host&#39;s
+configuration file rather than inferred.</figcaption>
+</figure>
+
 <table>
   <tr><th>Source</th><th>Meaning</th><th>Cleared automatically?</th></tr>
   <tr><td><code>log4j2.properties</code></td><td>Declared in that host's own configuration file.</td><td>never</td></tr>
@@ -71,7 +186,40 @@ overrides back up.</p>
   <tr><td><code>set at runtime</code></td><td>Something outside this plugin set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
 </table>
 
-<h2>The buttons</h2>
+<h2 id="buttons">The buttons<a class="top" href="#">top</a></h2>
+<figure>
+<svg viewBox="0 0 620 96" width="100%" height="auto" role="img"
+     aria-label="The Suppress toggle in its two states: grey when not holding, green when holding the logger at OFF">
+  <defs><style>
+    .p{font:12px "Segoe UI",Arial;fill:#3e4c59}
+    .c{font:11px "Segoe UI",Arial;fill:#7b8794}
+    .off{fill:#fff;stroke:#cbd2d9}
+    .on{fill:#e3f9e5;stroke:#57ae5b}
+    .lo{font:600 12px "Segoe UI",Arial;fill:#52606d}
+    .ln{font:600 12px "Segoe UI",Arial;fill:#0e6b31}
+  </style></defs>
+
+  <rect class="off" x="10" y="20" width="118" height="26" rx="13"/>
+  <circle cx="30" cy="33" r="5" fill="#cbd2d9" stroke="#b6bfc9"/>
+  <text class="lo" x="44" y="38">Suppress</text>
+  <text class="c" x="10" y="64">not holding -</text>
+  <text class="c" x="10" y="80">the logger runs at whatever sets it</text>
+
+  <path d="M186 33 h44" stroke="#9aa5b1" stroke-width="1.5" marker-end="url(#a)"/>
+  <defs><marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0 0 L7 3.5 L0 7 z" fill="#9aa5b1"/></marker></defs>
+  <text class="c" x="188" y="24">click</text>
+
+  <rect class="on" x="248" y="20" width="118" height="26" rx="13"/>
+  <circle cx="268" cy="33" r="5" fill="#31a24c" stroke="#207227"/>
+  <text class="ln" x="282" y="38">Suppress</text>
+  <text class="c" x="248" y="64">holding at OFF -</text>
+  <text class="c" x="248" y="80">re-applied on every sync; click again to lift</text>
+</svg>
+<figcaption>Suppress is one toggle, not two buttons. The colour and the filled dot are the state,
+so it reads without relying on colour alone.</figcaption>
+</figure>
+
 <dl>
   <dt>Turn on</dt><dd>Creates an override at the level you choose.</dd>
 
@@ -104,7 +252,7 @@ overrides back up.</p>
   own timer, so there is nothing to force there - watch <em>Last sync</em> in the Hosts table.</dd>
 </dl>
 
-<h2>Suppress versus Clear</h2>
+<h2 id="suppress-clear">Suppress versus Clear<a class="top" href="#">top</a></h2>
 <p><strong>Suppress holds it. Clear deletes it and lets go.</strong></p>
 <table>
   <tr><th></th><th>Suppress</th><th>Clear</th></tr>
@@ -117,7 +265,7 @@ overrides back up.</p>
 and the plugin puts it back to <code>OFF</code> within a minute. Clear the same logger and it is
 quiet only until that rule next runs.</p>
 
-<h2>Why loggers from log4j2.properties cannot be cleared</h2>
+<h2 id="nofileclear">Why loggers from log4j2.properties cannot be cleared<a class="top" href="#">top</a></h2>
 <p>Their Clear button is shown struck through and disabled on purpose.</p>
 <p>Deleting one would achieve nothing: log4j2 rebuilds its entire configuration from that file
 whenever the file changes and on every restart, so the logger would come straight back. It is also
@@ -125,7 +273,7 @@ the host's declared configuration - the plugin quietly deleting it would be figh
 your back. Overriding it to <code>OFF</code> with Suppress is the honest option, and it stays
 visible and reversible.</p>
 
-<h2>Levels and expiry</h2>
+<h2 id="levels">Levels and expiry<a class="top" href="#">top</a></h2>
 <p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like
 this causes an incident.</p>
 <dl>
@@ -139,7 +287,65 @@ this causes an incident.</p>
   to <code>DEBUG</code> turns on every logger in the JVM at once.</dd>
 </dl>
 
-<h2>Hosts and propagation</h2>
+<h2 id="hosts">Hosts and propagation<a class="top" href="#">top</a></h2>
+<figure>
+<svg viewBox="0 0 640 250" width="100%" height="auto" role="img"
+     aria-label="How a change propagates: the browser calls one host, which writes the desired state to the IIQ database; every host reconciles against it on a timer and applies levels to its own log4j2 runtime">
+  <defs><style>
+    .bx{fill:#fff;stroke:#cbd2d9}
+    .db{fill:#f0f4f8;stroke:#bcccdc}
+    .hs{fill:#fff;stroke:#a3d9a5}
+    .t{font:600 11px "Segoe UI",Arial;fill:#102a43}
+    .d{font:10px "Segoe UI",Arial;fill:#7b8794}
+    .ar{stroke:#7b8794;stroke-width:1.4;fill:none}
+  </style>
+  <marker id="h" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0 0 L7 3.5 L0 7 z" fill="#7b8794"/></marker></defs>
+
+  <rect class="bx" x="12" y="20" width="110" height="40" rx="4"/>
+  <text class="t" x="24" y="38">Your browser</text>
+  <text class="d" x="24" y="52">one click</text>
+
+  <path class="ar" d="M126 40 h60" marker-end="url(#h)"/>
+  <text class="d" x="132" y="32">REST</text>
+
+  <rect class="bx" x="192" y="20" width="128" height="40" rx="4"/>
+  <text class="t" x="204" y="38">The host serving it</text>
+  <text class="d" x="204" y="52">applies immediately</text>
+
+  <path class="ar" d="M256 64 v34" marker-end="url(#h)"/>
+  <text class="d" x="262" y="84">writes desired state</text>
+
+  <rect class="db" x="150" y="102" width="212" height="46" rx="4"/>
+  <text class="t" x="162" y="122">IIQ database</text>
+  <text class="d" x="162" y="138">Custom &quot;TurnOnLoggers Configuration&quot;</text>
+
+  <path class="ar" d="M150 125 h-70 v58" marker-end="url(#h)"/>
+  <path class="ar" d="M256 152 v30" marker-end="url(#h)"/>
+  <path class="ar" d="M362 125 h70 v58" marker-end="url(#h)"/>
+  <text class="d" x="376" y="170">each host reads it</text>
+
+  <rect class="hs" x="30" y="186" width="104" height="46" rx="4"/>
+  <text class="t" x="42" y="204">host A</text>
+  <text class="d" x="42" y="220">log4j2 runtime</text>
+
+  <rect class="hs" x="204" y="186" width="104" height="46" rx="4"/>
+  <text class="t" x="216" y="204">host B</text>
+  <text class="d" x="216" y="220">log4j2 runtime</text>
+
+  <rect class="hs" x="378" y="186" width="104" height="46" rx="4"/>
+  <text class="t" x="390" y="204">host C</text>
+  <text class="d" x="390" y="220">log4j2 runtime</text>
+
+  <text class="d" x="500" y="196">...every JVM,</text>
+  <text class="d" x="500" y="210">on its own timer</text>
+  <text class="d" x="500" y="224">60s by default</text>
+</svg>
+<figcaption>No host talks to another. Each one reconciles itself against the database, which is why
+a mixed Windows, Linux and container cluster needs no special handling - and why a restarted host
+picks the overrides back up on its own.</figcaption>
+</figure>
+
 <p>The host serving your click applies the change immediately. Every other host picks it up on its
 next sync - 60 seconds by default. Hosts reporting an identical picture are grouped in the tables,
 so the one host that differs stands out instead of being buried under repeats.</p>
@@ -147,7 +353,7 @@ so the one host that differs stands out instead of being buried under repeats.</
 the same log4j2 call everywhere. What differs per host - the OS, the config file path, where the
 logs are written - is reported in the Hosts table rather than acted on.</p>
 
-<h2>Audit</h2>
+<h2 id="audit">Audit<a class="top" href="#">top</a></h2>
 <p>Every button press is recorded as an IIQ audit event under the action
 <code>LoggerManagerChange</code>: who, what happened, the logger, level, target hosts, expiry, and
 the note you typed.</p>
@@ -160,7 +366,7 @@ header.</p>
 <p>The page's own background refresh is not audited: it polls every ten seconds and would bury the
 actions that matter.</p>
 
-<h2>Plugin settings</h2>
+<h2 id="settings">Plugin settings<a class="top" href="#">top</a></h2>
 <dl>
   <dt>Enabled</dt><dd>Master switch. Off means every host reverts to its own
   <code>log4j2.properties</code> on its next sync, without losing the stored configuration.</dd>
@@ -173,7 +379,7 @@ actions that matter.</p>
   in <em>Overrides in effect</em> marked <em>from settings</em> and can only be changed there.</dd>
 </dl>
 
-<h2>If something looks wrong</h2>
+<h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>
 <dl>
   <dt>A host says "not reporting"</dt>
   <dd>Its sync service has not run. Check that host's <code>sailpoint.log</code> for
@@ -190,7 +396,7 @@ actions that matter.</p>
   something changed it at runtime.</dd>
 </dl>
 
-<h2>Limitations</h2>
+<h2 id="limits">Limitations<a class="top" href="#">top</a></h2>
 <p>Appenders are not managed, only levels - where a logger writes is still
 <code>log4j2.properties</code>' business.</p>
 <p>Uninstalling the plugin leaves its ServiceDefinition behind, because IIQ has no uninstall-time
@@ -198,6 +404,9 @@ import hook. Remove it with the <code>iiq console</code>:
 <code>delete ServiceDefinition TurnOnLoggersSync</code>.</p>
 <p>Only the properties format of log4j2 configuration is parsed. For an XML or YAML configuration
 the source of each logger cannot be determined, and the page says so.</p>
+
+</main>
+</div>
 
 <footer>
 Logger Manager &middot; Sahiljit Singh Manhas &middot;

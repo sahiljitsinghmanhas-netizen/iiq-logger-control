@@ -385,7 +385,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.15.0.zip` from the
+Download `TurnOnLoggers-2.16.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
