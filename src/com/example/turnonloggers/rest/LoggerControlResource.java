@@ -111,11 +111,14 @@ public class LoggerControlResource extends BasePluginResource {
             String bad = validate(ctx, logger, level);
             if (bad != null) return error(Response.Status.BAD_REQUEST, bad);
 
-            long expires = resolveExpiry(ctx, body);
+            long expires = resolveExpiry(ctx, body, level);
             if (expires < 0) {
                 return error(Response.Status.BAD_REQUEST,
-                        "Permanent overrides are not allowed; set a TTL up to "
-                                + PluginSettings.getInt(ctx, PluginSettings.S_MAX_TTL, 1440) + " minutes.");
+                        "A logger being raised to " + level.toUpperCase(Locale.ROOT)
+                                + " has to expire; set a TTL up to "
+                                + PluginSettings.getInt(ctx, PluginSettings.S_MAX_TTL, 1440)
+                                + " minutes. Only OFF, FATAL, ERROR and WARN can be permanent, "
+                                + "since quietening a logger cannot flood a disk.");
             }
 
             List<Map<String, String>> entries = LoggerConfigStore.loadEntries(ctx);
@@ -181,9 +184,11 @@ public class LoggerControlResource extends BasePluginResource {
                 target.put(LoggerConfigStore.E_LEVEL, level.toUpperCase(Locale.ROOT));
             }
             if (body != null && body.containsKey("ttlMinutes")) {
-                long expires = resolveExpiry(ctx, body);
+                long expires = resolveExpiry(ctx, body, target.get(LoggerConfigStore.E_LEVEL));
                 if (expires < 0) {
-                    return error(Response.Status.BAD_REQUEST, "TTL exceeds the configured maximum.");
+                    return error(Response.Status.BAD_REQUEST,
+                            "A logger being raised to " + target.get(LoggerConfigStore.E_LEVEL)
+                                    + " has to expire. Only OFF, FATAL, ERROR and WARN can be permanent.");
                 }
                 target.put(LoggerConfigStore.E_EXPIRES, String.valueOf(expires));
             }
@@ -355,6 +360,11 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("permanentLoggers", permanentRaw);
         out.put("permanentErrors", permanentErrors);
         out.put("levels", Log4jAgent.LEVELS);
+        List<String> quieting = new ArrayList<>();
+        for (String l : Log4jAgent.LEVELS) {
+            if (Log4jAgent.isQuieting(l)) quieting.add(l);
+        }
+        out.put("quietingLevels", quieting);
         out.put("user", user.getName());
         out.put("log4jAvailable", Log4jAgent.available());
         out.put("pluginVersion", PluginSettings.getVersion(ctx));
@@ -556,7 +566,7 @@ public class LoggerControlResource extends BasePluginResource {
      * @return absolute expiry in epoch millis, 0 for never, or -1 if the
      *         requested TTL is not permitted.
      */
-    private long resolveExpiry(SailPointContext ctx, Map<String, Object> body) {
+    private long resolveExpiry(SailPointContext ctx, Map<String, Object> body, String level) {
         int maxTtl = PluginSettings.getInt(ctx, PluginSettings.S_MAX_TTL, 1440);
         int defTtl = PluginSettings.getInt(ctx, PluginSettings.S_DEFAULT_TTL, 60);
 
@@ -570,9 +580,15 @@ public class LoggerControlResource extends BasePluginResource {
         }
         int ttl = requested == null ? defTtl : requested;
         if (ttl <= 0) {
-            // 0 means "never expire" - only allowed when the admin has set
-            // maxTtlMinutes to 0, i.e. deliberately turned the guard rail off.
-            return maxTtl <= 0 ? 0L : -1L;
+            // "Never expire". The TTL guard rail is there to stop debug
+            // logging being left on and filling a disk, so it only applies to
+            // levels that can increase output. Silencing a logger is allowed
+            // to be permanent - otherwise quietening something noisy in
+            // log4j2.properties is impossible: the override lapses and the
+            // noise comes straight back.
+            if (maxTtl <= 0) return 0L;
+            if (Log4jAgent.isQuieting(level)) return 0L;
+            return -1L;
         }
         if (maxTtl > 0 && ttl > maxTtl) ttl = maxTtl;
         return System.currentTimeMillis() + (ttl * 60000L);

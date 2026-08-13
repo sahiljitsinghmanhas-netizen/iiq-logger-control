@@ -567,6 +567,21 @@ public final class Log4jAgent {
         return normalized == null || normalized.isEmpty();
     }
 
+    /**
+     * True for levels that can only ever reduce output.
+     *
+     * The TTL guard rail exists because debug logging left on by accident
+     * fills disks. Silencing a logger carries the opposite risk, so it is
+     * allowed to be permanent - otherwise the only way to quieten something
+     * noisy in log4j2.properties is an override that expires and lets the
+     * noise straight back.
+     */
+    public static boolean isQuieting(String level) {
+        Level l = parseLevel(level);
+        if (l == null) return false;
+        return l.intLevel() <= Level.WARN.intLevel();   // OFF, FATAL, ERROR, WARN
+    }
+
     /** null if the level name is not one we allow. */
     public static Level parseLevel(String raw) {
         if (raw == null) return null;

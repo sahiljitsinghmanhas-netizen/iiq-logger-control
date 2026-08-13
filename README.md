@@ -129,6 +129,32 @@ Overriding a logger the file already sets does not delete anything: ownership
 moves to the plugin while the override lives, and the file's own level is put
 back exactly when it is removed.
 
+### Silencing a noisy logger
+
+Turning something **down** is as important as turning it up, and it is the
+case a TTL gets wrong. If a logger is noisy because `log4j2.properties` sets it
+that way, an override that expires just lets the noise back an hour later.
+
+So the expiry rule depends on direction:
+
+| Level you are setting | Expiry |
+|---|---|
+| `INFO`, `DEBUG`, `TRACE`, `ALL` - more output | must expire, capped by `maxTtlMinutes` |
+| `OFF`, `FATAL`, `ERROR`, `WARN` - less output | **may be permanent** |
+
+Debug logging left on by accident is what fills a disk; a silenced logger
+cannot. The *Turn off after* list therefore offers **never (permanent)**, greyed
+out until the level you pick is one that reduces output.
+
+The quickest route is the **Silence** button on any row of *Already set in
+log4j2.properties* - one click adds a permanent `OFF` override for that logger
+on every host. The file is not modified, and removing the override hands the
+logger straight back to whatever the file says.
+
+Verified end to end: with `org.hibernate.SQL=DEBUG` set in the file, the log
+took 31 SQL lines from a single page load; after silencing, 0; after removing
+the silence, 33 again.
+
 ### Reverting is precise
 
 Before overriding a logger, the plugin records whether an exact `LoggerConfig`
@@ -222,7 +248,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.2.0.zip` from the
+Download `TurnOnLoggers-2.3.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

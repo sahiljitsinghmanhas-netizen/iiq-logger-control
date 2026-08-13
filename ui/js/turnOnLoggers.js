@@ -263,7 +263,9 @@
         form.appendChild(f2);
 
         // ttl
-        var f3 = field('Turn off after', 'Overrides expire on their own so nobody has to remember.');
+        var f3 = field('Turn off after',
+            'Raising a logger always expires, so debug output cannot be left on by accident. '
+            + 'Quietening one (OFF, FATAL, ERROR, WARN) may be permanent.');
         var ttl = document.createElement('select');
         ttl.id = 'tol-ttl';
         ttl.className = 'tol-input';
@@ -276,9 +278,28 @@
             if (max > 0 && m > max) return;
             ttl.appendChild(opt(String(m), fmtDuration(m * 60000), m === def));
         });
-        if (!(max > 0)) ttl.appendChild(opt('0', 'never (permanent)', false));
+        // Always present, enabled only when the chosen level cannot increase
+        // output. Greying it out rather than hiding it makes the rule
+        // discoverable instead of leaving people wondering where it went.
+        var never = opt('0', 'never (permanent)', false);
+        ttl.appendChild(never);
         f3.appendChild(ttl);
+        var ttlNote = el('div', 'tol-hint', '');
+        f3.appendChild(ttlNote);
         form.appendChild(f3);
+
+        function syncNeverOption() {
+            var quieting = (state.quietingLevels || []).indexOf(lvl.value) > -1;
+            var permitted = quieting || !(max > 0);
+            never.disabled = !permitted;
+            if (!permitted && ttl.value === '0') ttl.value = String(def);
+            clear(ttlNote);
+            ttlNote.appendChild(document.createTextNode(permitted
+                ? 'Permanent is allowed for ' + lvl.value + ' - quietening a logger cannot flood a disk.'
+                : lvl.value + ' increases output, so it has to expire.'));
+        }
+        lvl.onchange = syncNeverOption;
+        syncNeverOption();
 
         // hosts
         var f4 = field('Hosts', 'Leave on "All hosts" unless you are chasing something host-specific.');
@@ -370,7 +391,7 @@
     function overridesSection() {
         var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
-        head.appendChild(el('h2', 'tol-card-title', 'Loggers currently on'));
+        head.appendChild(el('h2', 'tol-card-title', 'Overrides in effect'));
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
             'Everything this plugin has turned on, from both this page and the plugin settings. ' +
@@ -575,7 +596,7 @@
         groups.forEach(function (g) {
             box.appendChild(hostChips(g.hosts));
             var t = el('table', 'tol-table');
-            t.appendChild(headRow(['Logger', 'Level', 'Source']));
+            t.appendChild(headRow(['Logger', 'Level', 'Source', '']));
             var tb = el('tbody');
             g.keys.forEach(function (k) {
                 var tr = el('tr');
@@ -586,6 +607,29 @@
                 c2.appendChild(el('span', 'tol-level tol-level-' + String(g.map[k]).toLowerCase(), g.map[k]));
                 tr.appendChild(c2);
                 tr.appendChild(el('td', 'tol-small', 'log4j2.properties'));
+
+                // One click to quieten a noisy file logger, permanently, without
+                // editing the file on every host. Permanent is the point - a
+                // silence that expires just lets the noise back.
+                var c4 = el('td');
+                if (k !== 'root' && String(g.map[k]).toUpperCase() !== 'OFF') {
+                    var silence = el('button', 'tol-btn tol-btn-small', 'Silence');
+                    silence.title = 'Set ' + k + ' to OFF on every host, permanently';
+                    silence.onclick = (function (name, wasLevel) {
+                        return function () {
+                            if (!window.confirm('Silence ' + name + ' on all hosts?' + "\n\n"
+                            + 'It is set to ' + wasLevel + ' in log4j2.properties. This adds a '
+                            + 'permanent OFF override that does not expire. The file itself is not '
+                            + 'changed, and removing the override here puts it back.')) return;
+                            mutate(api('POST', '/entries', {
+                                logger: name, level: 'OFF', ttlMinutes: 0, hosts: ['*'],
+                                note: 'silenced - was ' + wasLevel + ' in log4j2.properties'
+                            }), name + ' silenced on every host. It will not come back on its own.');
+                        };
+                    })(k, g.map[k]);
+                    c4.appendChild(silence);
+                }
+                tr.appendChild(c4);
                 tb.appendChild(tr);
             });
             t.appendChild(tb);
