@@ -1,5 +1,5 @@
 /*
- * Logger Control - plugin page UI.
+ * Logger Manager - plugin page UI.
  *
  * Vanilla JS on purpose: AngularJS is not loaded on IIQ plugin fullPages, so
  * ng-* attributes render as literal text. Everything here is fetch + DOM.
@@ -142,7 +142,7 @@
             if (!state && root) {
                 clear(root);
                 var b = el('div', 'tol-banner tol-error');
-                b.appendChild(document.createTextNode('Could not load Logger Control: ' + e.message));
+                b.appendChild(document.createTextNode('Could not load Logger Manager: ' + e.message));
                 root.appendChild(b);
             }
         });
@@ -195,7 +195,7 @@
     function header() {
         var h = el('div', 'tol-header');
         var left = el('div', 'tol-header-left');
-        left.appendChild(el('h1', 'tol-title', 'Logger Control'));
+        left.appendChild(el('h1', 'tol-title', 'Logger Manager'));
         var facts = state.thisHostFacts || {};
         var sub = el('div', 'tol-subtitle');
         sub.appendChild(document.createTextNode(
@@ -205,6 +205,7 @@
         chips.appendChild(chip('Serving host', state.thisHost));
         chips.appendChild(chip(OS_ICON[facts.osFamily] || 'OS', facts.os || '?'));
         chips.appendChild(chip('Config revision', String(state.revision)));
+        chips.appendChild(chip('Audit', state.auditEnabled ? 'recording' : 'not recording'));
         left.appendChild(chips);
         h.appendChild(left);
 
@@ -221,6 +222,23 @@
             mutate(api('DELETE', '/entries'), 'All overrides removed. Other hosts revert on their next sync.');
         };
         right.appendChild(panic);
+
+        if (!state.auditEnabled) {
+            // Off by default because switching it on edits the AuditConfig
+            // singleton, which is not something a plugin should do unasked.
+            var au = el('button', 'tol-btn', 'Start audit logging');
+            au.title = 'Register the ' + (state.auditAction || 'LoggerManagerChange')
+                + ' action so IIQ records who changes logger levels';
+            au.onclick = function () {
+                if (!window.confirm('Start recording changes to the IIQ audit log?'
+                    + ' This adds one action to Global Settings -> Audit Configuration.'
+                    + ' Existing audit actions are not affected.')) return;
+                mutate(api('POST', '/audit/enable'),
+                    'Audit logging on. Changes from here are recorded as '
+                    + (state.auditAction || 'LoggerManagerChange') + '.');
+            };
+            right.appendChild(au);
+        }
         h.appendChild(right);
         return h;
     }
@@ -779,22 +797,21 @@
     function footer() {
         var f = el('div', 'tol-footer');
 
-        // Two short centred lines. This used to be a left-aligned paragraph of
-        // small print that read as clutter under the tables.
+        // One line each. This was three lines of small print and read as clutter.
         f.appendChild(el('div', 'tol-footer-line',
-            'Turning a logger on only adds to the list - other overrides and anything '
-            + 'in log4j2.properties are left alone.'));
-        f.appendChild(el('div', 'tol-footer-line',
-            "Levels are set in each JVM's live log4j2 runtime, so no file is ever modified. "
-            + 'The list survives restarts.'));
+            'Levels are set in each JVM’s live log4j2 runtime — no file is ever modified, '
+            + 'turning a logger on only adds to the list, and the list survives restarts.'));
 
         var credit = el('div', 'tol-credit');
-        var name = 'Logger Control';
+        var name = 'Logger Manager';
         if (state.pluginVersion) name += ' ' + state.pluginVersion;
-        credit.appendChild(document.createTextNode(name));
-        if (state.author) credit.appendChild(document.createTextNode(' · ' + state.author));
+        credit.appendChild(el('span', 'tol-credit-name', name));
+        credit.appendChild(el('span', 'tol-credit-sep', '•'));
+        if (state.author) {
+            credit.appendChild(el('span', 'tol-credit-author', state.author));
+        }
         if (state.projectUrl) {
-            credit.appendChild(document.createTextNode(' · '));
+            credit.appendChild(el('span', 'tol-credit-sep', '•'));
             var a = document.createElement('a');
             a.href = state.projectUrl;
             a.target = '_blank';
@@ -826,7 +843,7 @@
     // "Configure" on the Plugins screen opens pluginConfig.jsf, which is where
     // people reasonably go looking for somewhere to add a logger - and it is
     // the wrong screen. The settings there are policy (who may use it, how long
-    // overrides live); loggers get turned on from the Logger Control page. This
+    // overrides live); loggers get turned on from the Logger Manager page. This
     // puts a link to it right at the top of that form.
     // ------------------------------------------------------------------
 
@@ -853,14 +870,14 @@
         text.appendChild(el('strong', '', 'Looking for where to turn a logger on? '));
         text.appendChild(document.createTextNode(
             'Not here. These settings control who may use the plugin and how long '
-            + 'overrides live. Loggers are turned on from the Logger Control page, '
+            + 'overrides live. Loggers are turned on from the Logger Manager page, '
             + 'which has a logger picker, per-host targeting and an expiry.'));
         box.appendChild(text);
 
         var link = document.createElement('a');
         link.href = PAGE_URL;
         link.className = 'tol-btn tol-btn-primary tol-config-banner-link';
-        link.appendChild(document.createTextNode('Open Logger Control'));
+        link.appendChild(document.createTextNode('Open Logger Manager'));
         box.appendChild(link);
 
         // Slot in under the "Back" header bar rather than above it, so it does

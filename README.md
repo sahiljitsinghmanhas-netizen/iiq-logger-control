@@ -1,4 +1,4 @@
-# Logger Control (`TurnOnLoggers`)
+# Logger Manager (`TurnOnLoggers`)
 
 An IdentityIQ plugin that lets a developer turn a log4j2 logger on or off
 **across every host in the deployment, from the IIQ UI**, without logging into
@@ -230,6 +230,35 @@ where an admin has overridden it (common in containers).
 
 ---
 
+## Audit trail
+
+Every change made through the plugin is recorded as an IIQ audit event, so
+"who turned that on, when, and why" has an answer outside the application log.
+The note you type when enabling a logger is carried into the event.
+
+| Field | Holds |
+|---|---|
+| action | `LoggerManagerChange` |
+| source | the user who made the change |
+| target | the logger |
+| string1 | what happened - enabled, silenced, updated, turned off, removed |
+| string2 / string3 / string4 | level, target hosts, expiry |
+| attribute `note` | the note from the form |
+
+IIQ only stores events whose action is enabled in **Audit Configuration**, and
+that object - `AuditConfig` - is a global singleton. A plugin that imported one
+would replace the whole configuration and silently switch off every other audit
+action in the environment, so this plugin never does that.
+
+Instead the page shows an **Audit** chip, and a **Start audit logging** button
+when it is off. That adds the single `LoggerManagerChange` action to the
+existing list and enables it; nothing else in Audit Configuration is touched.
+You can equally add it by hand under
+**gear icon → Global Settings → Audit Configuration**.
+
+Changes are always written to `sailpoint.log` regardless, and an audit failure
+never blocks the level change itself.
+
 ## Safety
 
 - **Overrides expire.** New overrides default to 60 minutes and are capped at
@@ -251,7 +280,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.5.0.zip` from the
+Download `TurnOnLoggers-2.6.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
@@ -280,8 +309,8 @@ on its next cycle, typically within a minute of the install.
 
 IIQ gives plugin full pages no menu entry of their own - `sailpoint.plugin
 .FullPage` carries a `title` and nothing else - so bookmark that URL, or go
-**gear icon → Plugins → Logger Control → Configure**, where the plugin adds an
-**Open Logger Control** button at the top of the settings form.
+**gear icon → Plugins → Logger Manager → Configure**, where the plugin adds an
+**Open Logger Manager** button at the top of the settings form.
 
 The plugin deliberately does not touch IIQ's navigation. Adding a menu entry
 would mean either editing the `UIConfig` singleton (which would overwrite
@@ -388,7 +417,7 @@ get logging control and nothing else.
 
 ## Settings
 
-`gear icon → Plugins → Logger Control → Settings`. Changes take effect on the
+`gear icon → Plugins → Logger Manager → Settings`. Changes take effect on the
 next read; no restart.
 
 | Setting | Default | What it does |
@@ -402,7 +431,7 @@ next read; no restart.
 
 ### `permanentLoggers`
 
-**Not the normal way to turn a logger on** - use the Logger Control page for
+**Not the normal way to turn a logger on** - use the Logger Manager page for
 that. This field exists for the one case the page deliberately does not cover:
 a logger with **no expiry**, which stays on until you edit the box. Everything
 set on the page expires; anything listed here does not.
@@ -414,7 +443,7 @@ item to a single host:
 sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02
 ```
 
-They appear in the Logger Control page's table marked **"from settings"** with
+They appear in the Logger Manager page's table marked **"from settings"** with
 an expiry of *never*, so the page is still a single list of everything that is
 on. They cannot be turned off from the page - editing the setting is the way -
 and they are the lowest precedence, so anything set in the UI for the same

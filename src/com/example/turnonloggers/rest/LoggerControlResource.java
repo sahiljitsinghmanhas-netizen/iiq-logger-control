@@ -1,5 +1,6 @@
 package com.example.turnonloggers.rest;
 
+import com.example.turnonloggers.core.AuditWriter;
 import com.example.turnonloggers.core.HostFacts;
 import com.example.turnonloggers.core.Log4jAgent;
 import com.example.turnonloggers.core.LoggerConfigStore;
@@ -141,11 +142,11 @@ public class LoggerControlResource extends BasePluginResource {
                     hosts, expires, user.getName(), note));
 
             int rev = LoggerConfigStore.saveEntries(ctx, entries, user.getName());
-            LOG.info("[TurnOnLoggers] " + user.getName() + " set " + Log4jAgent.display(normalized)
-                    + "=" + level.toUpperCase(Locale.ROOT) + " on hosts=" + hosts
-                    + " expires=" + (expires == 0 ? "never" : new java.util.Date(expires))
-                    + " (revision " + rev + ")");
 
+            AuditWriter.log(ctx, user.getName(),
+                    "OFF".equalsIgnoreCase(level) ? "silenced" : "enabled",
+                    Log4jAgent.display(normalized), level.toUpperCase(Locale.ROOT),
+                    hosts, expires, note);
             LoggerSync.run(ctx, "rest:add");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
@@ -197,8 +198,12 @@ public class LoggerControlResource extends BasePluginResource {
             }
 
             int rev = LoggerConfigStore.saveEntries(ctx, entries, user.getName());
-            LOG.info("[TurnOnLoggers] " + user.getName() + " updated override " + id
-                    + " -> " + target + " (revision " + rev + ")");
+            AuditWriter.log(ctx, user.getName(), "updated",
+                    String.valueOf(target.get(LoggerConfigStore.E_LOGGER)),
+                    String.valueOf(target.get(LoggerConfigStore.E_LEVEL)),
+                    String.valueOf(target.get(LoggerConfigStore.E_HOSTS)),
+                    LoggerConfigStore.asLong(target.get(LoggerConfigStore.E_EXPIRES), 0L),
+                    String.valueOf(target.get(LoggerConfigStore.E_NOTE)));
             LoggerSync.run(ctx, "rest:update");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
@@ -219,18 +224,20 @@ public class LoggerControlResource extends BasePluginResource {
 
             SailPointContext ctx = getContext();
             List<Map<String, String>> entries = LoggerConfigStore.loadEntries(ctx);
-            boolean removed = false;
+            Map<String, String> gone = null;
             for (int i = entries.size() - 1; i >= 0; i--) {
                 if (id.equals(entries.get(i).get(LoggerConfigStore.E_ID))) {
-                    entries.remove(i);
-                    removed = true;
+                    gone = entries.remove(i);
                 }
             }
-            if (!removed) return error(Response.Status.NOT_FOUND, "No such override: " + id);
+            if (gone == null) return error(Response.Status.NOT_FOUND, "No such override: " + id);
 
             int rev = LoggerConfigStore.saveEntries(ctx, entries, user.getName());
-            LOG.info("[TurnOnLoggers] " + user.getName() + " removed override " + id
-                    + " (revision " + rev + ")");
+            AuditWriter.log(ctx, user.getName(), "turned off",
+                    String.valueOf(gone.get(LoggerConfigStore.E_LOGGER)),
+                    String.valueOf(gone.get(LoggerConfigStore.E_LEVEL)),
+                    String.valueOf(gone.get(LoggerConfigStore.E_HOSTS)), 0L,
+                    String.valueOf(gone.get(LoggerConfigStore.E_NOTE)));
             LoggerSync.run(ctx, "rest:delete");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
@@ -252,7 +259,8 @@ public class LoggerControlResource extends BasePluginResource {
 
             SailPointContext ctx = getContext();
             int rev = LoggerConfigStore.saveEntries(ctx, new ArrayList<Map<String, String>>(), user.getName());
-            LOG.info("[TurnOnLoggers] " + user.getName() + " cleared ALL overrides (revision " + rev + ")");
+            AuditWriter.log(ctx, user.getName(), "turned everything off",
+                    "(all overrides)", null, "*", 0L, null);
             LoggerSync.run(ctx, "rest:clear");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
@@ -302,12 +310,46 @@ public class LoggerControlResource extends BasePluginResource {
             SailPointContext ctx = getContext();
             String target = str(body, "logger");
             LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName(), target);
-            LOG.info("[TurnOnLoggers] " + user.getName() + " requested cleanup of "
-                    + ((target == null || target.trim().isEmpty()) ? "loggers this plugin left behind" : target));
+            AuditWriter.log(ctx, user.getName(), "removed from the live configuration",
+                    (target == null || target.trim().isEmpty()) ? "(loggers left over)" : target,
+                    null, "*", 0L, null);
             LoggerSync.run(ctx, "rest:cleanup");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] cleanupRuntime failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
+    /**
+     * Register this plugin's audit action so IIQ starts persisting its events.
+     *
+     * Additive: the existing AuditConfig actions are kept exactly as they are.
+     * Deliberately an explicit request rather than something the plugin does
+     * on install, because AuditConfig is a global singleton.
+     */
+    @POST
+    @Path("audit/enable")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response enableAudit() {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            boolean ok = AuditWriter.enable(ctx);
+            if (!ok) {
+                return error(Response.Status.INTERNAL_SERVER_ERROR,
+                        "Could not enable the audit action. Add '" + AuditWriter.ACTION
+                                + "' by hand under gear icon -> Global Settings -> Audit Configuration.");
+            }
+            AuditWriter.log(ctx, user.getName(), "enabled audit logging", "(audit configuration)",
+                    null, null, 0L, null);
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] enableAudit failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
         }
     }
@@ -371,6 +413,8 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("user", user.getName());
         out.put("log4jAvailable", Log4jAgent.available());
         out.put("pluginVersion", PluginSettings.getVersion(ctx));
+        out.put("auditEnabled", AuditWriter.isEnabled());
+        out.put("auditAction", AuditWriter.ACTION);
         out.put("author", "Sahiljit Singh Manhas");
         out.put("projectUrl", "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control");
 
