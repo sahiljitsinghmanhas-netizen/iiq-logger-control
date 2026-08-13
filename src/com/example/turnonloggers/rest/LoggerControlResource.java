@@ -70,42 +70,6 @@ public class LoggerControlResource extends BasePluginResource {
     // read
     // ==================================================================
 
-    /**
-     * Cheap "may I use this?" probe, used by the snippet that adds the menu
-     * link to every IIQ page.
-     *
-     * Deliberately not capability-gated - answering "no" is the whole point.
-     * It reveals nothing beyond whether the caller holds a capability they
-     * could discover by visiting the page anyway, and it lets the menu entry
-     * stay hidden for the majority of users who have no business changing log
-     * levels, instead of showing everyone a link that 403s.
-     */
-    @GET
-    @Path("access")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response access() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        boolean allowed = false;
-        try {
-            Identity user = requireUser();
-            // Checked directly rather than via capabilityDenial(), which logs
-            // a warning on refusal - this probe runs once per user session and
-            // a "denied" answer here is normal, not noteworthy.
-            String required = PluginSettings.getString(getContext(),
-                    PluginSettings.S_REQUIRED_CAP, "SystemAdministrator");
-            allowed = user != null
-                    && PluginSettings.getBool(getContext(), PluginSettings.S_ENABLED, true)
-                    && hasCapability(user, required);
-        } catch (Throwable t) {
-            // Never let this break page rendering - the menu link just stays
-            // hidden if we cannot answer.
-            LOG.debug("[TurnOnLoggers] access probe failed: " + t);
-        }
-        m.put("allowed", allowed);
-        m.put("title", "Logger Control");
-        return json(Response.Status.OK, m);
-    }
-
     @GET
     @Path("state")
     @Produces(MediaType.APPLICATION_JSON)
@@ -536,8 +500,17 @@ public class LoggerControlResource extends BasePluginResource {
             return "The root logger is blocked. Turn on 'Allow root logger' in the plugin settings "
                     + "if you really want to raise the level for every logger on every host.";
         }
+        // Easy mistake: the "Permanent loggers" setting takes logger=LEVEL, so
+        // people paste that whole form in here. Say so, rather than leaving
+        // them to spot the stray '=' in a generic name-format complaint.
+        if (normalized.indexOf('=') > -1) {
+            return "Enter the logger name on its own and pick the level from the Level list. "
+                    + "The logger=LEVEL form is only used in the 'Permanent loggers' plugin setting.";
+        }
         if (!Log4jAgent.isRoot(normalized) && !LOGGER_NAME.matcher(normalized).matches()) {
-            return "Logger name must look like a Java package or class name, e.g. sailpoint.api.Provisioner.";
+            return "Logger name must look like a Java package or class name, e.g. "
+                    + "sailpoint.api.Provisioner - or any custom logger of your own, "
+                    + "e.g. rule.groupAggregationRefresh.DBMSQL.";
         }
         if (level == null || Log4jAgent.parseLevel(level) == null) {
             return "Level must be one of " + Log4jAgent.LEVELS + ".";

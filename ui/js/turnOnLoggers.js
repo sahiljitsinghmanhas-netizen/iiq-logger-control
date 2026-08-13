@@ -222,14 +222,21 @@
         form.onsubmit = function (ev) { ev.preventDefault(); submit(); };
         form.oninput = function () { formTouched = true; };
 
-        // logger name, with the catalog as suggestions
-        var f1 = field('Logger', 'The Java class or package to trace, e.g. sailpoint.api.Provisioner');
+        // Free-text field. The catalog is offered through a datalist purely as
+        // suggestions - a datalist never restricts what can be typed - but the
+        // browser renders the dropdown arrow exactly like a <select>, so the
+        // hint has to say out loud that anything is accepted. Custom loggers
+        // declared inside a rule (Logger.getLogger("rule.myRule")) are a main
+        // use case and will never appear in any catalog.
+        var f1 = field('Logger',
+            'Type any logger name - anything log4j2 knows about, including your own, '
+            + 'e.g. rule.myCustomRule. The dropdown only suggests common IIQ ones.');
         var input = document.createElement('input');
         input.type = 'text';
         input.id = 'tol-logger';
         input.className = 'tol-input';
         input.setAttribute('list', 'tol-catalog');
-        input.setAttribute('placeholder', 'sailpoint.api.Provisioner');
+        input.setAttribute('placeholder', 'type or pick a logger name');
         input.setAttribute('autocomplete', 'off');
         f1.appendChild(input);
 
@@ -557,66 +564,7 @@
     // boot
     // ------------------------------------------------------------------
 
-    // ------------------------------------------------------------------
-    // navigation link
-    //
-    // IIQ gives plugin full pages no menu entry of their own - sailpoint.plugin
-    // .FullPage carries a title and nothing else - so without this the page is
-    // reachable only by URL or via gear -> Plugins. This snippet already loads
-    // on every IIQ page, so it adds the link itself.
-    //
-    // Done in the DOM rather than by editing the UIConfig object on purpose:
-    // UIConfig is a singleton, so a plugin that shipped one would overwrite
-    // whatever navigation customisation the customer already has.
-    // ------------------------------------------------------------------
-
     var PAGE_URL = CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers';
-    var ACCESS_KEY = 'tol.access';
-
-    function addNavLink() {
-        if (document.getElementById('tol-nav-item')) return;
-        // Matches IIQ's own top-level items (see the "Home" entry). If a future
-        // IIQ release restyles the navbar this simply finds nothing and the
-        // link is skipped - it must never break the page it is injected into.
-        var bar = document.querySelector('ul.nav.navbar-nav.navbar-left');
-        if (!bar) return;
-
-        var li = document.createElement('li');
-        li.id = 'tol-nav-item';
-        li.setAttribute('role', 'presentation');
-
-        var a = document.createElement('a');
-        a.href = PAGE_URL;
-        a.className = 'menuitem';
-        a.setAttribute('role', 'menuitem');
-        a.appendChild(document.createTextNode('Logger Control'));
-
-        li.appendChild(a);
-        bar.appendChild(li);
-    }
-
-    function ensureNavLink() {
-        // Cached per session so this costs one small request per user login,
-        // not one per page view.
-        var cached = null;
-        try {
-            cached = window.sessionStorage && window.sessionStorage.getItem(ACCESS_KEY);
-        } catch (e) {
-            cached = null; // private mode / storage disabled
-        }
-        if (cached === '1') { addNavLink(); return; }
-        if (cached === '0') { return; }
-
-        api('GET', '/access').then(function (d) {
-            var ok = !!(d && d.allowed);
-            try {
-                if (window.sessionStorage) window.sessionStorage.setItem(ACCESS_KEY, ok ? '1' : '0');
-            } catch (e) { /* not cacheable, will re-probe next page */ }
-            if (ok) addNavLink();
-        }).catch(function () {
-            // Not logged in, plugin disabled, session expired - no link, no noise.
-        });
-    }
 
     // ------------------------------------------------------------------
     // signpost on this plugin's own Configure page
@@ -672,7 +620,6 @@
     }
 
     function start() {
-        ensureNavLink();
         addConfigBanner();
         // The config screen is a hash-routed SPA; re-check when the route moves.
         window.addEventListener('hashchange', addConfigBanner);

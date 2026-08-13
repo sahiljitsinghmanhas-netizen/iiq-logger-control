@@ -167,44 +167,47 @@ on its next cycle, typically within a minute of the install.
 
 ### Where the page is
 
-The plugin adds a **Logger Control** entry to the IIQ top navigation bar, next
-to Setup. That is the intended way in.
-
-It is also always reachable directly at:
-
 ```
 /identityiq/plugins/pluginPage.jsf?pn=TurnOnLoggers
 ```
 
-or via **gear icon → Plugins → Logger Control**.
+IIQ gives plugin full pages no menu entry of their own - `sailpoint.plugin
+.FullPage` carries a `title` and nothing else - so bookmark that URL, or go
+**gear icon → Plugins → Logger Control → Configure**, where the plugin adds an
+**Open Logger Control** button at the top of the settings form.
 
-<details>
-<summary>Why the plugin has to add its own menu entry</summary>
-
-IIQ gives plugin full pages no navigation entry - `sailpoint.plugin.FullPage`
-carries a `title` and nothing else, and there is no menu hook in the plugin
-manifest. Out of the box a plugin page is reachable only by URL or through the
-Plugins admin screen, which is no good for something developers are meant to
-use daily.
-
-So the stylesheet/script snippet this plugin already injects on every IIQ page
-also appends the menu item client-side. It is deliberately **not** done by
-importing a `UIConfig` object: UIConfig is a singleton, so a plugin that
-shipped one would silently overwrite whatever navigation customisation the
-customer already had - the same trap as shipping an `AuditConfig`.
-
-The link only appears for users who actually hold the required capability. The
-snippet asks `GET /plugin/rest/TurnOnLoggers/access` once per session and
-caches the answer in `sessionStorage`, so everyone else sees no menu entry
-rather than a link that 403s. If the navbar markup ever changes in a future IIQ
-release, the selector simply finds nothing and no link is added - it cannot
-break the page it is injected into.
-
-</details>
+The plugin deliberately does not touch IIQ's navigation. Adding a menu entry
+would mean either editing the `UIConfig` singleton (which would overwrite
+whatever navigation customisation you already have) or injecting into the
+navbar DOM on every page, and neither is a reasonable thing for a logging tool
+to do to a production IIQ.
 
 > Browsers cache plugin JavaScript aggressively and IIQ's asset URL revision
 > does not change between reinstalls, so after upgrading press **Ctrl+F5** once
-> or the menu entry will not appear.
+> or you will still be running the previous version's UI.
+
+**This page is where you turn loggers on.** The top card, *Turn on a logger*,
+takes a logger name, a level, how long to keep it on, which hosts, and an
+optional note. The `permanentLoggers` setting under **Settings** is not the
+normal route - see [Settings](#settings) for when to use it.
+
+### Any logger name works
+
+The Logger field is free text with a dropdown of common IIQ loggers attached.
+The dropdown is **suggestions only** - it does not restrict what you can type.
+Anything log4j2 recognises is valid, including loggers you declare yourself:
+
+```java
+// inside a rule
+Logger log = Logger.getLogger("rule.myCustomRule");
+```
+
+That name can be typed straight into the Logger field and set to `TRACE` like
+any other. Custom loggers from rules and custom Java are a main use case and
+will never appear in any catalog.
+
+Enter the **name only** and choose the level from the Level list. The
+`logger=LEVEL` form belongs to the `permanentLoggers` setting, not this field.
 
 **This page is where you turn loggers on.** The top card, *Turn on a logger*,
 takes a logger name (with a picker of the loggers people usually reach for), a
