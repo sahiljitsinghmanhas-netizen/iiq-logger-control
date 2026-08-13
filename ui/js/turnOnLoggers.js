@@ -210,15 +210,23 @@
 
         var right = el('div', 'tol-header-right');
         var sync = el('button', 'tol-btn', 'Sync this host now');
+        sync.title = 'Reconcile the host serving this page immediately. Every other host '
+            + 'reconciles itself on its own timer, so there is nothing to force there - '
+            + 'watch Last sync in the Hosts table.';
         sync.onclick = function () {
             mutate(api('POST', '/sync'), 'This host reconciled against the stored configuration.');
         };
         right.appendChild(sync);
 
-        var panic = el('button', 'tol-btn tol-btn-danger', 'Turn everything off');
+        var panic = el('button', 'tol-btn tol-btn-danger', 'Remove all overrides');
+        panic.title = 'Remove every override this plugin holds, on every host';
         panic.onclick = function () {
-            if (!window.confirm('Remove every logger override on every host?')) return;
-            mutate(api('DELETE', '/entries'), 'All overrides removed. Other hosts revert on their next sync.');
+            if (!window.confirm('Remove every override this plugin holds, on every host?'
+                + ' Each affected logger goes back to the level its own log4j2.properties gives it.'
+                + ' Nothing in log4j2.properties is changed, and loggers set at runtime by a rule'
+                + ' or custom code are not touched. The plugin stays enabled.')) return;
+            mutate(api('DELETE', '/entries'),
+                'All overrides removed. This host is back to its file levels; others follow within a minute.');
         };
         right.appendChild(panic);
 
@@ -554,7 +562,9 @@
         box.appendChild(el('div', 'tol-hint',
             'Every logger log4j2 has configured on each host, and where it came from. '
             + '"set at runtime" means something outside this plugin set it, typically a rule '
-            + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared.'));
+            + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
+            + 'Counts are distinct logger names; the tables list them per host, so the same '
+            + 'logger on several hosts appears once per host.'));
 
         var unparsed = [];
         (state.hosts || []).forEach(function (h) {
@@ -569,19 +579,37 @@
             box.appendChild(warn);
         }
 
-        var counts = { all: 0, file: 0, plugin: 0, leftover: 0, runtime: 0, unknown: 0 };
+        // Distinct logger names, not one per host. The same logger on ten hosts
+        // is one logger; counting rows made "Set at runtime (3)" mean two
+        // loggers, which reads as a discrepancy against the tables below.
+        var seen = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
+        var hostsWith = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
         (state.hosts || []).forEach(function (h) {
             (h.liveLoggers || []).forEach(function (r) {
-                counts.all++;
-                if (counts[r.source] !== undefined) counts[r.source]++;
+                seen.all[r.logger] = 1;
+                hostsWith.all[h.name] = 1;
+                if (seen[r.source]) {
+                    seen[r.source][r.logger] = 1;
+                    hostsWith[r.source][h.name] = 1;
+                }
             });
         });
+        var counts = {};
+        var hostCounts = {};
+        for (var k in seen) {
+            if (seen.hasOwnProperty(k)) {
+                counts[k] = Object.keys(seen[k]).length;
+                hostCounts[k] = Object.keys(hostsWith[k]).length;
+            }
+        }
         var bar = el('div', 'tol-filters');
         [['all', 'All'], ['file', 'From the file (log4j2.properties)'], ['plugin', 'This plugin'],
             ['leftover', 'Left over'], ['runtime', 'Set at runtime']].forEach(function (f) {
             if (f[0] !== 'all' && !counts[f[0]]) return;
             var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
                 f[1] + ' (' + counts[f[0]] + ')');
+            b.title = counts[f[0]] + ' distinct logger' + (counts[f[0]] === 1 ? '' : 's')
+                + ' across ' + hostCounts[f[0]] + ' host' + (hostCounts[f[0]] === 1 ? '' : 's');
             b.onclick = (function (key) {
                 return function () { liveFilter = key; render(); };
             })(f[0]);

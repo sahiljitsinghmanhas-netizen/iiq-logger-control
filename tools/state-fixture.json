@@ -1,1 +1,303 @@
-{"thisHost":"DESKTOP-SBFMEJO","thisHostFacts":{"host":"DESKTOP-SBFMEJO","osFamily":"windows","os":"Windows 10 10.0","arch":"amd64","java":"11.0.30 (OpenJDK 64-Bit Server VM)","jvmVendor":"Eclipse Adoptium","userTimezone":"America/New_York","fileSeparator":"\\","containerHint":"false","log4jConfig":"C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties","logFiles":"C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log"},"serverTime":"1786636632686","revision":66,"enabled":true,"allowRootLogger":false,"defaultTtlMinutes":60,"maxTtlMinutes":1440,"permanentLoggers":"","permanentErrors":[],"levels":["OFF","FATAL","ERROR","WARN","INFO","DEBUG","TRACE","ALL"],"quietingLevels":["OFF"],"user":"spadmin","log4jAvailable":true,"pluginVersion":"2.4.1","author":"Sahiljit Singh Manhas","projectUrl":"https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control","entries":[],"hosts":[{"name":"DESKTOP-SBFMEJO","knownToIIQ":true,"reporting":true,"inSync":true,"stale":false,"revision":66,"lastSync":"1786636579625","inactive":false,"heartbeat":"1786636629594","trigger":"service","applied":null,"errors":null,"facts":{"jvmVendor":"Eclipse Adoptium","logFiles":"C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log","java":"11.0.30 (OpenJDK 64-Bit Server VM)","os":"Windows 10 10.0","osFamily":"windows","fileSeparator":"\\","host":"DESKTOP-SBFMEJO","arch":"amd64","userTimezone":"America/New_York","log4jConfig":"C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties","containerHint":"false"},"fileLoggers":{"sailpoint.api.logging.SyslogAppender":"ERROR","root":"WARN","org.apache.myfaces.renderkit.html.util.MyFacesResourceLoader":"ERROR","sailpoint":"WARN","org.apache.myfaces.renderkit.html.util.DefaultAddResource":"ERROR","org.hibernate.engine.StatefulPersistenceContext":"ERROR","org.apache.myfaces.renderkit.html.util.ReducedHTMLParser":"ERROR","sailpoint.object.SyslogEvent":"ERROR","org.hibernate.orm.deprecation":"ERROR","net.sf.ehcache":"ERROR","net.sf.jasperreports.engine.xml":"ERROR"},"runtimeLoggers":null,"liveLoggers":[{"fileLevel":"WARN","level":"WARN","managed":"false","logger":"root","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"sailpoint.api.logging.SyslogAppender","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"org.apache.myfaces.renderkit.html.util.MyFacesResourceLoader","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"org.hibernate.orm.deprecation","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"net.sf.ehcache","source":"file"},{"fileLevel":"WARN","level":"WARN","managed":"false","logger":"sailpoint","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"org.apache.myfaces.renderkit.html.util.DefaultAddResource","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"org.hibernate.engine.StatefulPersistenceContext","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"org.apache.myfaces.renderkit.html.util.ReducedHTMLParser","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"sailpoint.object.SyslogEvent","source":"file"},{"fileLevel":"ERROR","level":"ERROR","managed":"false","logger":"net.sf.jasperreports.engine.xml","source":"file"}],"fileParsed":true,"isThisHost":true}],"localLoggers":[],"catalog":[{"logger":"sailpoint.api.Provisioner","label":"Provisioning - plan compilation and execution"},{"logger":"sailpoint.provisioning.PlanCompiler","label":"Provisioning - plan compiler detail"},{"logger":"sailpoint.api.Aggregator","label":"Aggregation - account/entitlement aggregation"},{"logger":"sailpoint.connector","label":"Connectors - all connector traffic"},{"logger":"sailpoint.connector.JDBCConnector","label":"Connector - JDBC"},{"logger":"sailpoint.connector.LDAPConnector","label":"Connector - LDAP"},{"logger":"sailpoint.connector.DelimitedFileConnector","label":"Connector - delimited file"},{"logger":"sailpoint.connector.webservices","label":"Connector - web services"},{"logger":"sailpoint.integration","label":"Integration executors"},{"logger":"sailpoint.api.Identitizer","label":"Identity refresh - attribute promotion"},{"logger":"sailpoint.task.IdentityRefreshExecutor","label":"Task - identity refresh"},{"logger":"sailpoint.api.Certificationer","label":"Certifications"},{"logger":"sailpoint.api.CorrelationModel","label":"Role correlation model"},{"logger":"sailpoint.api.Matchmaker","label":"Role assignment matching"},{"logger":"sailpoint.workflow","label":"Workflows - engine"},{"logger":"sailpoint.api.Workflower","label":"Workflows - launch and advance"},{"logger":"sailpoint.server.BSFRuleRunner","label":"Rules - BeanShell execution"},{"logger":"sailpoint.web.PageAuthenticationFilter","label":"Login - authentication filter"},{"logger":"sailpoint.service.PageAuthenticationService","label":"Login - authentication service"},{"logger":"sailpoint.web.sso","label":"Login - SSO authenticators"},{"logger":"sailpoint.rest","label":"REST API requests"},{"logger":"sailpoint.scim","label":"SCIM API requests"},{"logger":"sailpoint.server.Servicer","label":"Services - scheduler and heartbeat"},{"logger":"sailpoint.request","label":"Request processor"},{"logger":"sailpoint.persistence.hql","label":"Persistence - generated HQL"},{"logger":"org.hibernate.SQL","label":"Persistence - raw SQL"},{"logger":"sailpoint.api.Meter","label":"Performance metering"},{"logger":"sailpoint.plugin","label":"Plugin framework"},{"logger":"com.example.turnonloggers","label":"This plugin itself"}]}
+{
+ "thisHost": "DESKTOP-SBFMEJO",
+ "thisHostFacts": {
+  "host": "DESKTOP-SBFMEJO",
+  "osFamily": "windows",
+  "os": "Windows 10 10.0",
+  "arch": "amd64",
+  "java": "11.0.30 (OpenJDK 64-Bit Server VM)",
+  "jvmVendor": "Eclipse Adoptium",
+  "userTimezone": "America/New_York",
+  "fileSeparator": "\\",
+  "containerHint": "false",
+  "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
+  "logFiles": "C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log"
+ },
+ "serverTime": "1786636632686",
+ "revision": 66,
+ "enabled": true,
+ "allowRootLogger": false,
+ "defaultTtlMinutes": 60,
+ "maxTtlMinutes": 1440,
+ "permanentLoggers": "",
+ "permanentErrors": [],
+ "levels": [
+  "OFF",
+  "FATAL",
+  "ERROR",
+  "WARN",
+  "INFO",
+  "DEBUG",
+  "TRACE",
+  "ALL"
+ ],
+ "quietingLevels": [
+  "OFF"
+ ],
+ "user": "spadmin",
+ "log4jAvailable": true,
+ "pluginVersion": "2.4.1",
+ "author": "Sahiljit Singh Manhas",
+ "projectUrl": "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control",
+ "entries": [],
+ "hosts": [
+  {
+   "name": "DESKTOP-SBFMEJO",
+   "knownToIIQ": true,
+   "reporting": true,
+   "inSync": true,
+   "stale": false,
+   "revision": 66,
+   "lastSync": "1786636579625",
+   "inactive": false,
+   "heartbeat": "1786636629594",
+   "trigger": "service",
+   "applied": null,
+   "errors": null,
+   "facts": {
+    "jvmVendor": "Eclipse Adoptium",
+    "logFiles": "C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log",
+    "java": "11.0.30 (OpenJDK 64-Bit Server VM)",
+    "os": "Windows 10 10.0",
+    "osFamily": "windows",
+    "fileSeparator": "\\",
+    "host": "DESKTOP-SBFMEJO",
+    "arch": "amd64",
+    "userTimezone": "America/New_York",
+    "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
+    "containerHint": "false"
+   },
+   "fileLoggers": {
+    "sailpoint.api.logging.SyslogAppender": "ERROR",
+    "root": "WARN",
+    "org.apache.myfaces.renderkit.html.util.MyFacesResourceLoader": "ERROR",
+    "sailpoint": "WARN",
+    "org.apache.myfaces.renderkit.html.util.DefaultAddResource": "ERROR",
+    "org.hibernate.engine.StatefulPersistenceContext": "ERROR",
+    "org.apache.myfaces.renderkit.html.util.ReducedHTMLParser": "ERROR",
+    "sailpoint.object.SyslogEvent": "ERROR",
+    "org.hibernate.orm.deprecation": "ERROR",
+    "net.sf.ehcache": "ERROR",
+    "net.sf.jasperreports.engine.xml": "ERROR"
+   },
+   "runtimeLoggers": null,
+   "liveLoggers": [
+    {
+     "fileLevel": "WARN",
+     "level": "WARN",
+     "managed": "false",
+     "logger": "root",
+     "source": "file"
+    },
+    {
+     "fileLevel": "ERROR",
+     "level": "ERROR",
+     "managed": "false",
+     "logger": "sailpoint.api.logging.SyslogAppender",
+     "source": "file"
+    },
+    {
+     "logger": "rule.LeaverEventHandler",
+     "level": "DEBUG",
+     "managed": "false",
+     "source": "runtime",
+     "fileLevel": ""
+    },
+    {
+     "logger": "rule.DisableTerminatedAccounts",
+     "level": "DEBUG",
+     "managed": "false",
+     "source": "runtime",
+     "fileLevel": ""
+    }
+   ],
+   "fileParsed": true,
+   "isThisHost": true
+  },
+  {
+   "name": "iiq-app-01",
+   "knownToIIQ": true,
+   "reporting": true,
+   "inSync": true,
+   "stale": false,
+   "revision": 66,
+   "lastSync": "1786636579625",
+   "inactive": false,
+   "heartbeat": "1786636629594",
+   "trigger": "service",
+   "applied": null,
+   "errors": null,
+   "facts": {
+    "jvmVendor": "Eclipse Adoptium",
+    "logFiles": "C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log",
+    "java": "11.0.30 (OpenJDK 64-Bit Server VM)",
+    "os": "Windows 10 10.0",
+    "osFamily": "windows",
+    "fileSeparator": "\\",
+    "host": "DESKTOP-SBFMEJO",
+    "arch": "amd64",
+    "userTimezone": "America/New_York",
+    "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
+    "containerHint": "false"
+   },
+   "fileLoggers": {
+    "sailpoint.api.logging.SyslogAppender": "ERROR",
+    "root": "WARN",
+    "org.apache.myfaces.renderkit.html.util.MyFacesResourceLoader": "ERROR",
+    "sailpoint": "WARN",
+    "org.apache.myfaces.renderkit.html.util.DefaultAddResource": "ERROR",
+    "org.hibernate.engine.StatefulPersistenceContext": "ERROR",
+    "org.apache.myfaces.renderkit.html.util.ReducedHTMLParser": "ERROR",
+    "sailpoint.object.SyslogEvent": "ERROR",
+    "org.hibernate.orm.deprecation": "ERROR",
+    "net.sf.ehcache": "ERROR",
+    "net.sf.jasperreports.engine.xml": "ERROR"
+   },
+   "runtimeLoggers": null,
+   "liveLoggers": [
+    {
+     "fileLevel": "WARN",
+     "level": "WARN",
+     "managed": "false",
+     "logger": "root",
+     "source": "file"
+    },
+    {
+     "fileLevel": "ERROR",
+     "level": "ERROR",
+     "managed": "false",
+     "logger": "sailpoint.api.logging.SyslogAppender",
+     "source": "file"
+    },
+    {
+     "logger": "rule.LeaverEventHandler",
+     "level": "DEBUG",
+     "managed": "false",
+     "source": "runtime",
+     "fileLevel": ""
+    }
+   ],
+   "fileParsed": true,
+   "isThisHost": true
+  }
+ ],
+ "localLoggers": [],
+ "catalog": [
+  {
+   "logger": "sailpoint.api.Provisioner",
+   "label": "Provisioning - plan compilation and execution"
+  },
+  {
+   "logger": "sailpoint.provisioning.PlanCompiler",
+   "label": "Provisioning - plan compiler detail"
+  },
+  {
+   "logger": "sailpoint.api.Aggregator",
+   "label": "Aggregation - account/entitlement aggregation"
+  },
+  {
+   "logger": "sailpoint.connector",
+   "label": "Connectors - all connector traffic"
+  },
+  {
+   "logger": "sailpoint.connector.JDBCConnector",
+   "label": "Connector - JDBC"
+  },
+  {
+   "logger": "sailpoint.connector.LDAPConnector",
+   "label": "Connector - LDAP"
+  },
+  {
+   "logger": "sailpoint.connector.DelimitedFileConnector",
+   "label": "Connector - delimited file"
+  },
+  {
+   "logger": "sailpoint.connector.webservices",
+   "label": "Connector - web services"
+  },
+  {
+   "logger": "sailpoint.integration",
+   "label": "Integration executors"
+  },
+  {
+   "logger": "sailpoint.api.Identitizer",
+   "label": "Identity refresh - attribute promotion"
+  },
+  {
+   "logger": "sailpoint.task.IdentityRefreshExecutor",
+   "label": "Task - identity refresh"
+  },
+  {
+   "logger": "sailpoint.api.Certificationer",
+   "label": "Certifications"
+  },
+  {
+   "logger": "sailpoint.api.CorrelationModel",
+   "label": "Role correlation model"
+  },
+  {
+   "logger": "sailpoint.api.Matchmaker",
+   "label": "Role assignment matching"
+  },
+  {
+   "logger": "sailpoint.workflow",
+   "label": "Workflows - engine"
+  },
+  {
+   "logger": "sailpoint.api.Workflower",
+   "label": "Workflows - launch and advance"
+  },
+  {
+   "logger": "sailpoint.server.BSFRuleRunner",
+   "label": "Rules - BeanShell execution"
+  },
+  {
+   "logger": "sailpoint.web.PageAuthenticationFilter",
+   "label": "Login - authentication filter"
+  },
+  {
+   "logger": "sailpoint.service.PageAuthenticationService",
+   "label": "Login - authentication service"
+  },
+  {
+   "logger": "sailpoint.web.sso",
+   "label": "Login - SSO authenticators"
+  },
+  {
+   "logger": "sailpoint.rest",
+   "label": "REST API requests"
+  },
+  {
+   "logger": "sailpoint.scim",
+   "label": "SCIM API requests"
+  },
+  {
+   "logger": "sailpoint.server.Servicer",
+   "label": "Services - scheduler and heartbeat"
+  },
+  {
+   "logger": "sailpoint.request",
+   "label": "Request processor"
+  },
+  {
+   "logger": "sailpoint.persistence.hql",
+   "label": "Persistence - generated HQL"
+  },
+  {
+   "logger": "org.hibernate.SQL",
+   "label": "Persistence - raw SQL"
+  },
+  {
+   "logger": "sailpoint.api.Meter",
+   "label": "Performance metering"
+  },
+  {
+   "logger": "sailpoint.plugin",
+   "label": "Plugin framework"
+  },
+  {
+   "logger": "com.example.turnonloggers",
+   "label": "This plugin itself"
+  }
+ ]
+}

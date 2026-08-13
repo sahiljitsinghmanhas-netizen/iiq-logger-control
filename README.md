@@ -230,6 +230,20 @@ where an admin has overridden it (common in containers).
 
 ---
 
+## Two things the buttons do
+
+**Remove all overrides** (header, red) removes every override this plugin
+holds, on every host. Each affected logger goes back to whatever its own
+`log4j2.properties` gives it. Nothing in the file is changed, loggers set at
+runtime by a rule or custom code are not touched, and the plugin stays enabled.
+It is an undo of everything this plugin has done, not a kill switch.
+
+**Sync this host now** reconciles the host serving the page immediately.
+There is deliberately no "sync all hosts": every host already reconciles itself
+on its own timer, so there is nothing to force - a cluster-wide button would
+not make a change land any sooner than the tick that is coming anyway. The
+**Last sync** column in the Hosts table is how you see each host doing it.
+
 ## Audit trail
 
 Every change made through the plugin is recorded as an IIQ audit event, so
@@ -286,7 +300,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.7.0.zip` from the
+Download `TurnOnLoggers-2.8.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
