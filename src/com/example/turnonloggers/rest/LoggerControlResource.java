@@ -280,7 +280,10 @@ public class LoggerControlResource extends BasePluginResource {
             String denied = capabilityDenial(user);
             if (denied != null) return error(Response.Status.FORBIDDEN, denied);
 
-            LoggerSync.run(getContext(), "rest:sync");
+            SailPointContext ctx = getContext();
+            LoggerSync.run(ctx, "rest:sync");
+            AuditWriter.log(ctx, user.getName(), "synced", HostFacts.hostName(),
+                    null, HostFacts.hostName(), 0L, null);
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] syncNow failed", t);
@@ -336,7 +339,7 @@ public class LoggerControlResource extends BasePluginResource {
                 return error(Response.Status.BAD_REQUEST, "Refusing to forget the host serving this request.");
             }
             LoggerConfigStore.deleteStatus(getContext(), host);
-            LOG.info("[TurnOnLoggers] " + user.getName() + " forgot host status for " + host);
+            AuditWriter.log(getContext(), user.getName(), "forgot host", host, null, host, 0L, null);
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] forgetHost failed", t);

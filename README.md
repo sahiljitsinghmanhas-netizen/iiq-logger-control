@@ -130,6 +130,21 @@ Overriding a logger the file already sets does not delete anything: ownership
 moves to the plugin while the override lives, and the file's own level is put
 back exactly when it is removed.
 
+### Remove versus Silence
+
+For a logger something else set at runtime, the two actions differ in an
+important way:
+
+- **Remove** deletes it from the live configuration now. The logger falls back
+  to inheriting from its parent and the output stops - but it is **one-shot**.
+  The next time the rule that set it runs, it sets it again.
+- **Silence** adds a permanent `OFF` override. The plugin re-asserts it on
+  every sync, so it holds even against a rule that keeps switching its own
+  logger back on. This is the durable answer.
+
+Neither changes anything on disk, and removing the Silence override hands the
+logger back to whatever sets it.
+
 ### Silencing a noisy logger
 
 Turning something **down** is as important as turning it up, and it is the
@@ -259,6 +274,24 @@ The note you type when enabling a logger is carried into the event.
 | string2 / string3 / string4 | level, target hosts, expiry |
 | attribute `note` | the note from the form |
 
+Every button in the plugin writes one, not just the ones that change a level:
+
+| Button | Recorded as |
+|---|---|
+| Turn on | `enabled` |
+| Silence | `silenced` |
+| Turn off | `turned off` |
+| Remove all overrides | `turned everything off` |
+| Clear left over / Remove | `removed from the live configuration` |
+| Sync this host now | `synced` |
+
+Verified by pressing all six and counting rows in `spt_audit_event`.
+
+The page's own background refresh is **not** audited. It polls every ten
+seconds while open, so recording it would add several hundred rows an hour per
+open tab and bury the changes that matter. Reads change nothing; actions are
+what the trail is for.
+
 **There is no switch for this.** Changing what a production system logs is a
 privileged action, so whether it gets recorded is deliberately not something
 the person making the change can turn off. The plugin has no audit on/off
@@ -300,7 +333,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.8.0.zip` from the
+Download `TurnOnLoggers-2.9.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

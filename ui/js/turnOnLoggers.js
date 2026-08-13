@@ -672,7 +672,11 @@
                 tr.appendChild(c4);
 
                 var c5 = el('td');
-                if (r.source === 'file' && r.logger !== 'root'
+                // Silence works for any source: it adds a permanent OFF override
+                // that the plugin re-asserts on every sync, so it also holds
+                // against a rule that keeps re-enabling its own logger - which
+                // a one-shot Remove does not.
+                if (r.logger !== 'root' && r.source !== 'plugin'
                         && String(r.level).toUpperCase() !== 'OFF') {
                     var silence = el('button', 'tol-btn tol-btn-small', 'Silence');
                     silence.title = 'Set ' + r.logger + ' to OFF on every host, permanently';
@@ -701,9 +705,10 @@
                         return function () {
                             var extra = src === 'runtime'
                                 ? ' It was set by something other than this plugin, most likely a'
-                                  + ' rule calling Logger.getLogger(...).setLevel(...). Removing it'
-                                  + ' stops that logging until whatever set it runs again, or the'
-                                  + ' host restarts.'
+                                  + ' rule calling Logger.getLogger(...).setLevel(...). Remove is'
+                                  + ' one-shot: it stops the logging now, but whatever set it will'
+                                  + ' set it again next time it runs. Use Silence instead for an'
+                                  + ' override that keeps it off.'
                                 : ' This plugin created it and lost track of it, so removing it'
                                   + ' switches it off for good.';
                             if (!window.confirm('Remove ' + name + ' on every host?' + extra)) return;
