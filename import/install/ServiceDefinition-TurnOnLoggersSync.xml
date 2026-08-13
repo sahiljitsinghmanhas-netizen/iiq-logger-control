@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE sailpoint PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<sailpoint>
+
+  <!--
+    Runs the logger reconciler in every IIQ JVM.
+
+    hosts="global" is the whole trick: IIQ starts one instance of this service
+    on every host in the deployment, so each JVM applies the shared
+    configuration to its own log4j2 runtime. That is how a change made in the
+    UI on one host reaches the others without any host-to-host communication,
+    shared filesystem, or OS-specific remote execution - which in turn is why
+    a mixed Windows / Linux / macOS / container cluster needs no special
+    handling.
+
+    The pluginName attribute is required, not decorative. Without it IIQ's
+    Servicer resolves the executor through the webapp classloader, which
+    cannot see classes inside a plugin jar, and every host logs
+    "Unable to install service ... ClassNotFoundException" on startup.
+    With it, the Servicer loads the class from the plugin's own classloader.
+
+    interval=60 is the propagation delay for other hosts. The host that serves
+    the UI click applies immediately, so this only governs the rest of the
+    cluster. Dropping it to 15-30 makes changes feel instant everywhere at the
+    cost of one small SELECT per host per tick; raising it to 300 is fine if
+    you do not mind waiting five minutes for a change to land cluster-wide.
+
+    Auto-imported on plugin install via the import/install/ convention.
+  -->
+  <ServiceDefinition name="TurnOnLoggersSync"
+                     interval="60"
+                     executor="com.example.turnonloggers.service.LoggerSyncService"
+                     hosts="global">
+    <Description>Applies the Logger Control plugin's logger level overrides to this host's log4j2 runtime, and reports back what this host actually has running.</Description>
+    <Attributes>
+      <Map>
+        <entry key="pluginName" value="TurnOnLoggers"/>
+      </Map>
+    </Attributes>
+  </ServiceDefinition>
+
+</sailpoint>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Plugin PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+
+<Plugin name="TurnOnLoggers"
+        displayName="Logger Control"
+        version="1.0.0"
+        minSystemVersion="8.5">
+
+  <Attributes>
+    <Map>
+
+      <entry key="fullPage">
+        <value>
+          <FullPage title="Logger Control"/>
+        </value>
+      </entry>
+
+      <!--
+        Scripts and stylesheets have to be declared inside a Snippet; top-level
+        "scripts"/"styleSheets" entries are silently ignored and you get a
+        blank page. The script no-ops immediately unless it finds this
+        plugin's root div, so matching every page costs nothing.
+      -->
+      <entry key="snippets">
+        <value>
+          <List>
+            <Snippet regexPattern=".*">
+              <Scripts>
+                <String>ui/js/turnOnLoggers.js</String>
+              </Scripts>
+              <StyleSheets>
+                <String>ui/css/turnOnLoggers.css</String>
+              </StyleSheets>
+            </Snippet>
+          </List>
+        </value>
+      </entry>
+
+      <entry key="restResources">
+        <value>
+          <List>
+            <String>com.example.turnonloggers.rest.LoggerControlResource</String>
+          </List>
+        </value>
+      </entry>
+
+      <entry key="serviceExecutors">
+        <value>
+          <List>
+            <String>com.example.turnonloggers.service.LoggerSyncService</String>
+          </List>
+        </value>
+      </entry>
+
+      <entry key="settings">
+        <value>
+          <List>
+            <Setting name="enabled"
+                     dataType="boolean"
+                     defaultValue="true"
+                     label="Enabled"
+                     helpText="Master switch. Turn this off and every host reverts to the levels in its own log4j2.properties on its next sync tick (within ~60 seconds), without any config being lost."/>
+
+            <Setting name="requiredCapability"
+                     dataType="string"
+                     defaultValue="SystemAdministrator"
+                     label="Required capability"
+                     helpText="Capability the logged-in user (or one of their workgroups) must hold to view or change logger levels. There is no SysAdmin bypass - the check is exactly this capability name. Ships as SystemAdministrator so it works out of the box; point it at a dedicated capability such as LoggerAdmin to grant developers logging control without granting them everything else."/>
+
+            <Setting name="defaultTtlMinutes"
+                     dataType="int"
+                     defaultValue="60"
+                     label="Default TTL (minutes)"
+                     helpText="Pre-selected lifetime for a new override. Debug logging that nobody remembers to switch off is the usual way this kind of tool causes an incident, so overrides expire by default."/>
+
+            <Setting name="maxTtlMinutes"
+                     dataType="int"
+                     defaultValue="1440"
+                     label="Maximum TTL (minutes)"
+                     helpText="Upper bound on how long an override may live. Requests above this are clamped down to it. Set to 0 to allow permanent overrides that never expire (not recommended in production)."/>
+
+            <Setting name="allowRootLogger"
+                     dataType="boolean"
+                     defaultValue="false"
+                     label="Allow root logger"
+                     helpText="Whether the root logger may be targeted. Setting root to DEBUG or TRACE turns on every logger in the JVM at once, which on a busy host can fill a disk in minutes. Off by default; turn it on deliberately and briefly."/>
+
+            <Setting name="permanentLoggers"
+                     dataType="string"
+                     defaultValue=""
+                     label="Permanent loggers (never expire)"
+                     helpText="Loggers enabled from this settings page instead of the Logger Control page. Same effect - the only difference is that these have no TTL, so they stay on until you edit this field. Use it for a logger you want on indefinitely, or to enable one without opening the page. They also show up in the Logger Control page's table, marked 'from settings', so there is still a single list of everything that is on. Format: comma-separated logger=LEVEL, with an optional @host suffix to restrict one item to a single host. Example: sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02"/>
+          </List>
+        </value>
+      </entry>
+
+    </Map>
+  </Attributes>
+
+</Plugin>

@@ -1,0 +1,396 @@
+/*
+ * Logger Control - plugin page styles.
+ *
+ * Everything is namespaced under .tol- because this stylesheet is injected on
+ * every IIQ page by the snippet, not just the plugin page.
+ */
+
+.tol-root {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1f2933;
+    font-size: 13px;
+    padding: 4px 0 40px 0;
+}
+
+.tol-boot {
+    padding: 24px;
+    color: #7b8794;
+}
+
+/* ---------- header ---------- */
+
+.tol-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 4px 0 16px 0;
+    border-bottom: 1px solid #e4e7eb;
+    margin-bottom: 16px;
+}
+
+.tol-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: #102a43;
+}
+
+.tol-subtitle {
+    color: #52606d;
+    max-width: 70ch;
+}
+
+.tol-header-right {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tol-chips {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tol-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f5f7fa;
+    border: 1px solid #e4e7eb;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 12px;
+}
+
+.tol-chip-label {
+    color: #7b8794;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: .04em;
+}
+
+.tol-chip-value {
+    font-weight: 600;
+    color: #243b53;
+}
+
+/* ---------- cards ---------- */
+
+.tol-card {
+    background: #fff;
+    border: 1px solid #e4e7eb;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.tol-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: #102a43;
+}
+
+.tol-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ---------- form ---------- */
+
+.tol-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-start;
+    margin-top: 12px;
+}
+
+.tol-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    flex: 1 1 200px;
+}
+
+.tol-field:first-child {
+    flex: 2 1 320px;
+}
+
+.tol-label {
+    font-weight: 600;
+    color: #243b53;
+    margin-bottom: 2px;
+}
+
+.tol-hint {
+    color: #7b8794;
+    font-size: 11px;
+    margin-bottom: 6px;
+    max-width: 60ch;
+}
+
+.tol-input {
+    border: 1px solid #cbd2d9;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: #1f2933;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tol-input:focus {
+    outline: none;
+    border-color: #2186eb;
+    box-shadow: 0 0 0 2px rgba(33, 134, 235, .18);
+}
+
+.tol-hostpicker {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 120px;
+    overflow-y: auto;
+    border: 1px solid #e4e7eb;
+    border-radius: 4px;
+    padding: 6px 8px;
+}
+
+.tol-check {
+    display: block;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tol-form-actions {
+    display: flex;
+    align-items: flex-end;
+    padding-top: 22px;
+}
+
+/* ---------- buttons ---------- */
+
+.tol-btn {
+    background: #fff;
+    border: 1px solid #cbd2d9;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #243b53;
+    cursor: pointer;
+}
+
+.tol-btn:hover {
+    background: #f5f7fa;
+}
+
+.tol-btn-primary {
+    background: #2186eb;
+    border-color: #1d7ad6;
+    color: #fff;
+    font-weight: 600;
+}
+
+.tol-btn-primary:hover {
+    background: #1d7ad6;
+}
+
+.tol-btn-danger {
+    color: #ab091e;
+    border-color: #f29b9b;
+}
+
+.tol-btn-danger:hover {
+    background: #ffe3e3;
+}
+
+.tol-btn-small {
+    padding: 3px 10px;
+    font-size: 12px;
+}
+
+/* ---------- tables ---------- */
+
+.tol-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.tol-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #7b8794;
+    border-bottom: 1px solid #e4e7eb;
+    padding: 6px 8px;
+    font-weight: 600;
+}
+
+.tol-table td {
+    border-bottom: 1px solid #f0f2f5;
+    padding: 8px;
+    vertical-align: top;
+}
+
+.tol-table tr.tol-expired td {
+    opacity: .55;
+}
+
+.tol-empty {
+    color: #7b8794;
+    padding: 16px 4px;
+}
+
+.tol-mono {
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.tol-wrap {
+    word-break: break-all;
+}
+
+.tol-small {
+    font-size: 11px;
+    color: #7b8794;
+}
+
+.tol-logger-name {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    color: #102a43;
+}
+
+.tol-note-text {
+    font-size: 11px;
+    color: #52606d;
+    margin-top: 2px;
+}
+
+.tol-err-text {
+    font-size: 11px;
+    color: #ab091e;
+    margin-top: 2px;
+}
+
+/* ---------- badges ---------- */
+
+.tol-badge {
+    display: inline-block;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    background: #f5f7fa;
+    border: 1px solid #e4e7eb;
+    color: #52606d;
+    margin: 1px 2px 1px 0;
+}
+
+.tol-badge-ok {
+    background: #e3f9e5;
+    border-color: #a3d9a5;
+    color: #207227;
+}
+
+.tol-badge-warn {
+    background: #fffbea;
+    border-color: #f7d070;
+    color: #8d2b0b;
+}
+
+.tol-badge-off {
+    background: #ffe3e3;
+    border-color: #f29b9b;
+    color: #ab091e;
+}
+
+.tol-os {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    background: #e4e7eb;
+    color: #3e4c59;
+}
+
+.tol-os-windows { background: #d9e8fb; color: #0b4f9c; }
+.tol-os-linux   { background: #fce3c2; color: #8d2b0b; }
+.tol-os-macos   { background: #e6e6ea; color: #323f4b; }
+
+/* ---------- levels ---------- */
+
+.tol-level {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    background: #e4e7eb;
+    color: #3e4c59;
+}
+
+.tol-level-trace { background: #e0e8f9; color: #35469c; }
+.tol-level-debug { background: #d9e8fb; color: #0b4f9c; }
+.tol-level-info  { background: #e3f9e5; color: #207227; }
+.tol-level-warn  { background: #fffbea; color: #8d2b0b; }
+.tol-level-error { background: #ffe3e3; color: #ab091e; }
+.tol-level-fatal { background: #ab091e; color: #fff; }
+.tol-level-off   { background: #cbd2d9; color: #3e4c59; }
+.tol-level-all   { background: #e0e8f9; color: #35469c; }
+
+/* ---------- banners ---------- */
+
+.tol-banner {
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border: 1px solid transparent;
+}
+
+.tol-hidden {
+    display: none;
+}
+
+.tol-info {
+    background: #f0f4f8;
+    border-color: #d9e2ec;
+    color: #334e68;
+}
+
+.tol-ok {
+    background: #e3f9e5;
+    border-color: #a3d9a5;
+    color: #207227;
+}
+
+.tol-warn {
+    background: #fffbea;
+    border-color: #f7d070;
+    color: #8d2b0b;
+}
+
+.tol-error {
+    background: #ffe3e3;
+    border-color: #f29b9b;
+    color: #ab091e;
+}
+
+.tol-footer {
+    color: #7b8794;
+    font-size: 11px;
+    padding-top: 8px;
+    border-top: 1px solid #e4e7eb;
+    max-width: 100ch;
+}
