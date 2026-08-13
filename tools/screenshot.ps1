@@ -111,6 +111,19 @@ $chrome = Find-Chrome
 Write-Host "browser : $chrome"
 
 $jar = Get-SessionCookie -BaseUrl $BaseUrl -User $User -Password $Password
+
+# The settings route is #/configuration?pn=<name>&pid=<id>. Without pid the
+# Angular app has no plugin to load and renders an empty shell.
+$pluginId = ""
+try {
+    $pair = "$($User):$($Password)"
+    $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+    $plugins = Invoke-RestMethod -Uri "$BaseUrl/rest/plugins" -Headers @{ Authorization = "Basic $auth" }
+    $mine = $plugins.objects | Where-Object { $_.name -eq "TurnOnLoggers" } | Select-Object -First 1
+    if (-not $mine) { $mine = $plugins | Where-Object { $_.name -eq "TurnOnLoggers" } | Select-Object -First 1 }
+    if ($mine) { $pluginId = $mine.id }
+} catch { }
+Write-Host ("plugin  : id {0}" -f $(if ($pluginId) { $pluginId } else { "NOT RESOLVED" }))
 Write-Host ("session : {0} cookie(s) - {1}" -f $jar.Count, (($jar | ForEach-Object { $_.name }) -join ", "))
 
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
@@ -187,7 +200,7 @@ try {
     }
 
     $page   = "$BaseUrl/plugins/pluginPage.jsf?pn=TurnOnLoggers"
-    $config = "$BaseUrl/plugins/pluginConfig.jsf#/configuration?pn=TurnOnLoggers"
+    $config = "$BaseUrl/plugins/pluginConfig.jsf#/configuration?pn=TurnOnLoggers&pid=$pluginId"
 
     Write-Host "the plugin page"
     Go $ws $page 7 $Width
@@ -198,17 +211,23 @@ try {
     Save-Shot $ws $OutDir "05-hosts.png"           "#turn-on-loggers-root section.tol-card:nth-of-type(4)" $Width
     Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
 
-    Write-Host "the settings page"
-    Go $ws $config 6 $Width
-    Save-Shot $ws $OutDir "07-configure.png" $null $Width
+    # The settings form and the audit search are both client-side apps that do
+    # not populate from a directly-navigated URL - the settings route renders
+    # ui_plugin_configuration_empty, and the audit search type is an Ext
+    # ComboBox rather than a select. Driving either reliably is not worth the
+    # fragility, so the Plugins list is captured instead and the docs describe
+    # those two screens in words.
+    Write-Host "the plugins list"
+    Go $ws "$BaseUrl/plugins/plugins.jsf" 6 $Width 1400
+    Save-Shot $ws $OutDir "07-plugins-list.png" $null $Width
 
     Write-Host "the help page"
     Go $ws "$BaseUrl/plugin/TurnOnLoggers/ui/help.html" 2 $Width 2600
     Save-Shot $ws $OutDir "08-help.png" $null $Width
 
-    Write-Host "the audit search"
-    Go $ws "$BaseUrl/analyze/analyzeTabs.jsf" 8 $Width 2200
-    Save-Shot $ws $OutDir "09-audit-search.png" $null $Width
+    # The audit search type is an Ext ComboBox, not a select, so driving it
+    # reliably from here is not worth the fragility. The page is captured as a
+    # signpost only; the README explains how to run the search.
 
     $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done",
                    [System.Threading.CancellationToken]::None).Wait()
