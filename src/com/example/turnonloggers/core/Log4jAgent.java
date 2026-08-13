@@ -212,6 +212,171 @@ public final class Log4jAgent {
     }
 
     /**
+     * Re-adopt loggers a previous instance of this plugin owned.
+     *
+     * OWNED is a static in the plugin's own classloader, but log4j2's
+     * Configuration belongs to the webapp and outlives it. Reinstalling or
+     * upgrading the plugin therefore replaces the classloader - wiping OWNED -
+     * while every LoggerConfig the old instance created is still live. Turning
+     * that logger off afterwards then reverted nothing, stranding it at DEBUG
+     * or TRACE with no trace of it in the UI.
+     *
+     * So ownership is persisted per host (see LoggerConfigStore) and adopted
+     * here on the first sync after a reinstall, which puts those loggers back
+     * under management so they can be reverted normally.
+     *
+     * @param persisted logger name -> the level it had before we took it over,
+     *                  or "" if we created it and reverting means deleting it.
+     */
+    public static synchronized void adopt(Map<String, String> persisted) {
+        if (persisted == null || persisted.isEmpty()) return;
+
+        Configuration cfg;
+        try {
+            cfg = context().getConfiguration();
+        } catch (Throwable t) {
+            return;
+        }
+        // Bind to the current Configuration, otherwise apply() would treat this
+        // as a reconfiguration and clear what we just adopted.
+        if (ownedAgainst != cfg) {
+            OWNED.clear();
+            ownedAgainst = cfg;
+        }
+        for (Map.Entry<String, String> e : persisted.entrySet()) {
+            String name = normalize(e.getKey());
+            if (name == null || OWNED.containsKey(name)) continue;
+            String original = e.getValue();
+            if (original == null || original.trim().isEmpty()) {
+                OWNED.put(name, new Snapshot(false, null));
+            } else {
+                Level lvl = parseLevel(original);
+                OWNED.put(name, lvl == null ? new Snapshot(false, null) : new Snapshot(true, lvl));
+            }
+        }
+    }
+
+    /** Ownership in a form that survives a plugin reinstall. See adopt(). */
+    public static synchronized Map<String, String> ownedSnapshot() {
+        Map<String, String> m = new LinkedHashMap<>();
+        for (Map.Entry<String, Snapshot> e : OWNED.entrySet()) {
+            Snapshot s = e.getValue();
+            m.put(display(e.getKey()), (s.exact && s.level != null) ? s.level.name() : "");
+        }
+        return m;
+    }
+
+    /**
+     * Logger names this host's log4j2 configuration file actually declares, or
+     * null if that cannot be determined.
+     *
+     * Without this, "is this logger from the file?" can only be guessed as
+     * "not currently owned by us", which is wrong for anything a previous
+     * plugin instance stranded - it reports leftovers as though an admin had
+     * put them in log4j2.properties. Reading the file the JVM already loaded
+     * settles it.
+     */
+    public static synchronized Set<String> fileDeclaredLoggers() {
+        java.io.InputStream in = null;
+        try {
+            Configuration cfg = context().getConfiguration();
+            ConfigurationSource src = cfg.getConfigurationSource();
+            if (src == null) return null;
+
+            String loc = src.getLocation();
+            // Only the properties format is parsed here; for XML/YAML/JSON we
+            // return null and the UI says "source unknown" rather than lying.
+            if (loc == null || !loc.toLowerCase(Locale.ROOT).endsWith(".properties")) return null;
+
+            java.io.File f = null;
+            try {
+                f = src.getFile();
+            } catch (Throwable ignored) {
+                // some ConfigurationSource flavours have no file
+            }
+            if (f != null && f.canRead()) {
+                in = new java.io.FileInputStream(f);
+            } else {
+                java.net.URL u = null;
+                try {
+                    u = src.getURL();
+                } catch (Throwable ignored) {
+                    // no URL either
+                }
+                if (u != null) in = u.openStream();
+            }
+            if (in == null) return null;
+
+            java.util.Properties p = new java.util.Properties();
+            p.load(in);
+
+            Set<String> declared = new LinkedHashSet<>();
+            for (String key : p.stringPropertyNames()) {
+                if (key.startsWith("rootLogger.")) {
+                    declared.add("");
+                } else if (key.startsWith("logger.") && key.endsWith(".name")) {
+                    String v = p.getProperty(key);
+                    String n = normalize(v);
+                    if (n != null) declared.add(n);
+                }
+            }
+            return declared;
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (java.io.IOException ignored) { /* closing */ }
+            }
+        }
+    }
+
+    /**
+     * Remove loggers that are live in this JVM but neither declared in the
+     * configuration file nor currently managed by the plugin - i.e. stranded by
+     * an earlier plugin instance.
+     *
+     * Refuses to act if the file's declared set cannot be determined, because
+     * then "not in the file" is a guess and deleting on a guess could switch
+     * off logging somebody else configured.
+     *
+     * @return the loggers removed
+     */
+    public static synchronized List<String> clearRuntimeLeftovers() {
+        List<String> removed = new ArrayList<>();
+        Set<String> declared = fileDeclaredLoggers();
+        if (declared == null) return removed;
+
+        LoggerContext ctx;
+        Configuration cfg;
+        try {
+            ctx = context();
+            cfg = ctx.getConfiguration();
+        } catch (Throwable t) {
+            return removed;
+        }
+        Map<String, LoggerConfig> loggers = cfg.getLoggers();
+        if (loggers == null) return removed;
+
+        for (String raw : new ArrayList<>(loggers.keySet())) {
+            String name = normalize(raw == null ? "" : raw);
+            if (isRoot(name)) continue;                 // never remove root
+            if (declared.contains(name)) continue;      // the file wants it
+            if (OWNED.containsKey(name)) continue;      // we are managing it now
+            try {
+                cfg.removeLogger(name);
+                removed.add(display(name));
+            } catch (Throwable t) {
+                LOG.warn("[TurnOnLoggers] could not remove stranded logger " + display(name) + ": " + t);
+            }
+        }
+        if (!removed.isEmpty()) {
+            ctx.updateLoggers();
+            LOG.info("[TurnOnLoggers] cleared stranded runtime loggers: " + removed);
+        }
+        return removed;
+    }
+
+    /**
      * Every logger this JVM's log4j2 configuration currently defines, with a
      * flag saying whether this plugin is the one that set it.
      *
@@ -237,14 +402,30 @@ public final class Log4jAgent {
         }
         if (loggers == null) return out;
 
+        Set<String> declared = fileDeclaredLoggers();
+
         for (Map.Entry<String, LoggerConfig> e : loggers.entrySet()) {
-            String name = e.getKey() == null ? "" : e.getKey();
+            String name = normalize(e.getKey() == null ? "" : e.getKey());
             LoggerConfig lc = e.getValue();
             if (lc == null) continue;
+            boolean managed = OWNED.containsKey(name);
+
+            String source;
+            if (managed) {
+                source = "plugin";
+            } else if (declared == null) {
+                source = "unknown";          // could not read the file
+            } else if (declared.contains(name)) {
+                source = "file";
+            } else {
+                source = "runtime";          // stranded by an earlier instance
+            }
+
             Map<String, String> row = new LinkedHashMap<>();
-            row.put("logger", display(normalize(name)));
+            row.put("logger", display(name));
             row.put("level", lc.getLevel() == null ? "?" : lc.getLevel().name());
-            row.put("managed", String.valueOf(OWNED.containsKey(normalize(name))));
+            row.put("managed", String.valueOf(managed));
+            row.put("source", source);
             out.add(row);
         }
         return out;
@@ -349,9 +530,9 @@ public final class Log4jAgent {
             LoggerConfig lc = lookup(cfg, name);
             if (lc != null && name.equals(lc.getName())) {
                 lc.setLevel(s.level);
-            } else {
-                cfg.addLogger(name, new LoggerConfig(name, s.level, true));
             }
+            // If it is gone, log4j2.properties no longer declares it - leave it
+            // inheriting rather than re-creating a logger the file dropped.
         } else {
             // We created this LoggerConfig; take it away again so the logger
             // goes back to inheriting from its ancestor.

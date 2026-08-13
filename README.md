@@ -81,6 +81,34 @@ work the same way everywhere:
 Durability across restarts comes from the database instead: a JVM that
 restarts re-applies the current desired state on its first service tick.
 
+### Loggers stranded by a plugin reinstall
+
+The plugin's record of which loggers it owns is a static in its own
+classloader, but log4j2's configuration belongs to the webapp and outlives it.
+Reinstalling or upgrading the plugin replaces that classloader while every
+`LoggerConfig` the old copy created stays live. Before 2.2.0 the new copy had
+no idea it owned them, so turning one off reverted nothing and left it running
+at DEBUG or TRACE while the page showed nothing overridden - and it then
+appeared under *Already set in log4j2.properties*, as if an admin had put it
+in the file.
+
+In a cluster this showed up unevenly: hosts that still held the in-memory
+record cleaned up correctly, hosts whose plugin had been reloaded did not.
+
+Two fixes, both in 2.2.0:
+
+- **Ownership is now persisted per host**, in that host's status object, and
+  re-adopted on the first sync after a reinstall. A logger turned on before an
+  upgrade is still under management afterwards and turns off normally.
+- **The file's loggers are now read from the file.** The plugin parses the
+  `log4j2.properties` the JVM actually loaded, so "came from the file" is a
+  fact rather than a guess. Anything live that is neither in the file nor
+  managed by the plugin is listed separately as **Left over from a previous
+  install**, with a *Clear on all hosts* button that switches them off for
+  real. Loggers genuinely in the file are never touched by it, and if the file
+  cannot be parsed - an XML or YAML configuration, for instance - the plugin
+  refuses to guess and clears nothing.
+
 ### Turning loggers on is cumulative
 
 Nothing you do here clears anything else. Adding a logger adds one entry;
@@ -194,7 +222,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.1.0.zip` from the
+Download `TurnOnLoggers-2.2.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

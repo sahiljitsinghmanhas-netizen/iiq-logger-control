@@ -170,6 +170,7 @@
 
         root.appendChild(addForm());
         root.appendChild(overridesSection());
+        root.appendChild(strandedSection());
         root.appendChild(fileLoggersSection());
         root.appendChild(hostsSection());
         root.appendChild(footer());
@@ -182,7 +183,7 @@
         var facts = state.thisHostFacts || {};
         var sub = el('div', 'tol-subtitle');
         sub.appendChild(document.createTextNode(
-            'Turn IIQ loggers on and off across every host from here. No shell, no log4j2.properties edit, no restart.'));
+            'Turn loggers on and off across every host. No shell, no file edit, no restart.'));
         left.appendChild(sub);
         var chips = el('div', 'tol-chips');
         chips.appendChild(chip('Serving host', state.thisHost));
@@ -460,6 +461,81 @@
         return box;
     }
 
+    /** Shared host-label rendering, so a host looks the same in every table. */
+    function hostChips(names) {
+        var wrap = el('span', 'tol-hostchips');
+        names.forEach(function (n) {
+            var c = el('span', 'tol-hostchip', n);
+            if (n === state.thisHost) c.className = 'tol-hostchip tol-hostchip-self';
+            wrap.appendChild(c);
+        });
+        return wrap;
+    }
+
+    /**
+     * Loggers left running by a previous install of this plugin: live in the
+     * JVM, absent from that host's log4j2.properties, and not managed here.
+     *
+     * These are the dangerous ones - a logger stuck at TRACE that the page
+     * otherwise reports as "off". Shown separately from the file loggers so it
+     * is obvious they are not something an admin put in the file.
+     */
+    function strandedSection() {
+        var groups = [];
+        (state.hosts || []).forEach(function (h) {
+            var rl = h.runtimeLoggers;
+            if (!rl) return;
+            var keys = Object.keys(rl).sort();
+            if (!keys.length) return;
+            var sig = keys.map(function (k) { return k + '=' + rl[k]; }).join('|');
+            var found = null;
+            groups.forEach(function (g) { if (g.sig === sig) found = g; });
+            if (found) { found.hosts.push(h.name); }
+            else { groups.push({ sig: sig, hosts: [h.name], keys: keys, map: rl }); }
+        });
+        if (!groups.length) return document.createComment('no stranded loggers');
+
+        var box = el('section', 'tol-card tol-card-alert');
+        var head = el('div', 'tol-card-head');
+        head.appendChild(el('h2', 'tol-card-title', 'Left over from a previous install'));
+        var btn = el('button', 'tol-btn tol-btn-danger', 'Clear on all hosts');
+        btn.onclick = function () {
+            if (!window.confirm('Remove these stranded loggers on every host?\n\n'
+                + 'They are not in any host\'s log4j2.properties, so nothing configured '
+                + 'on the hosts is affected.')) return;
+            mutate(api('POST', '/cleanup'),
+                'Cleanup requested. This host is done; others follow on their next sync.');
+        };
+        head.appendChild(btn);
+        box.appendChild(head);
+        box.appendChild(el('div', 'tol-hint',
+            'These loggers are still running on the hosts below, but they are not in those hosts\' '
+            + 'log4j2.properties and this plugin is not managing them. That happens when the plugin '
+            + 'was reinstalled while a logger was on: the new copy lost track of it, so turning it '
+            + 'off had nothing to revert. Clearing them switches them off for real.'));
+
+        groups.forEach(function (g) {
+            box.appendChild(hostChips(g.hosts));
+            var t = el('table', 'tol-table');
+            t.appendChild(headRow(['Logger', 'Level', 'Source']));
+            var tb = el('tbody');
+            g.keys.forEach(function (k) {
+                var tr = el('tr');
+                var c1 = el('td');
+                c1.appendChild(el('code', 'tol-logger-name', k));
+                tr.appendChild(c1);
+                var c2 = el('td');
+                c2.appendChild(el('span', 'tol-level tol-level-' + String(g.map[k]).toLowerCase(), g.map[k]));
+                tr.appendChild(c2);
+                tr.appendChild(el('td', 'tol-small', 'stranded - not in the file'));
+                tb.appendChild(tr);
+            });
+            t.appendChild(tb);
+            box.appendChild(t);
+        });
+        return box;
+    }
+
     /**
      * Loggers that come from each host's log4j2.properties rather than from
      * this page. Read-only - the plugin never changes or removes them, it only
@@ -497,11 +573,7 @@
         }
 
         groups.forEach(function (g) {
-            if (groups.length > 1) {
-                var hdr = el('div', 'tol-group-head');
-                hdr.appendChild(el('span', 'tol-badge', g.hosts.join(', ')));
-                box.appendChild(hdr);
-            }
+            box.appendChild(hostChips(g.hosts));
             var t = el('table', 'tol-table');
             t.appendChild(headRow(['Logger', 'Level', 'Source']));
             var tb = el('tbody');
@@ -544,7 +616,7 @@
             var tr = el('tr');
 
             var c1 = el('td');
-            c1.appendChild(el('strong', '', h.name));
+            c1.appendChild(hostChips([h.name]));
             if (h.isThisHost) c1.appendChild(el('div', 'tol-badge tol-badge-ok', 'serving this page'));
             if (!h.knownToIIQ) c1.appendChild(el('div', 'tol-small', 'no Server record'));
             tr.appendChild(c1);
@@ -606,25 +678,21 @@
 
     function footer() {
         var f = el('div', 'tol-footer');
-        var bits = [];
-        bits.push('Turning a logger on adds to the list - it never disturbs the other overrides, ' +
-            'and never touches loggers configured in log4j2.properties.');
-        bits.push('Levels are set in each JVM\'s live log4j2 runtime, so no file on any host is modified; ' +
-            'the list is stored in the Custom object "TurnOnLoggers Configuration" and re-applied after a restart.');
-        f.appendChild(document.createTextNode(bits.join(' ')));
 
-        // Attribution line. Deliberately a repo link rather than a personal
-        // email address: this footer renders inside the customer's IIQ, and a
-        // link sends questions somewhere they can be answered once, publicly,
-        // instead of into one person's inbox forever.
+        // Two short centred lines. This used to be a left-aligned paragraph of
+        // small print that read as clutter under the tables.
+        f.appendChild(el('div', 'tol-footer-line',
+            'Turning a logger on only adds to the list - other overrides and anything '
+            + 'in log4j2.properties are left alone.'));
+        f.appendChild(el('div', 'tol-footer-line',
+            'Levels are set in each JVM's live log4j2 runtime, so no file is ever modified. '
+            + 'The list survives restarts.'));
+
         var credit = el('div', 'tol-credit');
-        credit.appendChild(document.createTextNode('Logger Control'));
-        if (state.pluginVersion) {
-            credit.appendChild(document.createTextNode(' ' + state.pluginVersion));
-        }
-        if (state.author) {
-            credit.appendChild(document.createTextNode(' · ' + state.author));
-        }
+        var name = 'Logger Control';
+        if (state.pluginVersion) name += ' ' + state.pluginVersion;
+        credit.appendChild(document.createTextNode(name));
+        if (state.author) credit.appendChild(document.createTextNode(' · ' + state.author));
         if (state.projectUrl) {
             credit.appendChild(document.createTextNode(' · '));
             var a = document.createElement('a');

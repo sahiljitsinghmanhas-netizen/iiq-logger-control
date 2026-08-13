@@ -413,30 +413,56 @@
     max-width: 90ch;
 }
 
-.tol-config-banner-link {
+.tol-config-banner-link,
+.tol-config-banner-link:link,
+.tol-config-banner-link:visited,
+.tol-config-banner-link:hover,
+.tol-config-banner-link:focus,
+.tol-config-banner-link:active {
     flex: 0 0 auto;
-    text-decoration: none;
     display: inline-block;
+    /* IIQ styles bare <a> globally and was greying this out. Pin every link
+       state explicitly so the button reads as a solid blue button. */
+    color: #ffffff !important;
+    background: #2186eb;
+    border: 1px solid #1d7ad6;
+    text-decoration: none !important;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 4px;
 }
 
 .tol-config-banner-link:hover,
 .tol-config-banner-link:focus {
-    color: #fff;
-    text-decoration: none;
+    background: #1668c4;
+    border-color: #1668c4;
 }
 
 .tol-footer {
     color: #7b8794;
     font-size: 11px;
-    padding-top: 8px;
+    margin-top: 8px;
+    padding: 16px 16px 4px 16px;
     border-top: 1px solid #e4e7eb;
-    max-width: 100ch;
+    text-align: center;
+}
+
+.tol-footer-line {
+    max-width: 80ch;
+    margin: 0 auto 3px auto;
+    line-height: 1.6;
 }
 
 .tol-credit {
-    margin-top: 6px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f2f5;
+    max-width: 80ch;
+    margin-left: auto;
+    margin-right: auto;
     color: #9aa5b1;
     font-size: 11px;
+    letter-spacing: .02em;
 }
 
 .tol-credit a {
@@ -450,4 +476,45 @@
 
 .tol-group-head {
     margin-top: 12px;
+}
+
+/* ---------- host labels (shared by every table) ---------- */
+
+.tol-hostchips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 10px 0 2px 0;
+}
+
+.tol-hostchip {
+    display: inline-block;
+    background: #2186eb;
+    border: 1px solid #1d7ad6;
+    color: #fff;
+    border-radius: 3px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: Consolas, "Courier New", monospace;
+    letter-spacing: .01em;
+}
+
+/* The host you are talking to, so it is obvious which one served the page. */
+.tol-hostchip-self {
+    background: #0b4f9c;
+    border-color: #08386f;
+}
+
+/* ---------- stranded-logger card ---------- */
+
+.tol-card-alert {
+    border-color: #f7d070;
+    border-left: 4px solid #f0b429;
+    background: #fffdf7;
+}
+
+.tol-card-alert .tol-hostchip {
+    background: #8d2b0b;
+    border-color: #6b1f08;
 }

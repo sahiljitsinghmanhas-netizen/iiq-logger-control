@@ -38,6 +38,7 @@ public final class LoggerSync {
         public Map<String, String> applied = new LinkedHashMap<>();
         public List<String> reverted = new ArrayList<>();
         public List<String> errors = new ArrayList<>();
+        public long lastClear;
     }
 
     public static synchronized SyncResult run(SailPointContext ctx, String trigger) {
@@ -55,6 +56,28 @@ public final class LoggerSync {
         r.enabled = PluginSettings.getBool(ctx, PluginSettings.S_ENABLED, true);
         boolean allowRoot = PluginSettings.getBool(ctx, PluginSettings.S_ALLOW_ROOT, false);
         long now = System.currentTimeMillis();
+
+        // Take back ownership of anything a previous instance of this plugin
+        // was managing before it was reinstalled. Without this, its loggers
+        // are stranded in the live configuration with nothing able to revert
+        // them, and turning them "off" in the UI silently does nothing.
+        long lastClear = 0L;
+        try {
+            Log4jAgent.adopt(LoggerConfigStore.readOwned(ctx, r.host));
+            lastClear = LoggerConfigStore.readLastClear(ctx, r.host);
+            long requested = LoggerConfigStore.clearRequestedAt(ctx);
+            if (requested > lastClear) {
+                List<String> cleared = Log4jAgent.clearRuntimeLeftovers();
+                lastClear = requested;
+                if (!cleared.isEmpty()) {
+                    LOG.info("[TurnOnLoggers] " + r.host + " cleared stranded loggers: " + cleared);
+                }
+            }
+        } catch (Throwable t) {
+            r.errors.add("could not restore previous ownership: " + t);
+            LOG.warn("[TurnOnLoggers] adopt/cleanup failed on " + r.host + ": " + t);
+        }
+        r.lastClear = lastClear;
 
         Map<String, String> desired = new LinkedHashMap<>();
 
@@ -120,7 +143,7 @@ public final class LoggerSync {
 
     private static void writeStatusQuietly(SailPointContext ctx, SyncResult r, String trigger) {
         try {
-            LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors);
+            LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors, r.lastClear);
         } catch (Throwable t) {
             // Status is diagnostics. Failing to publish it must never undo a
             // successful apply.

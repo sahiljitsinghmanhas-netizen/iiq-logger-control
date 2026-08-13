@@ -275,6 +275,35 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Drop loggers stranded in a host's live configuration by an earlier
+     * instance of this plugin - ones that are neither in that host's
+     * log4j2.properties nor currently managed here.
+     *
+     * Cluster-wide: it stamps a request on the config object and every host
+     * acts on it during its next sync, the same way level changes propagate.
+     */
+    @POST
+    @Path("cleanup")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cleanupRuntime() {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName());
+            LOG.info("[TurnOnLoggers] " + user.getName() + " requested cleanup of stranded runtime loggers");
+            LoggerSync.run(ctx, "rest:cleanup");
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] cleanupRuntime failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     /** Forget a decommissioned host's status row so it stops showing up. */
     @DELETE
     @Path("hosts/{host}")
@@ -459,6 +488,7 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("errors", st.get(LoggerConfigStore.S_ERRORS));
             h.put("facts", st.get(LoggerConfigStore.S_FACTS));
             h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
+            h.put("runtimeLoggers", st.get(LoggerConfigStore.S_RUNTIME_LOGGERS));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);
             h.put("inSync", hostRev == revision && (now - lastSync) <= STALE_AFTER_MS);
