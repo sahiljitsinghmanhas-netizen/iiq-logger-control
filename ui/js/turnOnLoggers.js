@@ -491,8 +491,12 @@
                 // delete here - editing the setting is the way to turn it off.
                 c7.appendChild(el('span', 'tol-small', 'edit in plugin settings'));
             } else {
-                var del = el('button', 'tol-btn tol-btn-small tol-btn-danger',
-                    String(e.level).toUpperCase() === 'OFF' ? 'Un-suppress' : 'Remove override');
+                // Every row in this table is an override, and the only thing
+                // that can be done to one is delete it - the same operation
+                // whatever its level. Naming the OFF case differently made one
+                // uniform action look like two. The verb here describes the
+                // row; the live-logger table names the effect on the logger.
+                var del = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Remove override');
                 del.title = String(e.level).toUpperCase() === 'OFF'
                     ? 'Stop holding this logger at OFF. It goes back to whatever sets it.'
                     : 'Remove this override; the logger goes back to its log4j2.properties level.';

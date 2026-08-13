@@ -157,17 +157,30 @@ is the honest option, and it stays visible and reversible.
 
 ### Which button appears where
 
-The same action carries the same label in both tables. *Overrides in effect*
-holds only this plugin's own overrides, so it never offers Suppress or Clear -
-there is nothing of anyone else's there to act on.
+Actions are named after the thing the row represents.
 
-| Acting on | Action | Where it appears |
+*Loggers live in the JVM* lists **loggers**, so its verbs describe what happens
+to the logger. *Overrides in effect* lists **this plugin's overrides**, and the
+only thing that can be done to one is delete it - the same operation whatever
+its level - so every row there reads **Remove override**.
+
+| Table | Row is | Actions |
 |---|---|---|
-| Someone else's logger | **Suppress** | Loggers live in the JVM |
-| Someone else's logger | **Clear** | Loggers live in the JVM, runtime and left over rows only |
-| This plugin's `OFF` override | **Un-suppress** | both tables |
-| This plugin's other overrides | **Remove override** | both tables |
-| A new override | **Turn on** | the form at the top |
+| Loggers live in the JVM | a logger | **Suppress**, **Un-suppress**, **Clear** |
+| Overrides in effect | an override | **Remove override** |
+| The form at the top | - | **Turn on** |
+
+What each one does, and where it leaves things:
+
+| | Effect | Appears in Overrides in effect afterwards? |
+|---|---|---|
+| **Suppress** | plugin holds the logger at `OFF`, re-applied every sync | **yes** - it creates an override |
+| **Un-suppress** | deletes that override; the logger goes back to whatever sets it | no - the override is gone |
+| **Clear** | deletes the entry from the running configuration, nothing enforced after | no - it never creates an override |
+
+Un-suppressing a logger declared in `log4j2.properties` returns it to its file
+level immediately. Un-suppressing one a rule sets returns it when that rule next
+runs - lifting the suppression cannot make the rule run.
 
 ### Silencing a noisy logger
 
@@ -357,7 +370,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.11.0.zip` from the
+Download `TurnOnLoggers-2.12.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
