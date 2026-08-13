@@ -557,7 +557,70 @@
     // boot
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // navigation link
+    //
+    // IIQ gives plugin full pages no menu entry of their own - sailpoint.plugin
+    // .FullPage carries a title and nothing else - so without this the page is
+    // reachable only by URL or via gear -> Plugins. This snippet already loads
+    // on every IIQ page, so it adds the link itself.
+    //
+    // Done in the DOM rather than by editing the UIConfig object on purpose:
+    // UIConfig is a singleton, so a plugin that shipped one would overwrite
+    // whatever navigation customisation the customer already has.
+    // ------------------------------------------------------------------
+
+    var PAGE_URL = CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers';
+    var ACCESS_KEY = 'tol.access';
+
+    function addNavLink() {
+        if (document.getElementById('tol-nav-item')) return;
+        // Matches IIQ's own top-level items (see the "Home" entry). If a future
+        // IIQ release restyles the navbar this simply finds nothing and the
+        // link is skipped - it must never break the page it is injected into.
+        var bar = document.querySelector('ul.nav.navbar-nav.navbar-left');
+        if (!bar) return;
+
+        var li = document.createElement('li');
+        li.id = 'tol-nav-item';
+        li.setAttribute('role', 'presentation');
+
+        var a = document.createElement('a');
+        a.href = PAGE_URL;
+        a.className = 'menuitem';
+        a.setAttribute('role', 'menuitem');
+        a.appendChild(document.createTextNode('Logger Control'));
+
+        li.appendChild(a);
+        bar.appendChild(li);
+    }
+
+    function ensureNavLink() {
+        // Cached per session so this costs one small request per user login,
+        // not one per page view.
+        var cached = null;
+        try {
+            cached = window.sessionStorage && window.sessionStorage.getItem(ACCESS_KEY);
+        } catch (e) {
+            cached = null; // private mode / storage disabled
+        }
+        if (cached === '1') { addNavLink(); return; }
+        if (cached === '0') { return; }
+
+        api('GET', '/access').then(function (d) {
+            var ok = !!(d && d.allowed);
+            try {
+                if (window.sessionStorage) window.sessionStorage.setItem(ACCESS_KEY, ok ? '1' : '0');
+            } catch (e) { /* not cacheable, will re-probe next page */ }
+            if (ok) addNavLink();
+        }).catch(function () {
+            // Not logged in, plugin disabled, session expired - no link, no noise.
+        });
+    }
+
     function start() {
+        ensureNavLink();
+
         root = document.getElementById(ROOT_ID);
         if (!root) return; // not our page - every other IIQ page lands here
 

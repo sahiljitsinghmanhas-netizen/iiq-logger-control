@@ -167,14 +167,44 @@ on its next cycle, typically within a minute of the install.
 
 ### Where the page is
 
-**gear icon → Plugins → click "Logger Control"**, or go straight to:
+The plugin adds a **Logger Control** entry to the IIQ top navigation bar, next
+to Setup. That is the intended way in.
+
+It is also always reachable directly at:
 
 ```
 /identityiq/plugins/pluginPage.jsf?pn=TurnOnLoggers
 ```
 
-Plugin full pages do not get their own top-level menu entry, so the Plugins
-screen (or a bookmark) is how you reach it.
+or via **gear icon → Plugins → Logger Control**.
+
+<details>
+<summary>Why the plugin has to add its own menu entry</summary>
+
+IIQ gives plugin full pages no navigation entry - `sailpoint.plugin.FullPage`
+carries a `title` and nothing else, and there is no menu hook in the plugin
+manifest. Out of the box a plugin page is reachable only by URL or through the
+Plugins admin screen, which is no good for something developers are meant to
+use daily.
+
+So the stylesheet/script snippet this plugin already injects on every IIQ page
+also appends the menu item client-side. It is deliberately **not** done by
+importing a `UIConfig` object: UIConfig is a singleton, so a plugin that
+shipped one would silently overwrite whatever navigation customisation the
+customer already had - the same trap as shipping an `AuditConfig`.
+
+The link only appears for users who actually hold the required capability. The
+snippet asks `GET /plugin/rest/TurnOnLoggers/access` once per session and
+caches the answer in `sessionStorage`, so everyone else sees no menu entry
+rather than a link that 403s. If the navbar markup ever changes in a future IIQ
+release, the selector simply finds nothing and no link is added - it cannot
+break the page it is injected into.
+
+</details>
+
+> Browsers cache plugin JavaScript aggressively and IIQ's asset URL revision
+> does not change between reinstalls, so after upgrading press **Ctrl+F5** once
+> or the menu entry will not appear.
 
 **This page is where you turn loggers on.** The top card, *Turn on a logger*,
 takes a logger name (with a picker of the loggers people usually reach for), a

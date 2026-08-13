@@ -70,6 +70,42 @@ public class LoggerControlResource extends BasePluginResource {
     // read
     // ==================================================================
 
+    /**
+     * Cheap "may I use this?" probe, used by the snippet that adds the menu
+     * link to every IIQ page.
+     *
+     * Deliberately not capability-gated - answering "no" is the whole point.
+     * It reveals nothing beyond whether the caller holds a capability they
+     * could discover by visiting the page anyway, and it lets the menu entry
+     * stay hidden for the majority of users who have no business changing log
+     * levels, instead of showing everyone a link that 403s.
+     */
+    @GET
+    @Path("access")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response access() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        boolean allowed = false;
+        try {
+            Identity user = requireUser();
+            // Checked directly rather than via capabilityDenial(), which logs
+            // a warning on refusal - this probe runs once per user session and
+            // a "denied" answer here is normal, not noteworthy.
+            String required = PluginSettings.getString(getContext(),
+                    PluginSettings.S_REQUIRED_CAP, "SystemAdministrator");
+            allowed = user != null
+                    && PluginSettings.getBool(getContext(), PluginSettings.S_ENABLED, true)
+                    && hasCapability(user, required);
+        } catch (Throwable t) {
+            // Never let this break page rendering - the menu link just stays
+            // hidden if we cannot answer.
+            LOG.debug("[TurnOnLoggers] access probe failed: " + t);
+        }
+        m.put("allowed", allowed);
+        m.put("title", "Logger Control");
+        return json(Response.Status.OK, m);
+    }
+
     @GET
     @Path("state")
     @Produces(MediaType.APPLICATION_JSON)
