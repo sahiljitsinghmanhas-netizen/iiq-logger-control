@@ -458,6 +458,7 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("applied", st.get(LoggerConfigStore.S_APPLIED));
             h.put("errors", st.get(LoggerConfigStore.S_ERRORS));
             h.put("facts", st.get(LoggerConfigStore.S_FACTS));
+            h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);
             h.put("inSync", hostRev == revision && (now - lastSync) <= STALE_AFTER_MS);

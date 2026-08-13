@@ -211,6 +211,45 @@ public final class Log4jAgent {
         return out;
     }
 
+    /**
+     * Every logger this JVM's log4j2 configuration currently defines, with a
+     * flag saying whether this plugin is the one that set it.
+     *
+     * The unmanaged ones are the loggers that came from log4j2.properties -
+     * either shipped by IIQ or added by hand on that host. The plugin never
+     * touches them; this exists so the UI can show that they are there, since
+     * otherwise a level set in the file is invisible from the page and someone
+     * chasing "why is this logger already noisy" has nowhere to look.
+     */
+    public static synchronized List<Map<String, String>> configuredLoggers() {
+        List<Map<String, String>> out = new ArrayList<>();
+        Configuration cfg;
+        try {
+            cfg = context().getConfiguration();
+        } catch (Throwable t) {
+            return out;
+        }
+        Map<String, LoggerConfig> loggers;
+        try {
+            loggers = cfg.getLoggers();
+        } catch (Throwable t) {
+            return out;
+        }
+        if (loggers == null) return out;
+
+        for (Map.Entry<String, LoggerConfig> e : loggers.entrySet()) {
+            String name = e.getKey() == null ? "" : e.getKey();
+            LoggerConfig lc = e.getValue();
+            if (lc == null) continue;
+            Map<String, String> row = new LinkedHashMap<>();
+            row.put("logger", display(normalize(name)));
+            row.put("level", lc.getLevel() == null ? "?" : lc.getLevel().name());
+            row.put("managed", String.valueOf(OWNED.containsKey(normalize(name))));
+            out.add(row);
+        }
+        return out;
+    }
+
     /** Loggers this JVM is currently overriding, in display form. */
     public static synchronized List<String> managedLoggers() {
         List<String> out = new ArrayList<>();

@@ -170,6 +170,7 @@
 
         root.appendChild(addForm());
         root.appendChild(overridesSection());
+        root.appendChild(fileLoggersSection());
         root.appendChild(hostsSection());
         root.appendChild(footer());
     }
@@ -456,6 +457,68 @@
         });
         t.appendChild(tb);
         box.appendChild(t);
+        return box;
+    }
+
+    /**
+     * Loggers that come from each host's log4j2.properties rather than from
+     * this page. Read-only - the plugin never changes or removes them, it only
+     * adds on top. Shown so that "why is this already noisy" and "what else is
+     * on" have an answer here instead of requiring a shell on the host.
+     */
+    function fileLoggersSection() {
+        var box = el('section', 'tol-card');
+        box.appendChild(el('h2', 'tol-card-title', 'Already set in log4j2.properties'));
+        box.appendChild(el('div', 'tol-hint',
+            'Loggers configured in each host\'s own log4j2.properties, including anything set by hand '
+            + 'on that host. This plugin leaves them alone - turning a logger on here adds to this, '
+            + 'it never clears it. To change these, edit the file on the host.'));
+
+        // Group hosts that report an identical set, which is the normal case -
+        // listing the same ten IIQ defaults once per host would bury the one
+        // host that differs, and spotting that host is the point.
+        var groups = [];
+        (state.hosts || []).forEach(function (h) {
+            var fl = h.fileLoggers;
+            if (!fl) return;
+            var keys = Object.keys(fl).sort();
+            if (!keys.length) return;
+            var sig = keys.map(function (k) { return k + '=' + fl[k]; }).join('|');
+            var found = null;
+            groups.forEach(function (g) { if (g.sig === sig) found = g; });
+            if (found) { found.hosts.push(h.name); }
+            else { groups.push({ sig: sig, hosts: [h.name], keys: keys, map: fl }); }
+        });
+
+        if (!groups.length) {
+            box.appendChild(el('div', 'tol-empty',
+                'No host has reported yet. This fills in on the next sync tick.'));
+            return box;
+        }
+
+        groups.forEach(function (g) {
+            if (groups.length > 1) {
+                var hdr = el('div', 'tol-group-head');
+                hdr.appendChild(el('span', 'tol-badge', g.hosts.join(', ')));
+                box.appendChild(hdr);
+            }
+            var t = el('table', 'tol-table');
+            t.appendChild(headRow(['Logger', 'Level', 'Source']));
+            var tb = el('tbody');
+            g.keys.forEach(function (k) {
+                var tr = el('tr');
+                var c1 = el('td');
+                c1.appendChild(el('code', 'tol-logger-name', k));
+                tr.appendChild(c1);
+                var c2 = el('td');
+                c2.appendChild(el('span', 'tol-level tol-level-' + String(g.map[k]).toLowerCase(), g.map[k]));
+                tr.appendChild(c2);
+                tr.appendChild(el('td', 'tol-small', 'log4j2.properties'));
+                tb.appendChild(tr);
+            });
+            t.appendChild(tb);
+            box.appendChild(t);
+        });
         return box;
     }
 

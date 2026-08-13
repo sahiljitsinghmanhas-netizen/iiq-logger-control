@@ -65,6 +65,7 @@ public final class LoggerConfigStore {
     public static final String S_APPLIED   = "applied";    // logger -> effective level
     public static final String S_ERRORS    = "errors";
     public static final String S_FACTS     = "facts";
+    public static final String S_FILE_LOGGERS = "fileLoggers";
 
     public static final String ALL_HOSTS = "*";
 
@@ -249,6 +250,17 @@ public final class LoggerConfigStore {
         st.put(S_APPLIED, new LinkedHashMap<String, String>(applied));
         st.put(S_ERRORS, new ArrayList<String>(errors));
         st.put(S_FACTS, new LinkedHashMap<String, String>(HostFacts.collect()));
+
+        // What this host's log4j2.properties defines, as distinct from what we
+        // set. Reported per host because the file can differ between hosts -
+        // that is exactly the case a single shared UI cannot otherwise reveal.
+        Map<String, String> fileLoggers = new LinkedHashMap<>();
+        for (Map<String, String> row : Log4jAgent.configuredLoggers()) {
+            if (!"true".equals(row.get("managed"))) {
+                fileLoggers.put(row.get("logger"), row.get("level"));
+            }
+        }
+        st.put(S_FILE_LOGGERS, fileLoggers);
         ctx.saveObject(st);
         ctx.commitTransaction();
     }

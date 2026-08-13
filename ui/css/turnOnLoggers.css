@@ -447,3 +447,7 @@
 .tol-credit a:hover {
     color: #2186eb;
 }
+
+.tol-group-head {
+    margin-top: 12px;
+}

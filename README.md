@@ -81,6 +81,26 @@ work the same way everywhere:
 Durability across restarts comes from the database instead: a JVM that
 restarts re-applies the current desired state on its first service tick.
 
+### Turning loggers on is cumulative
+
+Nothing you do here clears anything else. Adding a logger adds one entry;
+existing overrides and everything in `log4j2.properties` are left exactly as
+they were. The reconciler only ever reverts loggers *this plugin* set, and only
+when you remove them or their TTL lapses.
+
+Verified end to end on a live instance:
+
+| Action | Loggers from the file | Plugin-managed |
+|---|---|---|
+| baseline | 11 (`net.sf.ehcache=ERROR`) | none |
+| add `sailpoint.api.Provisioner=DEBUG` | **11, untouched** | 1 |
+| override `net.sf.ehcache` to `DEBUG` | 10 - it moved | 2 |
+| remove that override | **11, `net.sf.ehcache=ERROR` restored** | 1 |
+
+Overriding a logger the file already sets does not delete anything: ownership
+moves to the plugin while the override lives, and the file's own level is put
+back exactly when it is removed.
+
 ### Reverting is precise
 
 Before overriding a logger, the plugin records whether an exact `LoggerConfig`
@@ -117,11 +137,12 @@ Two consequences worth knowing:
   tick. And since it re-snapshots against the new configuration, removing the
   override later reverts to whatever the file *now* says, not the stale
   pre-edit value.
-- **Loggers set in the file do not appear in Logger Control.** The page shows
-  only what the plugin manages. The Hosts table tells you *which*
-  `log4j2.properties` each host loaded, but not what is in it - so a colleague
-  hand-editing a file on one host is invisible here. If levels on a host are
-  not what you expect, read that file.
+- **Loggers set in the file are shown, read-only,** under *Already set in
+  log4j2.properties* - including ones added by hand on a single host. A hand
+  edit shows up there within about 90 seconds (log4j2's 20s file check, then
+  one sync tick). Hosts reporting an identical set are grouped, so the one host
+  that differs stands out instead of being buried under ten repeats of the IIQ
+  defaults.
 
 ---
 
@@ -250,6 +271,9 @@ level, how long to keep it on, which hosts, and an optional note. The
 not uninstall first. IIQ replaces the plugin in place and **your settings are
 preserved** (verified upgrading 1.0.0 → 2.0.0 with a non-default
 `permanentLoggers` and `defaultTtlMinutes`; both survived).
+
+**Reinstalling the same version also needs an uninstall first** - IIQ rejects
+it with the same 400 below, since it is not an upgrade.
 
 **To roll back, you must uninstall first.** IIQ refuses to install an older
 version over a newer one:
