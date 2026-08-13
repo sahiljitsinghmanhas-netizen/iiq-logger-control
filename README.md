@@ -155,6 +155,14 @@ change and restart, so the logger would return - and the plugin would be
 quietly fighting the host's declared configuration. Overriding it to `OFF`
 is the honest option, and it stays visible and reversible.
 
+### Built-in help
+
+The **?** next to the page title opens a help panel covering everything on the
+page: what each section is, where a logger came from, what every button does,
+Suppress versus Clear, the expiry rules, propagation across hosts, the audit
+trail, the plugin settings, what to check when something looks wrong, and the
+known limitations. It is the same material as this README, at the point of use.
+
 ### Which button appears where
 
 Actions are named after the thing the row represents.
@@ -377,7 +385,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.13.0.zip` from the
+Download `TurnOnLoggers-2.14.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

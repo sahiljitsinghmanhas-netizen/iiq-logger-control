@@ -189,13 +189,26 @@
         root.appendChild(overridesSection());
         root.appendChild(liveLoggersSection());
         root.appendChild(hostsSection());
+        var help = helpPanel();
+        help.id = 'tol-help-panel';
+        root.appendChild(help);
         root.appendChild(footer());
     }
 
     function header() {
         var h = el('div', 'tol-header');
         var left = el('div', 'tol-header-left');
-        left.appendChild(el('h1', 'tol-title', 'Logger Manager'));
+        var titleRow = el('div', 'tol-titlerow');
+        titleRow.appendChild(el('h1', 'tol-title', 'Logger Manager'));
+        var helpBtn = el('button', 'tol-help-btn', '?');
+        helpBtn.title = 'What everything on this page means';
+        helpBtn.setAttribute('aria-label', 'Help');
+        helpBtn.onclick = function () {
+            var panel = document.getElementById('tol-help-panel');
+            if (panel) panel.className = 'tol-help';
+        };
+        titleRow.appendChild(helpBtn);
+        left.appendChild(titleRow);
         var facts = state.thisHostFacts || {};
         var sub = el('div', 'tol-subtitle');
         sub.appendChild(document.createTextNode(
@@ -757,7 +770,21 @@
                     c5.appendChild(tgl);
                 }
 
-                // Clear stays its own button, and only where it means anything.
+                // Shown disabled rather than omitted for file-declared loggers:
+                // an absent button leaves people wondering whether it is missing
+                // or forbidden, and there is a real reason worth stating.
+                if (r.source === 'file' || r.source === 'unknown') {
+                    var noClear = el('button', 'tol-btn tol-btn-small', 'Clear');
+                    noClear.disabled = true;
+                    noClear.title = r.source === 'file'
+                        ? 'Cannot be cleared: this logger is declared in the host log4j2.properties, '
+                          + 'and log4j2 rebuilds its configuration from that file on every change and '
+                          + 'restart - so it would come straight back. Use Suppress to hold it at OFF '
+                          + 'instead.'
+                        : 'Cannot be cleared: the log4j2 configuration on this host could not be read, '
+                          + 'so it is not known whether the file declares this logger.';
+                    c5.appendChild(noClear);
+                }
                 if (r.source === 'runtime' || r.source === 'leftover') {
                     var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Clear');
                     rm.title = 'Delete ' + r.logger + ' from the running configuration on every host. '
@@ -869,6 +896,183 @@
         t.appendChild(tb);
         box.appendChild(t);
         return box;
+    }
+
+    // ------------------------------------------------------------------
+    // help
+    //
+    // Built as data rather than a wall of markup so it stays readable and so
+    // the render check exercises it: the panel is created on every render and
+    // hidden, not built lazily on click, which means a mistake in here fails
+    // the build instead of waiting to be discovered by someone pressing "?".
+    // ------------------------------------------------------------------
+
+    var HELP = [
+        { h: 'What this page does',
+          p: ['Turns IIQ log4j2 loggers on and off across every host in the deployment, from here. '
+            + 'No shell access, no editing log4j2.properties, no restart.',
+              'Levels are set in each JVM live log4j2 runtime. No file on any host is ever modified. '
+            + 'The list of what should be on lives in the IIQ database, and every host reconciles '
+            + 'itself against it on a timer, so a host that restarts picks the overrides back up.'] },
+
+        { h: 'The three sections',
+          dl: [['Turn on a logger', 'The form. Type any logger name, pick a level, pick how long, '
+              + 'pick which hosts. The dropdown is only a list of common IIQ loggers - it does not '
+              + 'restrict what you can type. Custom loggers from your own rules work, for example '
+              + 'rule.myCustomRule.'],
+                ['Overrides in effect', 'Everything this plugin is currently holding, from this page '
+              + 'and from the Permanent loggers plugin setting. Every row here is an override, and '
+              + 'the only thing you can do to one is remove it.'],
+                ['Loggers live in the JVM', 'Every logger log4j2 actually has configured on each '
+              + 'host, whatever put it there, with its source stated. This is the truth of what is '
+              + 'running.'],
+                ['Hosts', 'Every IIQ JVM, its OS, its JVM, which log4j2.properties it loaded, where '
+              + 'it writes logs, and when it last reconciled.']] },
+
+        { h: 'Where a logger came from',
+          dl: [['log4j2.properties', 'Declared in that host own configuration file. Never changed or '
+              + 'removed by this plugin.'],
+                ['this plugin', 'An override currently managed here. Removing it hands the logger '
+              + 'back to whatever was underneath.'],
+                ['left over', 'This plugin created it and lost track of it, which used to happen '
+              + 'when the plugin was reinstalled while a logger was on. Safe to clear.'],
+                ['set at runtime', 'Something outside this plugin set it - typically a rule calling '
+              + 'Logger.getLogger(...).setLevel(...). Never touched or cleared automatically.']] },
+
+        { h: 'The actions',
+          dl: [['Turn on', 'Creates an override at the level you choose.'],
+                ['Suppress (toggle)', 'Holds a logger at OFF and keeps it there. The plugin '
+              + 're-applies it on every sync, so it stays off even if a rule keeps switching it back '
+              + 'on. Green with a filled dot means it is holding right now; click again to lift it.'],
+                ['Clear', 'Deletes the logger from the running configuration once, then lets go. '
+              + 'Nothing is enforced afterwards, so whatever created it can create it again. Use '
+              + 'Suppress if it needs to stay off. Not available for loggers declared in '
+              + 'log4j2.properties - see below.'],
+                ['Remove override', 'Deletes one of this plugin overrides. The logger returns to its '
+              + 'log4j2.properties level, or to whatever a rule sets, next time that rule runs.'],
+                ['Remove all overrides', 'Removes every override this plugin holds, on every host. '
+              + 'Nothing in log4j2.properties is changed, loggers set at runtime are not touched, '
+              + 'and the plugin stays enabled.'],
+                ['Clear all left over', 'Clears only loggers this plugin created and lost track of. '
+              + 'It can never remove something a rule or the file set.'],
+                ['Sync this host now', 'Reconciles the host serving this page immediately. Every '
+              + 'other host reconciles itself on its own timer, so there is nothing to force there.']] },
+
+        { h: 'Suppress versus Clear',
+          p: ['Suppress holds it. Clear deletes it and lets go.',
+              'Suppress a logger a rule sets and it stays quiet: the rule runs, sets DEBUG again, and '
+            + 'the plugin puts it back to OFF within a minute. Clear the same logger and it is quiet '
+            + 'only until that rule next runs.'] },
+
+        { h: 'Why loggers from log4j2.properties cannot be cleared',
+          p: ['Deleting one would achieve nothing. log4j2 rebuilds its entire configuration from that '
+            + 'file whenever the file changes and on every restart, so the logger would come straight '
+            + 'back.',
+              'It is also the host declared configuration - the plugin quietly deleting it would be '
+            + 'fighting the file behind your back. Overriding it to OFF with Suppress is the honest '
+            + 'option, and it stays visible and reversible.'] },
+
+        { h: 'Levels and expiry',
+          p: ['Overrides expire so logging cannot be left on by accident. That is the usual way a '
+            + 'tool like this causes an incident.'],
+          dl: [['Anything that produces output', 'Must expire. The maximum is set by the '
+              + 'Maximum TTL plugin setting, 24 hours by default.'],
+                ['OFF', 'May be permanent. A logger switched off cannot fill a disk, so it is allowed '
+              + 'to stay off. This is what Suppress uses.'],
+                ['root', 'Blocked unless Allow root logger is turned on in the plugin settings. '
+              + 'Setting root to DEBUG turns on every logger in the JVM at once.']] },
+
+        { h: 'Hosts and propagation',
+          p: ['The host serving your click applies the change immediately. Every other host picks it '
+            + 'up on its next sync, 60 seconds by default.',
+              'Hosts reporting an identical picture are grouped together in the tables, so the one '
+            + 'host that differs stands out instead of being buried under repeats.',
+              'A mixed Windows, Linux, macOS or container cluster needs no special handling: the '
+            + 'level change is the same log4j2 call everywhere. What differs per host - the OS, the '
+            + 'config file path, where the logs are written - is reported in the Hosts table rather '
+            + 'than acted on.'] },
+
+        { h: 'Audit',
+          p: ['Every button press is recorded as an IIQ audit event under the action '
+            + 'LoggerManagerChange: who, what happened, the logger, level, target hosts, expiry, and '
+            + 'the note you typed.',
+              'There is deliberately no way to turn this off from the plugin. Events are written '
+            + 'whatever Audit Configuration says.',
+              'To find them: Advanced Analytics, Search Type Audit, then refine on Action equals '
+            + 'Logger Manager change. Filtering by Source needs your IIQ login name, not the display '
+            + 'name shown in the header.',
+              'The page background refresh is not audited - it polls every ten seconds and would '
+            + 'bury the actions that matter.'] },
+
+        { h: 'Plugin settings',
+          dl: [['Enabled', 'Master switch. Off means every host reverts to its own log4j2.properties '
+              + 'on its next sync, without losing the stored configuration.'],
+                ['Required capability', 'Capability needed to view or change anything here. No '
+              + 'SysAdmin bypass - the check is exactly this capability name.'],
+                ['Default TTL / Maximum TTL', 'Preselected and maximum lifetime for a new override. '
+              + 'Set Maximum to 0 to allow permanent overrides at any level.'],
+                ['Allow root logger', 'Whether the root logger may be targeted at all.'],
+                ['Permanent loggers', 'Loggers enabled from the settings page with no expiry. They '
+              + 'appear in Overrides in effect marked from settings, and can only be changed there.']] },
+
+        { h: 'If something looks wrong',
+          dl: [['A host says not reporting', 'Its sync service has not run. Check that host '
+              + 'sailpoint.log for Unable to install service.'],
+                ['A host says catching up', 'It is on an older revision than the configuration. '
+              + 'Normal for up to one interval after a change.'],
+                ['The level changed but nothing appears in the log', 'The message still has to reach '
+              + 'an appender. Check that host log file paths in the Hosts table - on a stock IIQ the '
+              + 'file appender is commented out and everything goes to stdout.'],
+                ['A logger is noisy and you did not do it', 'Look at Loggers live in the JVM and read '
+              + 'the Source column. File says shows what log4j2.properties declares; differs from '
+              + 'file means something changed it at runtime.']] },
+
+        { h: 'Limitations',
+          p: ['Appenders are not managed, only levels. Where a logger writes is still '
+            + 'log4j2.properties business.',
+              'Uninstalling the plugin leaves its ServiceDefinition behind, because IIQ has no '
+            + 'uninstall-time import hook. Remove it with the iiq console: '
+            + 'delete ServiceDefinition TurnOnLoggersSync.',
+              'Only the properties format of log4j2 configuration is parsed. For an XML or YAML '
+            + 'configuration the source of each logger cannot be determined, and the page says so.'] }
+    ];
+
+    function helpPanel() {
+        var wrap = el('div', 'tol-help tol-hidden');
+
+        var card = el('div', 'tol-help-card');
+        var head = el('div', 'tol-help-head');
+        head.appendChild(el('h2', 'tol-help-title', 'Logger Manager help'));
+        var close = el('button', 'tol-btn tol-btn-small', 'Close');
+        close.onclick = function () { wrap.className = 'tol-help tol-hidden'; };
+        head.appendChild(close);
+        card.appendChild(head);
+
+        var body = el('div', 'tol-help-body');
+        HELP.forEach(function (sec) {
+            body.appendChild(el('h3', 'tol-help-h', sec.h));
+            (sec.p || []).forEach(function (t) { body.appendChild(el('p', 'tol-help-p', t)); });
+            if (sec.dl) {
+                var dl = el('dl', 'tol-help-dl');
+                sec.dl.forEach(function (pair) {
+                    dl.appendChild(el('dt', '', pair[0]));
+                    dl.appendChild(el('dd', '', pair[1]));
+                });
+                body.appendChild(dl);
+            }
+        });
+        if (state.pluginVersion) {
+            body.appendChild(el('p', 'tol-help-p tol-small',
+                'Logger Manager ' + state.pluginVersion));
+        }
+        card.appendChild(body);
+        wrap.appendChild(card);
+
+        // Click the backdrop to dismiss, same as Close.
+        wrap.onclick = function (ev) {
+            if (ev.target === wrap) wrap.className = 'tol-help tol-hidden';
+        };
+        return wrap;
     }
 
     function footer() {

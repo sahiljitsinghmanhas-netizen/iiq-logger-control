@@ -623,3 +623,117 @@
     opacity: .5;
     cursor: not-allowed;
 }
+
+/* ---------- help ---------- */
+
+.tol-titlerow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tol-help-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #cbd2d9;
+    background: #fff;
+    color: #52606d;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.tol-help-btn:hover {
+    background: #2186eb;
+    border-color: #1d7ad6;
+    color: #fff;
+}
+
+.tol-help {
+    position: fixed;
+    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(16, 42, 67, .45);
+    z-index: 2147483647;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+}
+
+.tol-help-card {
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 12px 40px rgba(16, 42, 67, .3);
+    max-width: 860px;
+    width: 100%;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1f2933;
+}
+
+.tol-help-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e4e7eb;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    border-radius: 6px 6px 0 0;
+}
+
+.tol-help-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #102a43;
+}
+
+.tol-help-body {
+    padding: 4px 20px 20px 20px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.tol-help-h {
+    font-size: 13px;
+    font-weight: 700;
+    color: #102a43;
+    margin: 20px 0 6px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.tol-help-p {
+    margin: 0 0 8px 0;
+    color: #3e4c59;
+    max-width: 80ch;
+}
+
+.tol-help-dl {
+    margin: 0 0 8px 0;
+}
+
+.tol-help-dl dt {
+    font-weight: 600;
+    color: #243b53;
+    margin-top: 8px;
+}
+
+.tol-help-dl dd {
+    margin: 2px 0 0 0;
+    color: #3e4c59;
+    max-width: 80ch;
+}
+
+.tol-btn:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
