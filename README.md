@@ -157,8 +157,8 @@ is the honest option, and it stays visible and reversible.
 
 ### Built-in help
 
-The **?** next to the page title opens a help panel covering everything on the
-page: what each section is, where a logger came from, what every button does,
+The **?** beside *Sync this host now* opens `ui/help.html` in a new tab - a
+plain page, not an overlay - covering everything on the page: what each section is, where a logger came from, what every button does,
 Suppress versus Clear, the expiry rules, propagation across hosts, the audit
 trail, the plugin settings, what to check when something looks wrong, and the
 known limitations. It is the same material as this README, at the point of use.
@@ -385,7 +385,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.14.0.zip` from the
+Download `TurnOnLoggers-2.15.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

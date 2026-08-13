@@ -299,6 +299,11 @@ public final class LoggerConfigStore {
         }
         if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
         long now = System.currentTimeMillis();
+        // A cleanup is a change every host has to act on, so it bumps the
+        // revision like any other. Without this the Hosts table kept reporting
+        // "in sync" while hosts still had the logger, and nothing showed the
+        // request travelling.
+        cfg.put(A_REVISION, String.valueOf(asInt(cfg.getString(A_REVISION), 0) + 1));
         cfg.put(A_CLEAR_AT, String.valueOf(now));
         cfg.put(A_CLEAR_LOGGER, logger == null ? "" : logger.trim());
         cfg.put(A_UPDATED, String.valueOf(now));

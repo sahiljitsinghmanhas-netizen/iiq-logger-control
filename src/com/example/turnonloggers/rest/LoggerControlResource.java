@@ -384,6 +384,13 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("log4jAvailable", Log4jAgent.available());
         out.put("pluginVersion", PluginSettings.getVersion(ctx));
         out.put("auditAction", AuditWriter.ACTION);
+        try {
+            out.put("clearRequestedAt", String.valueOf(LoggerConfigStore.clearRequestedAt(ctx)));
+            out.put("clearRequestedLogger", LoggerConfigStore.clearRequestedLogger(ctx));
+        } catch (Throwable t) {
+            out.put("clearRequestedAt", "0");
+            out.put("clearRequestedLogger", "");
+        }
         out.put("author", "Sahiljit Singh Manhas");
         out.put("projectUrl", "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control");
 
@@ -516,6 +523,8 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
             h.put("runtimeLoggers", st.get(LoggerConfigStore.S_RUNTIME_LOGGERS));
             h.put("liveLoggers", st.get(LoggerConfigStore.S_LIVE));
+            h.put("lastClear", String.valueOf(
+                    LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LAST_CLEAR)), 0L)));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Logger Manager - help</title>
+<style>
+  body { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         color: #1f2933; line-height: 1.6; font-size: 14px;
+         max-width: 900px; margin: 0 auto; padding: 32px 20px 80px 20px; }
+  h1 { font-size: 24px; color: #102a43; margin: 0 0 4px 0; }
+  .sub { color: #7b8794; margin: 0 0 28px 0; }
+  h2 { font-size: 15px; color: #102a43; margin: 32px 0 8px 0;
+       padding-bottom: 6px; border-bottom: 1px solid #e4e7eb; }
+  p { margin: 0 0 10px 0; color: #3e4c59; }
+  dt { font-weight: 600; color: #243b53; margin-top: 10px; }
+  dd { margin: 2px 0 0 0; color: #3e4c59; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 13px;
+         background: #f5f7fa; border: 1px solid #e4e7eb; border-radius: 3px; padding: 0 4px; }
+  table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7b8794;
+       border-bottom: 1px solid #e4e7eb; }
+  .note { background: #f0f4f8; border: 1px solid #d9e2ec; border-left: 4px solid #2186eb;
+          border-radius: 4px; padding: 10px 14px; margin: 12px 0; color: #334e68; }
+  footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e4e7eb;
+           color: #9aa5b1; font-size: 12px; }
+  a { color: #2186eb; }
+</style>
+</head>
+<body>
+
+<h1>Logger Manager</h1>
+<p class="sub">Turn IIQ log4j2 loggers on and off across every host, from the UI.</p>
+
+<h2>What this page does</h2>
+<p>Sets logger levels across every host in the deployment without shell access, without editing
+<code>log4j2.properties</code>, and without a restart.</p>
+<p>Levels are set in each JVM's live log4j2 runtime, so <strong>no file on any host is ever
+modified</strong>. The list of what should be on lives in the IIQ database, and every host
+reconciles itself against it on a timer - which is also how a host that restarts picks the
+overrides back up.</p>
+
+<h2>The sections</h2>
+<dl>
+  <dt>Turn on a logger</dt>
+  <dd>The form. Type <strong>any</strong> logger name - the dropdown is only a list of common IIQ
+  loggers and does not restrict what you can type. Custom loggers from your own rules work, for
+  example <code>rule.myCustomRule</code>.</dd>
+
+  <dt>Overrides in effect</dt>
+  <dd>Everything this plugin is currently holding, from this page and from the
+  <code>Permanent loggers</code> plugin setting. Every row is an override, and the only thing you
+  can do to one is remove it.</dd>
+
+  <dt>Loggers live in the JVM</dt>
+  <dd>Every logger log4j2 actually has configured on each host, whatever put it there, with its
+  source stated. This is the truth of what is running.</dd>
+
+  <dt>Hosts</dt>
+  <dd>Every IIQ JVM: its OS, its JVM, which <code>log4j2.properties</code> it loaded, where it
+  writes logs, and when it last reconciled.</dd>
+</dl>
+
+<h2>Where a logger came from</h2>
+<table>
+  <tr><th>Source</th><th>Meaning</th><th>Cleared automatically?</th></tr>
+  <tr><td><code>log4j2.properties</code></td><td>Declared in that host's own configuration file.</td><td>never</td></tr>
+  <tr><td><code>this plugin</code></td><td>An override currently managed here.</td><td>on removal or expiry</td></tr>
+  <tr><td><code>left over</code></td><td>This plugin created it and lost track of it, which used to happen when the plugin was reinstalled while a logger was on.</td><td>yes, by <em>Clear all left over</em></td></tr>
+  <tr><td><code>set at runtime</code></td><td>Something outside this plugin set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
+</table>
+
+<h2>The buttons</h2>
+<dl>
+  <dt>Turn on</dt><dd>Creates an override at the level you choose.</dd>
+
+  <dt>Suppress (a toggle)</dt>
+  <dd>Holds a logger at <code>OFF</code> and keeps it there. The plugin re-applies it on every sync,
+  so it stays off even if a rule keeps switching it back on. Green with a filled dot means it is
+  holding right now; click it again to lift it.</dd>
+
+  <dt>Clear</dt>
+  <dd>Deletes the logger from the running configuration once, then lets go. Nothing is enforced
+  afterwards, so whatever created it can create it again. It is a cluster-wide request: the host you
+  are on does it immediately and the others follow on their next sync, which the page shows while it
+  is in flight.</dd>
+
+  <dt>Remove override</dt>
+  <dd>Deletes one of this plugin's overrides. The logger returns to its
+  <code>log4j2.properties</code> level, or to whatever a rule sets, next time that rule runs.</dd>
+
+  <dt>Remove all overrides</dt>
+  <dd>Removes every override this plugin holds, on every host. Nothing in
+  <code>log4j2.properties</code> is changed, loggers set at runtime are not touched, and the plugin
+  stays enabled.</dd>
+
+  <dt>Clear all left over</dt>
+  <dd>Clears only loggers this plugin created and lost track of. It can never remove something a
+  rule or the file set.</dd>
+
+  <dt>Sync this host now</dt>
+  <dd>Reconciles the host serving this page immediately. Every other host reconciles itself on its
+  own timer, so there is nothing to force there - watch <em>Last sync</em> in the Hosts table.</dd>
+</dl>
+
+<h2>Suppress versus Clear</h2>
+<p><strong>Suppress holds it. Clear deletes it and lets go.</strong></p>
+<table>
+  <tr><th></th><th>Suppress</th><th>Clear</th></tr>
+  <tr><td>The logger entry</td><td>stays, held at <code>OFF</code></td><td>deleted</td></tr>
+  <tr><td>Enforced afterwards?</td><td>yes, every sync</td><td>no</td></tr>
+  <tr><td>Survives a rule re-setting it?</td><td><strong>yes</strong></td><td>no, it comes back</td></tr>
+  <tr><td>Reversible?</td><td>yes, click the toggle again</td><td>nothing to reverse</td></tr>
+</table>
+<p>Suppress a logger a rule sets and it stays quiet: the rule runs, sets <code>DEBUG</code> again,
+and the plugin puts it back to <code>OFF</code> within a minute. Clear the same logger and it is
+quiet only until that rule next runs.</p>
+
+<h2>Why loggers from log4j2.properties cannot be cleared</h2>
+<p>Their Clear button is shown struck through and disabled on purpose.</p>
+<p>Deleting one would achieve nothing: log4j2 rebuilds its entire configuration from that file
+whenever the file changes and on every restart, so the logger would come straight back. It is also
+the host's declared configuration - the plugin quietly deleting it would be fighting the file behind
+your back. Overriding it to <code>OFF</code> with Suppress is the honest option, and it stays
+visible and reversible.</p>
+
+<h2>Levels and expiry</h2>
+<p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like
+this causes an incident.</p>
+<dl>
+  <dt>Anything that produces output</dt>
+  <dd>Must expire, up to the <code>Maximum TTL</code> plugin setting - 24 hours by default.</dd>
+  <dt><code>OFF</code></dt>
+  <dd>May be permanent. A logger switched off cannot fill a disk, so it is allowed to stay off.
+  This is what Suppress uses.</dd>
+  <dt><code>root</code></dt>
+  <dd>Blocked unless <code>Allow root logger</code> is enabled in the plugin settings. Setting root
+  to <code>DEBUG</code> turns on every logger in the JVM at once.</dd>
+</dl>
+
+<h2>Hosts and propagation</h2>
+<p>The host serving your click applies the change immediately. Every other host picks it up on its
+next sync - 60 seconds by default. Hosts reporting an identical picture are grouped in the tables,
+so the one host that differs stands out instead of being buried under repeats.</p>
+<p>A mixed Windows, Linux, macOS or container cluster needs no special handling: the level change is
+the same log4j2 call everywhere. What differs per host - the OS, the config file path, where the
+logs are written - is reported in the Hosts table rather than acted on.</p>
+
+<h2>Audit</h2>
+<p>Every button press is recorded as an IIQ audit event under the action
+<code>LoggerManagerChange</code>: who, what happened, the logger, level, target hosts, expiry, and
+the note you typed.</p>
+<div class="note">There is deliberately no way to turn this off from the plugin. Events are written
+whatever Audit Configuration says.</div>
+<p>To find them: <strong>Advanced Analytics</strong>, Search Type <strong>Audit</strong>, then
+refine on <strong>Action</strong> equals <em>Logger Manager change</em>. Filtering by
+<strong>Source</strong> needs your IIQ <em>login</em> name, not the display name shown in the
+header.</p>
+<p>The page's own background refresh is not audited: it polls every ten seconds and would bury the
+actions that matter.</p>
+
+<h2>Plugin settings</h2>
+<dl>
+  <dt>Enabled</dt><dd>Master switch. Off means every host reverts to its own
+  <code>log4j2.properties</code> on its next sync, without losing the stored configuration.</dd>
+  <dt>Required capability</dt><dd>Capability needed to view or change anything here. No SysAdmin
+  bypass - the check is exactly this capability name.</dd>
+  <dt>Default TTL / Maximum TTL</dt><dd>Preselected and maximum lifetime for a new override. Set
+  Maximum to 0 to allow permanent overrides at any level.</dd>
+  <dt>Allow root logger</dt><dd>Whether the root logger may be targeted at all.</dd>
+  <dt>Permanent loggers</dt><dd>Loggers enabled from the settings page with no expiry. They appear
+  in <em>Overrides in effect</em> marked <em>from settings</em> and can only be changed there.</dd>
+</dl>
+
+<h2>If something looks wrong</h2>
+<dl>
+  <dt>A host says "not reporting"</dt>
+  <dd>Its sync service has not run. Check that host's <code>sailpoint.log</code> for
+  <code>Unable to install service</code>.</dd>
+  <dt>A host says "catching up"</dt>
+  <dd>It is on an older revision than the configuration. Normal for up to one interval after a
+  change.</dd>
+  <dt>The level changed but nothing appears in the log</dt>
+  <dd>The message still has to reach an appender. Check that host's log file paths in the Hosts
+  table - on a stock IIQ install the file appender is commented out and everything goes to stdout.</dd>
+  <dt>A logger is noisy and nobody here turned it on</dt>
+  <dd>Read the <strong>Source</strong> column in <em>Loggers live in the JVM</em>. <strong>File
+  says</strong> shows what <code>log4j2.properties</code> declares; <em>differs from file</em> means
+  something changed it at runtime.</dd>
+</dl>
+
+<h2>Limitations</h2>
+<p>Appenders are not managed, only levels - where a logger writes is still
+<code>log4j2.properties</code>' business.</p>
+<p>Uninstalling the plugin leaves its ServiceDefinition behind, because IIQ has no uninstall-time
+import hook. Remove it with the <code>iiq console</code>:
+<code>delete ServiceDefinition TurnOnLoggersSync</code>.</p>
+<p>Only the properties format of log4j2 configuration is parsed. For an XML or YAML configuration
+the source of each logger cannot be determined, and the page says so.</p>
+
+<footer>
+Logger Manager &middot; Sahiljit Singh Manhas &middot;
+<a href="https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control" target="_blank"
+   rel="noopener noreferrer">Documentation and issues</a>
+</footer>
+
+</body>
+</html>
