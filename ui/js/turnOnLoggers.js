@@ -264,8 +264,8 @@
 
         // ttl
         var f3 = field('Turn off after',
-            'Raising a logger always expires, so debug output cannot be left on by accident. '
-            + 'Quietening one (OFF, FATAL, ERROR, WARN) may be permanent.');
+            'Overrides expire so logging cannot be left on by accident. Only OFF may be '
+            + 'permanent, so a logger you switch off stays off.');
         var ttl = document.createElement('select');
         ttl.id = 'tol-ttl';
         ttl.className = 'tol-input';
@@ -295,8 +295,8 @@
             if (!permitted && ttl.value === '0') ttl.value = String(def);
             clear(ttlNote);
             ttlNote.appendChild(document.createTextNode(permitted
-                ? 'Permanent is allowed for ' + lvl.value + ' - quietening a logger cannot flood a disk.'
-                : lvl.value + ' increases output, so it has to expire.'));
+                ? 'OFF can be permanent - switching a logger off cannot flood a disk.'
+                : lvl.value + ' produces output, so it has to expire. Only OFF may be permanent.'));
         }
         lvl.onchange = syncNeverOption;
         syncNeverOption();
@@ -586,6 +586,24 @@
             if (found) { found.hosts.push(h.name); }
             else { groups.push({ sig: sig, hosts: [h.name], keys: keys, map: fl }); }
         });
+
+        // If a host's configuration file could not be read - an XML or YAML
+        // config, or an unreadable path - the plugin cannot tell which loggers
+        // came from it. Say so, rather than presenting guesses as facts and
+        // leaving people wondering why nothing is ever flagged as stranded.
+        var unparsed = [];
+        (state.hosts || []).forEach(function (h) {
+            if (h.reporting && h.fileParsed === false) unparsed.push(h.name);
+        });
+        if (unparsed.length) {
+            var warn = el('div', 'tol-banner tol-warn');
+            warn.appendChild(document.createTextNode(
+                'Could not read the log4j2 configuration file on ' + unparsed.join(', ')
+                + '. The loggers below are what those hosts have live, but the plugin cannot '
+                + 'tell which came from the file, so nothing there can be flagged as left over '
+                + 'from a previous install. Only the properties format is parsed.'));
+            box.appendChild(warn);
+        }
 
         if (!groups.length) {
             box.appendChild(el('div', 'tol-empty',

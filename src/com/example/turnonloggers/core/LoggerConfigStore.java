@@ -71,6 +71,8 @@ public final class LoggerConfigStore {
     /** Durable record of what this host owns, so a plugin reinstall cannot strand loggers. */
     public static final String S_OWNED = "owned";
     public static final String S_LAST_CLEAR = "lastClearAt";
+    /** "false" when this host's log4j2 config could not be read, so sources are unknown. */
+    public static final String S_FILE_PARSED = "fileParsed";
 
     /** Set on the config object to ask every host to drop stranded loggers. */
     public static final String A_CLEAR_AT = "clearRuntimeAt";
@@ -310,8 +312,10 @@ public final class LoggerConfigStore {
         // that is exactly the case a single shared UI cannot otherwise reveal.
         Map<String, String> fileLoggers = new LinkedHashMap<>();
         Map<String, String> runtimeLoggers = new LinkedHashMap<>();
+        boolean fileParsed = true;
         for (Map<String, String> row : Log4jAgent.configuredLoggers()) {
             String source = row.get("source");
+            if ("unknown".equals(source)) fileParsed = false;
             if ("file".equals(source) || "unknown".equals(source)) {
                 fileLoggers.put(row.get("logger"), row.get("level"));
             } else if ("runtime".equals(source)) {
@@ -322,6 +326,7 @@ public final class LoggerConfigStore {
         st.put(S_RUNTIME_LOGGERS, runtimeLoggers);
         st.put(S_OWNED, new LinkedHashMap<String, String>(Log4jAgent.ownedSnapshot()));
         st.put(S_LAST_CLEAR, String.valueOf(lastClear));
+        st.put(S_FILE_PARSED, String.valueOf(fileParsed));
         ctx.saveObject(st);
         ctx.commitTransaction();
     }

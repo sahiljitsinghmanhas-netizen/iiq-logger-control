@@ -139,12 +139,14 @@ So the expiry rule depends on direction:
 
 | Level you are setting | Expiry |
 |---|---|
-| `INFO`, `DEBUG`, `TRACE`, `ALL` - more output | must expire, capped by `maxTtlMinutes` |
-| `OFF`, `FATAL`, `ERROR`, `WARN` - less output | **may be permanent** |
+| `OFF` - the logger produces nothing | **may be permanent** |
+| everything else | must expire, capped by `maxTtlMinutes` |
 
-Debug logging left on by accident is what fills a disk; a silenced logger
-cannot. The *Turn off after* list therefore offers **never (permanent)**, greyed
-out until the level you pick is one that reduces output.
+Logging left on by accident is what fills a disk, and a logger set to `OFF`
+cannot. Only `OFF` qualifies: `WARN` or `ERROR` may be a reduction or an
+increase depending on what the logger was already at, so "is this definitely
+off" is the only question with an unambiguous answer. The *Turn off after* list
+offers **never (permanent)**, greyed out until you pick `OFF`.
 
 The quickest route is the **Silence** button on any row of *Already set in
 log4j2.properties* - one click adds a permanent `OFF` override for that logger
@@ -248,7 +250,7 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
-Download `TurnOnLoggers-2.3.0.zip` from the
+Download `TurnOnLoggers-2.4.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 

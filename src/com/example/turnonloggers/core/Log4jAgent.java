@@ -577,9 +577,11 @@ public final class Log4jAgent {
      * noise straight back.
      */
     public static boolean isQuieting(String level) {
-        Level l = parseLevel(level);
-        if (l == null) return false;
-        return l.intLevel() <= Level.WARN.intLevel();   // OFF, FATAL, ERROR, WARN
+        // OFF only. WARN or ERROR can be a reduction or an increase depending
+        // on what the logger was already at, so "is this definitely turning
+        // logging off" is the only question with an unambiguous answer, and
+        // it is the only one allowed to skip the expiry.
+        return Level.OFF.equals(parseLevel(level));
     }
 
     /** null if the level name is not one we allow. */

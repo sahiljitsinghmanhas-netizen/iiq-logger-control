@@ -114,11 +114,11 @@ public class LoggerControlResource extends BasePluginResource {
             long expires = resolveExpiry(ctx, body, level);
             if (expires < 0) {
                 return error(Response.Status.BAD_REQUEST,
-                        "A logger being raised to " + level.toUpperCase(Locale.ROOT)
-                                + " has to expire; set a TTL up to "
+                        level.toUpperCase(Locale.ROOT) + " produces output, so it has to expire; "
+                                + "set a TTL up to "
                                 + PluginSettings.getInt(ctx, PluginSettings.S_MAX_TTL, 1440)
-                                + " minutes. Only OFF, FATAL, ERROR and WARN can be permanent, "
-                                + "since quietening a logger cannot flood a disk.");
+                                + " minutes. Only OFF may be permanent - a logger you switch off "
+                                + "cannot flood a disk, so it is allowed to stay off.");
             }
 
             List<Map<String, String>> entries = LoggerConfigStore.loadEntries(ctx);
@@ -187,8 +187,8 @@ public class LoggerControlResource extends BasePluginResource {
                 long expires = resolveExpiry(ctx, body, target.get(LoggerConfigStore.E_LEVEL));
                 if (expires < 0) {
                     return error(Response.Status.BAD_REQUEST,
-                            "A logger being raised to " + target.get(LoggerConfigStore.E_LEVEL)
-                                    + " has to expire. Only OFF, FATAL, ERROR and WARN can be permanent.");
+                            target.get(LoggerConfigStore.E_LEVEL)
+                                    + " produces output, so it has to expire. Only OFF may be permanent.");
                 }
                 target.put(LoggerConfigStore.E_EXPIRES, String.valueOf(expires));
             }
@@ -499,6 +499,7 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("facts", st.get(LoggerConfigStore.S_FACTS));
             h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
             h.put("runtimeLoggers", st.get(LoggerConfigStore.S_RUNTIME_LOGGERS));
+            h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);
             h.put("inSync", hostRev == revision && (now - lastSync) <= STALE_AFTER_MS);
