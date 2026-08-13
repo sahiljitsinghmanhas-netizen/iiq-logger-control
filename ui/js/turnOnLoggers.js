@@ -716,6 +716,13 @@
 
                 var c1 = el('td');
                 c1.appendChild(el('code', 'tol-logger-name', r.logger));
+                if (r.logger === 'root' && String(r.rootLogger) !== 'true') {
+                    // log4j2 keys the root logger as "", so a LoggerConfig
+                    // actually named "root" is a different, ordinary logger -
+                    // almost always a rule that meant to set the root level.
+                    c1.appendChild(el('div', 'tol-badge tol-badge-warn',
+                        'an ordinary logger named root, not the root logger'));
+                }
                 tr.appendChild(c1);
 
                 var c2 = el('td');
@@ -748,7 +755,12 @@
                 var suppressed = r.source === 'plugin'
                     && String(r.level).toUpperCase() === 'OFF' && ours;
 
-                if (r.logger !== 'root') {
+                // The root logger is never actionable from here: suppressing it
+                // would mute the whole JVM and clearing it is meaningless. Show
+                // no buttons at all rather than a disabled one, so "do not
+                // touch" reads as exactly that.
+                var isRootLogger = String(r.rootLogger) === 'true';
+                if (!isRootLogger) {
                     var tgl = el('button', 'tol-toggle' + (suppressed ? ' tol-toggle-on' : ''), 'Suppress');
                     tgl.setAttribute('aria-pressed', suppressed ? 'true' : 'false');
 
@@ -795,7 +807,7 @@
                 // Shown disabled rather than omitted for file-declared loggers:
                 // an absent button leaves people wondering whether it is missing
                 // or forbidden, and there is a real reason worth stating.
-                if (r.source === 'file' || r.source === 'unknown') {
+                if (!isRootLogger && (r.source === 'file' || r.source === 'unknown')) {
                     var noClear = el('button', 'tol-btn tol-btn-small', 'Clear');
                     noClear.disabled = true;
                     noClear.title = r.source === 'file'
@@ -807,7 +819,7 @@
                           + 'so it is not known whether the file declares this logger.';
                     c5.appendChild(noClear);
                 }
-                if (r.source === 'runtime' || r.source === 'leftover') {
+                if (!isRootLogger && (r.source === 'runtime' || r.source === 'leftover')) {
                     var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Clear');
                     rm.title = 'Delete ' + r.logger + ' from the running configuration on every host. '
                         + 'One-shot: nothing is enforced afterwards, so whatever created it can create '

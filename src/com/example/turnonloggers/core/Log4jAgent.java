@@ -505,9 +505,17 @@ public final class Log4jAgent {
         Set<String> declared = fileLevels == null ? null : fileLevels.keySet();
 
         for (Map.Entry<String, LoggerConfig> e : loggers.entrySet()) {
-            String name = normalize(e.getKey() == null ? "" : e.getKey());
+            // Deliberately NOT normalize()d. normalize() folds the string
+            // "root" onto the root logger, which is right for something typed
+            // into the form but wrong when reading the live configuration: a
+            // rule doing Logger.getLogger("root").setLevel(DEBUG) - thinking it
+            // sets the root logger - actually creates an ordinary logger named
+            // "root". Folding them together showed one logger twice and
+            // attributed the stray one to log4j2.properties.
+            String name = e.getKey() == null ? "" : e.getKey();
             LoggerConfig lc = e.getValue();
             if (lc == null) continue;
+            boolean rootLogger = name.isEmpty();
             boolean managed = OWNED.containsKey(name);
 
             String source;
@@ -527,7 +535,8 @@ public final class Log4jAgent {
             }
 
             Map<String, String> row = new LinkedHashMap<>();
-            row.put("logger", display(name));
+            row.put("logger", rootLogger ? ROOT_DISPLAY : name);
+            row.put("rootLogger", String.valueOf(rootLogger));
             row.put("level", lc.getLevel() == null ? "?" : lc.getLevel().name());
             row.put("managed", String.valueOf(managed));
             row.put("source", source);
