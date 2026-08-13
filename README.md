@@ -144,6 +144,12 @@ where an admin has overridden it (common in containers).
 
 ## Install
 
+Download `TurnOnLoggers-1.0.0.zip` from the
+[latest release](../../releases/latest), then **gear icon → Plugins → New** and
+upload it.
+
+Or build it yourself:
+
 ```bash
 # Windows
 build.bat
@@ -373,3 +379,10 @@ Other limitations:
 Sahiljit Singh Manhas
 
 Built and tested against IdentityIQ 8.5 on Tomcat 9 / JDK 11 / SQL Server.
+
+## License
+
+[MIT](LICENSE).
+
+SailPoint and IdentityIQ are trademarks of SailPoint Technologies, Inc. This is
+an independent plugin, not affiliated with or supported by SailPoint.
