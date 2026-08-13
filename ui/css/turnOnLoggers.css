@@ -569,3 +569,57 @@
 .tol-credit-name   { font-weight: 600; color: #7b8794; }
 .tol-credit-author { color: #7b8794; }
 .tol-credit-sep    { margin: 0 8px; color: #cbd2d9; }
+
+/* ---------- suppress toggle ---------- */
+
+.tol-actions {
+    white-space: nowrap;
+}
+
+.tol-toggle {
+    background: #fff;
+    border: 1px solid #cbd2d9;
+    border-radius: 12px;
+    padding: 3px 14px 3px 26px;
+    font-size: 12px;
+    font-family: inherit;
+    color: #52606d;
+    cursor: pointer;
+    position: relative;
+    margin-right: 6px;
+}
+
+/* the dot is the state, so it reads without relying on colour alone */
+.tol-toggle:before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    margin-top: -5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #cbd2d9;
+    border: 1px solid #b6bfc9;
+}
+
+.tol-toggle:hover:not(:disabled) { background: #f5f7fa; }
+
+.tol-toggle-on {
+    background: #e3f9e5;
+    border-color: #57ae5b;
+    color: #0e6b31;
+    font-weight: 600;
+}
+
+.tol-toggle-on:before {
+    background: #31a24c;
+    border-color: #207227;
+}
+
+.tol-toggle-on:hover { background: #d3f2d6; }
+
+.tol-toggle:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}

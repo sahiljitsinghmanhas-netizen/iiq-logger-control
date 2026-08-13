@@ -704,36 +704,61 @@
                 }
                 tr.appendChild(c4);
 
-                var c5 = el('td');
-                // Silence works for any source: it adds a permanent OFF override
-                // that the plugin re-asserts on every sync, so it also holds
-                // against a rule that keeps re-enabling its own logger - which
-                // a one-shot Remove does not.
-                if (r.logger !== 'root' && r.source !== 'plugin'
-                        && String(r.level).toUpperCase() !== 'OFF') {
-                    var silence = el('button', 'tol-btn tol-btn-small', 'Suppress');
-                    silence.title = 'Hold ' + r.logger + ' at OFF on every host. The plugin re-applies '
-                        + 'it every sync, so it stays off even if a rule keeps switching it back on. '
-                        + 'Reversible with Un-suppress.';
-                    silence.onclick = (function (name, was) {
-                        return function () {
-                            if (!window.confirm('Silence ' + name + ' on all hosts?'
-                                + '\n\nIt is set to ' + was + ' in log4j2.properties. This adds a '
-                                + 'permanent OFF override that does not expire. The file itself is '
-                                + 'not changed, and removing the override here puts it back.')) return;
-                            mutate(api('POST', '/entries', {
-                                logger: name, level: 'OFF', ttlMinutes: 0, hosts: ['*'],
-                                note: 'silenced - was ' + was + ' in log4j2.properties'
-                            }), name + ' silenced on every host.');
-                        };
-                    })(r.logger, r.level);
-                    c5.appendChild(silence);
+                var c5 = el('td', 'tol-actions');
+
+                // One toggle, not two buttons. Its colour is the state: green
+                // means this plugin is holding the logger at OFF right now.
+                // Clicking on applies that hold, clicking off lifts it.
+                var ours = r.source === 'plugin' ? overrideFor(r.logger) : null;
+                var suppressed = r.source === 'plugin'
+                    && String(r.level).toUpperCase() === 'OFF' && ours;
+
+                if (r.logger !== 'root') {
+                    var tgl = el('button', 'tol-toggle' + (suppressed ? ' tol-toggle-on' : ''), 'Suppress');
+                    tgl.setAttribute('aria-pressed', suppressed ? 'true' : 'false');
+
+                    if (r.source === 'plugin' && !ours) {
+                        // Several overrides target this logger on different host
+                        // subsets; which one to lift is not ours to guess.
+                        tgl.disabled = true;
+                        tgl.title = 'This logger is covered by more than one override - '
+                            + 'manage them in Overrides in effect.';
+                    } else if (suppressed) {
+                        tgl.title = 'Held at OFF by this plugin. Click to lift it - the logger goes '
+                            + 'back to whatever sets it.';
+                        tgl.onclick = (function (entry, name) {
+                            return function () {
+                                if (!window.confirm('Stop suppressing ' + name + ' on every host?'
+                                    + ' It goes back to its log4j2.properties level straight away, or,'
+                                    + ' if a rule sets it, the next time that rule runs.')) return;
+                                mutate(api('DELETE', '/entries/' + encodeURIComponent(entry.id)),
+                                    name + ' is no longer suppressed.');
+                            };
+                        })(ours, r.logger);
+                    } else {
+                        tgl.title = 'Hold ' + r.logger + ' at OFF on every host. The plugin re-applies '
+                            + 'it every sync, so it stays off even if a rule keeps switching it back on.';
+                        tgl.onclick = (function (name, was, isOurs) {
+                            return function () {
+                                var extra = isOurs
+                                    ? ' This replaces the existing override on it.'
+                                    : '';
+                                if (!window.confirm('Suppress ' + name + ' on every host?'
+                                    + ' It is running at ' + was + '. This holds it at OFF and keeps it'
+                                    + ' there until you lift it. Nothing on disk is changed.'
+                                    + extra)) return;
+                                mutate(api('POST', '/entries', {
+                                    logger: name, level: 'OFF', ttlMinutes: 0, hosts: ['*'],
+                                    note: 'suppressed - was ' + was
+                                }), name + ' suppressed on every host.');
+                            };
+                        })(r.logger, r.level, r.source === 'plugin');
+                    }
+                    c5.appendChild(tgl);
                 }
+
+                // Clear stays its own button, and only where it means anything.
                 if (r.source === 'runtime' || r.source === 'leftover') {
-                    // Deliberate, named removal. Bulk cleanup deliberately will
-                    // not touch 'set at runtime' rows, because something else
-                    // configured them - so removing one has to be an explicit
-                    // choice about that specific logger.
                     var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Clear');
                     rm.title = 'Delete ' + r.logger + ' from the running configuration on every host. '
                         + 'One-shot: nothing is enforced afterwards, so whatever created it can create '
@@ -742,50 +767,17 @@
                         return function () {
                             var extra = src === 'runtime'
                                 ? ' It was set by something other than this plugin, most likely a'
-                                  + ' rule calling Logger.getLogger(...).setLevel(...). Remove is'
+                                  + ' rule calling Logger.getLogger(...).setLevel(...). Clear is'
                                   + ' one-shot: it stops the logging now, but whatever set it will'
-                                  + ' set it again next time it runs. Use Silence instead for an'
-                                  + ' override that keeps it off.'
-                                : ' This plugin created it and lost track of it, so removing it'
+                                  + ' set it again next time it runs. Use Suppress to keep it off.'
+                                : ' This plugin created it and lost track of it, so clearing it'
                                   + ' switches it off for good.';
-                            if (!window.confirm('Remove ' + name + ' on every host?' + extra)) return;
+                            if (!window.confirm('Clear ' + name + ' on every host?' + extra)) return;
                             mutate(api('POST', '/cleanup', { logger: name }),
-                                name + ' removal requested. This host is done; others follow on their next sync.');
+                                name + ' cleared. This host is done; others follow on their next sync.');
                         };
                     })(r.logger, r.source);
                     c5.appendChild(rm);
-                }
-                // A logger this plugin is holding can be released from the same
-                // place it was silenced, instead of hunting for it in the
-                // Overrides table - where the action reads "remove override",
-                // which on an OFF override is the opposite of what it sounds.
-                if (r.source === 'plugin') {
-                    var ov = overrideFor(r.logger);
-                    if (ov) {
-                        var isOff = String(r.level).toUpperCase() === 'OFF';
-                        var undo = el('button', 'tol-btn tol-btn-small',
-                            isOff ? 'Un-suppress' : 'Remove override');
-                        undo.title = isOff
-                            ? 'Stop holding ' + r.logger + ' at OFF. It goes back to whatever sets it.'
-                            : 'Remove this plugin override on every host. The logger goes back to its '
-                              + 'log4j2.properties level.';
-                        undo.onclick = (function (entry, name, off) {
-                            return function () {
-                                var after = off
-                                    ? ' It goes back to whatever sets it: its log4j2.properties level'
-                                      + ' straight away, or, if a rule sets it, the next time that rule runs.'
-                                    : ' It goes back to its log4j2.properties level.';
-                                if (!window.confirm((off ? 'Stop silencing ' : 'Remove the override on ')
-                                    + name + ' on every host?' + after)) return;
-                                mutate(api('DELETE', '/entries/' + encodeURIComponent(entry.id)),
-                                    off ? name + ' is no longer being silenced.'
-                                        : name + ' override removed.');
-                            };
-                        })(ov, r.logger, isOff);
-                        c5.appendChild(undo);
-                    } else {
-                        c5.appendChild(el('span', 'tol-small', 'manage in Overrides in effect'));
-                    }
                 }
                 tr.appendChild(c5);
                 tb.appendChild(tr);

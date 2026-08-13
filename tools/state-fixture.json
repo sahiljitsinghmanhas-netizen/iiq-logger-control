@@ -39,7 +39,26 @@
  "pluginVersion": "2.4.1",
  "author": "Sahiljit Singh Manhas",
  "projectUrl": "https://github.com/sahiljitsinghmanhas-netizen/iiq-logger-control",
- "entries": [],
+ "entries": [
+  {
+   "id": "fixture-entry-1",
+   "logger": "net.sf.ehcache",
+   "level": "OFF",
+   "hosts": "*",
+   "expires": "0",
+   "created": "1",
+   "createdBy": "spadmin",
+   "note": "suppressed",
+   "expired": false,
+   "remainingMs": "-1",
+   "source": "ui",
+   "permanent": false,
+   "confirmedOn": [
+    "DESKTOP-SBFMEJO"
+   ],
+   "pendingOn": []
+  }
+ ],
  "hosts": [
   {
    "name": "DESKTOP-SBFMEJO",
@@ -109,6 +128,13 @@
      "managed": "false",
      "source": "runtime",
      "fileLevel": ""
+    },
+    {
+     "logger": "net.sf.ehcache",
+     "level": "OFF",
+     "managed": "true",
+     "source": "plugin",
+     "fileLevel": "ERROR"
     }
    ],
    "fileParsed": true,

@@ -166,21 +166,28 @@ its level - so every row there reads **Remove override**.
 
 | Table | Row is | Actions |
 |---|---|---|
-| Loggers live in the JVM | a logger | **Suppress**, **Un-suppress**, **Clear** |
+| Loggers live in the JVM | a logger | **Suppress** (a toggle), **Clear** |
 | Overrides in effect | an override | **Remove override** |
 | The form at the top | - | **Turn on** |
+
+**Suppress is a toggle, not two buttons.** Green with a filled dot means this
+plugin is holding that logger at `OFF` right now; click it again to lift the
+hold. The state is visible without reading anything. Where a logger is covered
+by more than one override - the same name pinned to different host subsets -
+the toggle is disabled and points at *Overrides in effect*, rather than
+guessing which override to lift.
 
 What each one does, and where it leaves things:
 
 | | Effect | Appears in Overrides in effect afterwards? |
 |---|---|---|
 | **Suppress** | plugin holds the logger at `OFF`, re-applied every sync | **yes** - it creates an override |
-| **Un-suppress** | deletes that override; the logger goes back to whatever sets it | no - the override is gone |
+| **Suppress**, clicked again | deletes that override; the logger goes back to whatever sets it | no - the override is gone |
 | **Clear** | deletes the entry from the running configuration, nothing enforced after | no - it never creates an override |
 
-Un-suppressing a logger declared in `log4j2.properties` returns it to its file
-level immediately. Un-suppressing one a rule sets returns it when that rule next
-runs - lifting the suppression cannot make the rule run.
+Lifting the suppression on a logger declared in `log4j2.properties` returns it
+to its file level immediately. Lifting it on one a rule sets returns it when
+that rule next runs - lifting the hold cannot make the rule run.
 
 ### Silencing a noisy logger
 
@@ -370,7 +377,7 @@ never blocks the level change itself.
 
 ## Install
 
-Download `TurnOnLoggers-2.12.0.zip` from the
+Download `TurnOnLoggers-2.13.0.zip` from the
 [latest release](../../releases/latest), then **gear icon → Plugins → New** and
 upload it.
 
