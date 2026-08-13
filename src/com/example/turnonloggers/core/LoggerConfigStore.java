@@ -73,9 +73,15 @@ public final class LoggerConfigStore {
     public static final String S_LAST_CLEAR = "lastClearAt";
     /** "false" when this host's log4j2 config could not be read, so sources are unknown. */
     public static final String S_FILE_PARSED = "fileParsed";
+    /** Loggers this plugin created here - the only ones cleanup may remove. */
+    public static final String S_CREATED = "created";
+    /** Every logger live in this host's JVM, with level and source. */
+    public static final String S_LIVE = "liveLoggers";
 
     /** Set on the config object to ask every host to drop stranded loggers. */
     public static final String A_CLEAR_AT = "clearRuntimeAt";
+    /** Optional: a single logger to remove, instead of sweeping our leftovers. */
+    public static final String A_CLEAR_LOGGER = "clearRuntimeLogger";
 
     public static final String ALL_HOSTS = "*";
 
@@ -252,6 +258,19 @@ public final class LoggerConfigStore {
         return out;
     }
 
+    /** Loggers this plugin previously created on this host. */
+    @SuppressWarnings("unchecked")
+    public static List<String> readCreated(SailPointContext ctx, String host) throws GeneralException {
+        List<String> out = new ArrayList<>();
+        Custom st = ctx.getObjectByName(Custom.class, statusName(host));
+        if (st == null) return out;
+        Object raw = st.get(S_CREATED);
+        if (raw instanceof List) {
+            for (Object o : (List<Object>) raw) if (o != null) out.add(String.valueOf(o));
+        }
+        return out;
+    }
+
     public static long readLastClear(SailPointContext ctx, String host) throws GeneralException {
         Custom st = ctx.getObjectByName(Custom.class, statusName(host));
         if (st == null) return 0L;
@@ -265,7 +284,13 @@ public final class LoggerConfigStore {
     }
 
     /** Ask every host to drop loggers stranded by an earlier plugin instance. */
-    public static long requestRuntimeCleanup(SailPointContext ctx, String user) throws GeneralException {
+    public static String clearRequestedLogger(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        return cfg == null ? "" : String.valueOf(cfg.getString(A_CLEAR_LOGGER) == null ? "" : cfg.getString(A_CLEAR_LOGGER));
+    }
+
+    public static long requestRuntimeCleanup(SailPointContext ctx, String user, String logger)
+            throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) {
             cfg = new Custom();
@@ -275,6 +300,7 @@ public final class LoggerConfigStore {
         if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
         long now = System.currentTimeMillis();
         cfg.put(A_CLEAR_AT, String.valueOf(now));
+        cfg.put(A_CLEAR_LOGGER, logger == null ? "" : logger.trim());
         cfg.put(A_UPDATED, String.valueOf(now));
         cfg.put(A_UPDATED_BY, user == null ? "" : user);
         ctx.saveObject(cfg);
@@ -313,17 +339,21 @@ public final class LoggerConfigStore {
         Map<String, String> fileLoggers = new LinkedHashMap<>();
         Map<String, String> runtimeLoggers = new LinkedHashMap<>();
         boolean fileParsed = true;
+        List<Object> live = new ArrayList<>();
         for (Map<String, String> row : Log4jAgent.configuredLoggers()) {
             String source = row.get("source");
             if ("unknown".equals(source)) fileParsed = false;
+            live.add(new LinkedHashMap<String, String>(row));
             if ("file".equals(source) || "unknown".equals(source)) {
                 fileLoggers.put(row.get("logger"), row.get("level"));
-            } else if ("runtime".equals(source)) {
+            } else if ("leftover".equals(source)) {
                 runtimeLoggers.put(row.get("logger"), row.get("level"));
             }
         }
         st.put(S_FILE_LOGGERS, fileLoggers);
         st.put(S_RUNTIME_LOGGERS, runtimeLoggers);
+        st.put(S_LIVE, live);
+        st.put(S_CREATED, new ArrayList<String>(Log4jAgent.createdSnapshot()));
         st.put(S_OWNED, new LinkedHashMap<String, String>(Log4jAgent.ownedSnapshot()));
         st.put(S_LAST_CLEAR, String.valueOf(lastClear));
         st.put(S_FILE_PARSED, String.valueOf(fileParsed));

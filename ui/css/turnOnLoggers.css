@@ -518,3 +518,48 @@
     background: #8d2b0b;
     border-color: #6b1f08;
 }
+
+/* ---------- live-logger filters and source tags ---------- */
+
+.tol-filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 12px 0 4px 0;
+}
+
+.tol-filter {
+    background: #fff;
+    border: 1px solid #cbd2d9;
+    border-radius: 12px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-family: inherit;
+    color: #52606d;
+    cursor: pointer;
+}
+
+.tol-filter:hover { background: #f5f7fa; }
+
+.tol-filter-on {
+    background: #2186eb;
+    border-color: #1d7ad6;
+    color: #fff;
+    font-weight: 600;
+}
+
+.tol-src {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    background: #e4e7eb;
+    color: #3e4c59;
+}
+
+.tol-src-file     { background: #e0e8f9; color: #35469c; }
+.tol-src-plugin   { background: #e3f9e5; color: #207227; }
+.tol-src-leftover { background: #ffe3e3; color: #ab091e; }
+.tol-src-runtime  { background: #fffbea; color: #8d2b0b; }
+.tol-src-unknown  { background: #e4e7eb; color: #3e4c59; }

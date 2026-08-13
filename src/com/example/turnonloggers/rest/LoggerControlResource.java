@@ -291,7 +291,8 @@ public class LoggerControlResource extends BasePluginResource {
     @POST
     @Path("cleanup")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response cleanupRuntime() {
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response cleanupRuntime(Map<String, Object> body) {
         try {
             Identity user = requireUser();
             if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
@@ -299,8 +300,10 @@ public class LoggerControlResource extends BasePluginResource {
             if (denied != null) return error(Response.Status.FORBIDDEN, denied);
 
             SailPointContext ctx = getContext();
-            LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName());
-            LOG.info("[TurnOnLoggers] " + user.getName() + " requested cleanup of stranded runtime loggers");
+            String target = str(body, "logger");
+            LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName(), target);
+            LOG.info("[TurnOnLoggers] " + user.getName() + " requested cleanup of "
+                    + ((target == null || target.trim().isEmpty()) ? "loggers this plugin left behind" : target));
             LoggerSync.run(ctx, "rest:cleanup");
             return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
@@ -499,6 +502,7 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("facts", st.get(LoggerConfigStore.S_FACTS));
             h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
             h.put("runtimeLoggers", st.get(LoggerConfigStore.S_RUNTIME_LOGGERS));
+            h.put("liveLoggers", st.get(LoggerConfigStore.S_LIVE));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);

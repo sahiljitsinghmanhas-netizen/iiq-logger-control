@@ -69,6 +69,14 @@
         return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
     }
 
+    var SRC = {
+        file: 'log4j2.properties',
+        plugin: 'this plugin',
+        leftover: 'left over',
+        runtime: 'set at runtime',
+        unknown: 'source unknown'
+    };
+
     var OS_ICON = { windows: 'Win', linux: 'Linux', macos: 'macOS', aix: 'AIX', solaris: 'Solaris', other: 'OS' };
 
     // ------------------------------------------------------------------
@@ -179,8 +187,7 @@
 
         root.appendChild(addForm());
         root.appendChild(overridesSection());
-        root.appendChild(strandedSection());
-        root.appendChild(fileLoggersSection());
+        root.appendChild(liveLoggersSection());
         root.appendChild(hostsSection());
         root.appendChild(footer());
     }
@@ -501,105 +508,53 @@
         });
         return wrap;
     }
+    var liveFilter = 'all';
 
     /**
-     * Loggers left running by a previous install of this plugin: live in the
-     * JVM, absent from that host's log4j2.properties, and not managed here.
+     * Everything log4j2 currently has configured in each host's JVM, whatever
+     * put it there.
      *
-     * These are the dangerous ones - a logger stuck at TRACE that the page
-     * otherwise reports as "off". Shown separately from the file loggers so it
-     * is obvious they are not something an admin put in the file.
+     * This replaced two separate curated lists, because deciding which list a
+     * logger belonged in meant inferring its origin, and the inference was
+     * wrong often enough to matter - a rule doing
+     * Logger.getLogger("Rule.X").setLevel(DEBUG) creates a LoggerConfig that
+     * is not in the file and not ours, and it was being reported as our litter.
+     *
+     * Source is a fact per row now:
+     *   log4j2.properties - declared in that host's file
+     *   this plugin       - an override currently managed here
+     *   left over         - this plugin created it and lost track of it
+     *   set at runtime    - something else set it: a rule, custom Java, a
+     *                       connector. Never touched, never cleared.
      */
-    function strandedSection() {
-        var groups = [];
-        (state.hosts || []).forEach(function (h) {
-            var rl = h.runtimeLoggers;
-            if (!rl) return;
-            var keys = Object.keys(rl).sort();
-            if (!keys.length) return;
-            var sig = keys.map(function (k) { return k + '=' + rl[k]; }).join('|');
-            var found = null;
-            groups.forEach(function (g) { if (g.sig === sig) found = g; });
-            if (found) { found.hosts.push(h.name); }
-            else { groups.push({ sig: sig, hosts: [h.name], keys: keys, map: rl }); }
-        });
-        if (!groups.length) return document.createComment('no stranded loggers');
-
-        var box = el('section', 'tol-card tol-card-alert');
+    function liveLoggersSection() {
+        var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
-        head.appendChild(el('h2', 'tol-card-title', 'Left over from a previous install'));
-        var btn = el('button', 'tol-btn tol-btn-danger', 'Clear on all hosts');
-        btn.onclick = function () {
-            if (!window.confirm('Remove these stranded loggers on every host?\n\n'
-                + 'They are not in any host\'s log4j2.properties, so nothing configured '
-                + 'on the hosts is affected.')) return;
-            mutate(api('POST', '/cleanup'),
-                'Cleanup requested. This host is done; others follow on their next sync.');
-        };
-        head.appendChild(btn);
+        head.appendChild(el('h2', 'tol-card-title', 'Loggers live in the JVM'));
+
+        var anyLeftover = false;
+        (state.hosts || []).forEach(function (h) {
+            (h.liveLoggers || []).forEach(function (r) {
+                if (r.source === 'leftover') anyLeftover = true;
+            });
+        });
+        if (anyLeftover) {
+            var clr = el('button', 'tol-btn tol-btn-danger', 'Clear left over');
+            clr.onclick = function () {
+                if (!window.confirm('Remove the loggers this plugin left behind, on every host?'
+                    + '\n\nOnly loggers this plugin created are removed. Anything in '
+                    + 'log4j2.properties, and anything a rule or custom code set, is left alone.')) return;
+                mutate(api('POST', '/cleanup'),
+                    'Cleanup requested. This host is done; others follow on their next sync.');
+            };
+            head.appendChild(clr);
+        }
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
-            'These loggers are still running on the hosts below, but they are not in those hosts\' '
-            + 'log4j2.properties and this plugin is not managing them. That happens when the plugin '
-            + 'was reinstalled while a logger was on: the new copy lost track of it, so turning it '
-            + 'off had nothing to revert. Clearing them switches them off for real.'));
+            'Every logger log4j2 has configured on each host, and where it came from. '
+            + '"set at runtime" means something outside this plugin set it, typically a rule '
+            + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared.'));
 
-        groups.forEach(function (g) {
-            box.appendChild(hostChips(g.hosts));
-            var t = el('table', 'tol-table');
-            t.appendChild(headRow(['Logger', 'Level', 'Source']));
-            var tb = el('tbody');
-            g.keys.forEach(function (k) {
-                var tr = el('tr');
-                var c1 = el('td');
-                c1.appendChild(el('code', 'tol-logger-name', k));
-                tr.appendChild(c1);
-                var c2 = el('td');
-                c2.appendChild(el('span', 'tol-level tol-level-' + String(g.map[k]).toLowerCase(), g.map[k]));
-                tr.appendChild(c2);
-                tr.appendChild(el('td', 'tol-small', 'stranded - not in the file'));
-                tb.appendChild(tr);
-            });
-            t.appendChild(tb);
-            box.appendChild(t);
-        });
-        return box;
-    }
-
-    /**
-     * Loggers that come from each host's log4j2.properties rather than from
-     * this page. Read-only - the plugin never changes or removes them, it only
-     * adds on top. Shown so that "why is this already noisy" and "what else is
-     * on" have an answer here instead of requiring a shell on the host.
-     */
-    function fileLoggersSection() {
-        var box = el('section', 'tol-card');
-        box.appendChild(el('h2', 'tol-card-title', 'Already set in log4j2.properties'));
-        box.appendChild(el('div', 'tol-hint',
-            'Loggers configured in each host\'s own log4j2.properties, including anything set by hand '
-            + 'on that host. This plugin leaves them alone - turning a logger on here adds to this, '
-            + 'it never clears it. To change these, edit the file on the host.'));
-
-        // Group hosts that report an identical set, which is the normal case -
-        // listing the same ten IIQ defaults once per host would bury the one
-        // host that differs, and spotting that host is the point.
-        var groups = [];
-        (state.hosts || []).forEach(function (h) {
-            var fl = h.fileLoggers;
-            if (!fl) return;
-            var keys = Object.keys(fl).sort();
-            if (!keys.length) return;
-            var sig = keys.map(function (k) { return k + '=' + fl[k]; }).join('|');
-            var found = null;
-            groups.forEach(function (g) { if (g.sig === sig) found = g; });
-            if (found) { found.hosts.push(h.name); }
-            else { groups.push({ sig: sig, hosts: [h.name], keys: keys, map: fl }); }
-        });
-
-        // If a host's configuration file could not be read - an XML or YAML
-        // config, or an unreadable path - the plugin cannot tell which loggers
-        // came from it. Say so, rather than presenting guesses as facts and
-        // leaving people wondering why nothing is ever flagged as stranded.
         var unparsed = [];
         (state.hosts || []).forEach(function (h) {
             if (h.reporting && h.fileParsed === false) unparsed.push(h.name);
@@ -608,55 +563,128 @@
             var warn = el('div', 'tol-banner tol-warn');
             warn.appendChild(document.createTextNode(
                 'Could not read the log4j2 configuration file on ' + unparsed.join(', ')
-                + '. The loggers below are what those hosts have live, but the plugin cannot '
-                + 'tell which came from the file, so nothing there can be flagged as left over '
-                + 'from a previous install. Only the properties format is parsed.'));
+                + ', so the source of those loggers cannot be determined. Only the properties '
+                + 'format is parsed.'));
             box.appendChild(warn);
         }
 
+        var counts = { all: 0, file: 0, plugin: 0, leftover: 0, runtime: 0, unknown: 0 };
+        (state.hosts || []).forEach(function (h) {
+            (h.liveLoggers || []).forEach(function (r) {
+                counts.all++;
+                if (counts[r.source] !== undefined) counts[r.source]++;
+            });
+        });
+        var bar = el('div', 'tol-filters');
+        [['all', 'All'], ['file', 'From the file'], ['plugin', 'This plugin'],
+            ['leftover', 'Left over'], ['runtime', 'Set at runtime']].forEach(function (f) {
+            if (f[0] !== 'all' && !counts[f[0]]) return;
+            var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
+                f[1] + ' (' + counts[f[0]] + ')');
+            b.onclick = (function (key) {
+                return function () { liveFilter = key; render(); };
+            })(f[0]);
+            bar.appendChild(b);
+        });
+        box.appendChild(bar);
+
+        // Hosts reporting an identical picture are grouped, so the one host
+        // that differs stands out instead of being buried under repeats.
+        var groups = [];
+        (state.hosts || []).forEach(function (h) {
+            var rows = (h.liveLoggers || []).filter(function (r) {
+                return liveFilter === 'all' || r.source === liveFilter;
+            });
+            if (!rows.length) return;
+            rows.sort(function (a, b) { return a.logger < b.logger ? -1 : 1; });
+            var sig = rows.map(function (r) { return r.logger + '=' + r.level + '/' + r.source; }).join('|');
+            var found = null;
+            groups.forEach(function (g) { if (g.sig === sig) found = g; });
+            if (found) { found.hosts.push(h.name); } else { groups.push({ sig: sig, hosts: [h.name], rows: rows }); }
+        });
+
         if (!groups.length) {
             box.appendChild(el('div', 'tol-empty',
-                'No host has reported yet. This fills in on the next sync tick.'));
+                'Nothing to show for this filter. Hosts report on their next sync tick.'));
             return box;
         }
 
         groups.forEach(function (g) {
             box.appendChild(hostChips(g.hosts));
             var t = el('table', 'tol-table');
-            t.appendChild(headRow(['Logger', 'Level', 'Source', '']));
+            t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', '']));
             var tb = el('tbody');
-            g.keys.forEach(function (k) {
+            g.rows.forEach(function (r) {
                 var tr = el('tr');
-                var c1 = el('td');
-                c1.appendChild(el('code', 'tol-logger-name', k));
-                tr.appendChild(c1);
-                var c2 = el('td');
-                c2.appendChild(el('span', 'tol-level tol-level-' + String(g.map[k]).toLowerCase(), g.map[k]));
-                tr.appendChild(c2);
-                tr.appendChild(el('td', 'tol-small', 'log4j2.properties'));
 
-                // One click to quieten a noisy file logger, permanently, without
-                // editing the file on every host. Permanent is the point - a
-                // silence that expires just lets the noise back.
-                var c4 = el('td');
-                if (k !== 'root' && String(g.map[k]).toUpperCase() !== 'OFF') {
-                    var silence = el('button', 'tol-btn tol-btn-small', 'Silence');
-                    silence.title = 'Set ' + k + ' to OFF on every host, permanently';
-                    silence.onclick = (function (name, wasLevel) {
-                        return function () {
-                            if (!window.confirm('Silence ' + name + ' on all hosts?' + "\n\n"
-                            + 'It is set to ' + wasLevel + ' in log4j2.properties. This adds a '
-                            + 'permanent OFF override that does not expire. The file itself is not '
-                            + 'changed, and removing the override here puts it back.')) return;
-                            mutate(api('POST', '/entries', {
-                                logger: name, level: 'OFF', ttlMinutes: 0, hosts: ['*'],
-                                note: 'silenced - was ' + wasLevel + ' in log4j2.properties'
-                            }), name + ' silenced on every host. It will not come back on its own.');
-                        };
-                    })(k, g.map[k]);
-                    c4.appendChild(silence);
+                var c1 = el('td');
+                c1.appendChild(el('code', 'tol-logger-name', r.logger));
+                tr.appendChild(c1);
+
+                var c2 = el('td');
+                c2.appendChild(el('span', 'tol-level tol-level-' + String(r.level).toLowerCase(), r.level));
+                tr.appendChild(c2);
+
+                var c3 = el('td', 'tol-small');
+                c3.appendChild(el('span', 'tol-src tol-src-' + r.source, SRC[r.source] || r.source));
+                tr.appendChild(c3);
+
+                // What the file declares, and whether the JVM disagrees.
+                var c4 = el('td', 'tol-small');
+                if (r.fileLevel) {
+                    c4.appendChild(document.createTextNode(r.fileLevel));
+                    if (String(r.fileLevel).toUpperCase() !== String(r.level).toUpperCase()
+                        && r.source !== 'plugin') {
+                        c4.appendChild(el('div', 'tol-badge tol-badge-warn', 'differs from file'));
+                    }
+                } else {
+                    c4.appendChild(document.createTextNode('-'));
                 }
                 tr.appendChild(c4);
+
+                var c5 = el('td');
+                if (r.source === 'file' && r.logger !== 'root'
+                        && String(r.level).toUpperCase() !== 'OFF') {
+                    var silence = el('button', 'tol-btn tol-btn-small', 'Silence');
+                    silence.title = 'Set ' + r.logger + ' to OFF on every host, permanently';
+                    silence.onclick = (function (name, was) {
+                        return function () {
+                            if (!window.confirm('Silence ' + name + ' on all hosts?'
+                                + '\n\nIt is set to ' + was + ' in log4j2.properties. This adds a '
+                                + 'permanent OFF override that does not expire. The file itself is '
+                                + 'not changed, and removing the override here puts it back.')) return;
+                            mutate(api('POST', '/entries', {
+                                logger: name, level: 'OFF', ttlMinutes: 0, hosts: ['*'],
+                                note: 'silenced - was ' + was + ' in log4j2.properties'
+                            }), name + ' silenced on every host.');
+                        };
+                    })(r.logger, r.level);
+                    c5.appendChild(silence);
+                }
+                if (r.source === 'runtime' || r.source === 'leftover') {
+                    // Deliberate, named removal. Bulk cleanup deliberately will
+                    // not touch 'set at runtime' rows, because something else
+                    // configured them - so removing one has to be an explicit
+                    // choice about that specific logger.
+                    var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Remove');
+                    rm.title = 'Remove ' + r.logger + ' from the live configuration on every host';
+                    rm.onclick = (function (name, src) {
+                        return function () {
+                            var extra = src === 'runtime'
+                                ? ' It was set by something other than this plugin, most likely a'
+                                  + ' rule calling Logger.getLogger(...).setLevel(...). Removing it'
+                                  + ' stops that logging until whatever set it runs again, or the'
+                                  + ' host restarts.'
+                                : ' This plugin created it and lost track of it, so removing it'
+                                  + ' switches it off for good.';
+                            if (!window.confirm('Remove ' + name + ' on every host?' + extra)) return;
+                            mutate(api('POST', '/cleanup', { logger: name }),
+                                name + ' removal requested. This host is done; others follow on their next sync.');
+                        };
+                    })(r.logger, r.source);
+                    c5.appendChild(rm);
+                }
+                tr.appendChild(c5);
                 tb.appendChild(tr);
             });
             t.appendChild(tb);
@@ -664,6 +692,7 @@
         });
         return box;
     }
+
 
     function hostsSection() {
         var box = el('section', 'tol-card');

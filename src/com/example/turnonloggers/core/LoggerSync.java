@@ -63,11 +63,18 @@ public final class LoggerSync {
         // them, and turning them "off" in the UI silently does nothing.
         long lastClear = 0L;
         try {
-            Log4jAgent.adopt(LoggerConfigStore.readOwned(ctx, r.host));
+            Log4jAgent.adopt(LoggerConfigStore.readOwned(ctx, r.host),
+                    LoggerConfigStore.readCreated(ctx, r.host));
             lastClear = LoggerConfigStore.readLastClear(ctx, r.host);
             long requested = LoggerConfigStore.clearRequestedAt(ctx);
             if (requested > lastClear) {
-                List<String> cleared = Log4jAgent.clearRuntimeLeftovers();
+                String target = LoggerConfigStore.clearRequestedLogger(ctx);
+                List<String> cleared = new ArrayList<>();
+                if (target != null && !target.trim().isEmpty()) {
+                    if (Log4jAgent.removeRuntimeLogger(target)) cleared.add(target);
+                } else {
+                    cleared = Log4jAgent.clearRuntimeLeftovers();
+                }
                 lastClear = requested;
                 if (!cleared.isEmpty()) {
                     LOG.info("[TurnOnLoggers] " + r.host + " cleared stranded loggers: " + cleared);

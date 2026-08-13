@@ -72,6 +72,21 @@ public final class Log4jAgent {
     private static final Map<String, Snapshot> OWNED = new LinkedHashMap<>();
 
     /**
+     * Every logger this plugin has ever created a LoggerConfig for on this
+     * host, kept durably (see LoggerConfigStore) across plugin reinstalls.
+     *
+     * This exists because "live, not in the file, not currently mine" is NOT
+     * enough to conclude a logger was stranded by an old copy of this plugin.
+     * Anything running in the JVM can set a level programmatically - an IIQ
+     * rule doing Logger.getLogger("Rule.X").setLevel(DEBUG) creates exactly
+     * such a LoggerConfig. Treating those as our litter and deleting them
+     * would switch off logging somebody deliberately configured elsewhere.
+     *
+     * Only names in here are ever eligible for automatic cleanup.
+     */
+    private static final Set<String> CREATED = new LinkedHashSet<>();
+
+    /**
      * The Configuration instance OWNED was captured against. log4j2 replaces
      * the whole Configuration object when it reconfigures (IIQ ships
      * monitorInterval=20, so editing log4j2.properties on the host triggers
@@ -228,7 +243,13 @@ public final class Log4jAgent {
      * @param persisted logger name -> the level it had before we took it over,
      *                  or "" if we created it and reverting means deleting it.
      */
-    public static synchronized void adopt(Map<String, String> persisted) {
+    public static synchronized void adopt(Map<String, String> persisted, List<String> created) {
+        if (created != null) {
+            for (String c : created) {
+                String n = normalize(c);
+                if (n != null) CREATED.add(n);
+            }
+        }
         if (persisted == null || persisted.isEmpty()) return;
 
         Configuration cfg;
@@ -256,6 +277,13 @@ public final class Log4jAgent {
         }
     }
 
+    /** Loggers this plugin created here, for durable storage. See adopt(). */
+    public static synchronized List<String> createdSnapshot() {
+        List<String> out = new ArrayList<>();
+        for (String n : CREATED) out.add(display(n));
+        return out;
+    }
+
     /** Ownership in a form that survives a plugin reinstall. See adopt(). */
     public static synchronized Map<String, String> ownedSnapshot() {
         Map<String, String> m = new LinkedHashMap<>();
@@ -277,6 +305,20 @@ public final class Log4jAgent {
      * settles it.
      */
     public static synchronized Set<String> fileDeclaredLoggers() {
+        Map<String, String> levels = fileDeclaredLevels();
+        return levels == null ? null : new LinkedHashSet<>(levels.keySet());
+    }
+
+    /**
+     * Logger name -> the level this host's configuration file declares for it,
+     * or null if the file cannot be read.
+     *
+     * Reading the levels as well as the names is what lets the page say "this
+     * logger is in the file, but it is running at something else" - drift that
+     * name-matching alone cannot see, whether caused by a leftover override on
+     * a file-declared logger or by something else changing it at runtime.
+     */
+    public static synchronized Map<String, String> fileDeclaredLevels() {
         java.io.InputStream in = null;
         try {
             Configuration cfg = context().getConfiguration();
@@ -310,15 +352,33 @@ public final class Log4jAgent {
             java.util.Properties p = new java.util.Properties();
             p.load(in);
 
-            Set<String> declared = new LinkedHashSet<>();
+            // The properties format keys a logger by an arbitrary token:
+            //   logger.foo.name  = sailpoint.api.Provisioner
+            //   logger.foo.level = DEBUG
+            // so gather names and levels by that token, then pair them up.
+            Map<String, String> names = new LinkedHashMap<>();
+            Map<String, String> levels = new LinkedHashMap<>();
+            String rootLevel = null;
+
             for (String key : p.stringPropertyNames()) {
-                if (key.startsWith("rootLogger.")) {
-                    declared.add("");
-                } else if (key.startsWith("logger.") && key.endsWith(".name")) {
-                    String v = p.getProperty(key);
-                    String n = normalize(v);
-                    if (n != null) declared.add(n);
+                if ("rootLogger.level".equals(key)) {
+                    rootLevel = p.getProperty(key);
+                } else if (key.startsWith("logger.")) {
+                    if (key.endsWith(".name")) {
+                        names.put(key.substring(7, key.length() - 5), p.getProperty(key));
+                    } else if (key.endsWith(".level")) {
+                        levels.put(key.substring(7, key.length() - 6), p.getProperty(key));
+                    }
                 }
+            }
+
+            Map<String, String> declared = new LinkedHashMap<>();
+            declared.put("", rootLevel == null ? "" : rootLevel.trim().toUpperCase(Locale.ROOT));
+            for (Map.Entry<String, String> e : names.entrySet()) {
+                String n = normalize(e.getValue());
+                if (n == null) continue;
+                String lvl = levels.get(e.getKey());
+                declared.put(n, lvl == null ? "" : lvl.trim().toUpperCase(Locale.ROOT));
             }
             return declared;
         } catch (Throwable t) {
@@ -362,8 +422,12 @@ public final class Log4jAgent {
             if (isRoot(name)) continue;                 // never remove root
             if (declared.contains(name)) continue;      // the file wants it
             if (OWNED.containsKey(name)) continue;      // we are managing it now
+            // Only ever remove loggers this plugin created. Anything else live
+            // was put there by a rule or custom code and is not ours to touch.
+            if (!CREATED.contains(name)) continue;
             try {
                 cfg.removeLogger(name);
+                CREATED.remove(name);
                 removed.add(display(name));
             } catch (Throwable t) {
                 LOG.warn("[TurnOnLoggers] could not remove stranded logger " + display(name) + ": " + t);
@@ -374,6 +438,41 @@ public final class Log4jAgent {
             LOG.info("[TurnOnLoggers] cleared stranded runtime loggers: " + removed);
         }
         return removed;
+    }
+
+    /**
+     * Remove one specific logger that is live but not declared in the file.
+     *
+     * Separate from clearRuntimeLeftovers because this is a deliberate,
+     * named request from an administrator, not an automatic sweep - so it will
+     * remove a logger something else set (a rule, custom Java), which the
+     * automatic path must never do. It still refuses to touch root, anything
+     * the file declares, or anything currently managed.
+     *
+     * @return true if it was removed
+     */
+    public static synchronized boolean removeRuntimeLogger(String rawName) {
+        String name = normalize(rawName);
+        if (name == null || isRoot(name)) return false;
+
+        Set<String> declared = fileDeclaredLoggers();
+        if (declared != null && declared.contains(name)) return false;  // the file wants it
+        if (OWNED.containsKey(name)) return false;                      // managed here
+
+        try {
+            LoggerContext ctx = context();
+            Configuration cfg = ctx.getConfiguration();
+            Map<String, LoggerConfig> loggers = cfg.getLoggers();
+            if (loggers == null || !loggers.containsKey(name)) return false;
+            cfg.removeLogger(name);
+            CREATED.remove(name);
+            ctx.updateLoggers();
+            LOG.info("[TurnOnLoggers] removed runtime logger " + display(name) + " on request");
+            return true;
+        } catch (Throwable t) {
+            LOG.warn("[TurnOnLoggers] could not remove runtime logger " + display(name) + ": " + t);
+            return false;
+        }
     }
 
     /**
@@ -402,7 +501,8 @@ public final class Log4jAgent {
         }
         if (loggers == null) return out;
 
-        Set<String> declared = fileDeclaredLoggers();
+        Map<String, String> fileLevels = fileDeclaredLevels();
+        Set<String> declared = fileLevels == null ? null : fileLevels.keySet();
 
         for (Map.Entry<String, LoggerConfig> e : loggers.entrySet()) {
             String name = normalize(e.getKey() == null ? "" : e.getKey());
@@ -417,8 +517,13 @@ public final class Log4jAgent {
                 source = "unknown";          // could not read the file
             } else if (declared.contains(name)) {
                 source = "file";
+            } else if (CREATED.contains(name)) {
+                source = "leftover";         // we created it and lost track of it
             } else {
-                source = "runtime";          // stranded by an earlier instance
+                // Live, not in the file, and not something we ever created -
+                // so something else set it: a rule, custom Java, a connector.
+                // Not ours to remove.
+                source = "runtime";
             }
 
             Map<String, String> row = new LinkedHashMap<>();
@@ -426,6 +531,8 @@ public final class Log4jAgent {
             row.put("level", lc.getLevel() == null ? "?" : lc.getLevel().name());
             row.put("managed", String.valueOf(managed));
             row.put("source", source);
+            row.put("fileLevel", (declared == null || fileLevels == null) ? ""
+                    : String.valueOf(fileLevels.get(name) == null ? "" : fileLevels.get(name)));
             out.add(row);
         }
         return out;
@@ -515,6 +622,7 @@ public final class Log4jAgent {
             // additive=true so records still reach the appenders configured on
             // the ancestor (in IIQ's case root -> stdout + the file appender).
             cfg.addLogger(name, new LoggerConfig(name, level, true));
+            CREATED.add(name);   // durable: this one is ours to clean up later
         }
     }
 
