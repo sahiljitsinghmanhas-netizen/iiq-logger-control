@@ -243,6 +243,22 @@
     vertical-align: top;
 }
 
+/* One of these is drawn per picked host, so they have to share a geometry.
+   Left to itself each table sizes its columns to its own content, which puts
+   Level in a different place on every host and defeats the whole point of
+   picking two - comparing them means reading down a column. */
+.tol-table-live { table-layout: fixed; }
+
+.tol-table-live th:nth-child(1), .tol-table-live td:nth-child(1) { width: 40%; }
+.tol-table-live th:nth-child(2), .tol-table-live td:nth-child(2) { width: 9%; }
+.tol-table-live th:nth-child(3), .tol-table-live td:nth-child(3) { width: 15%; }
+.tol-table-live th:nth-child(4), .tol-table-live td:nth-child(4) { width: 12%; }
+.tol-table-live th:nth-child(5), .tol-table-live td:nth-child(5) { width: 24%; }
+
+/* Fixed layout will not shrink a long logger name, it will let it spill into
+   the next column. Wrap instead. */
+.tol-table-live td:nth-child(1) { overflow-wrap: anywhere; }
+
 .tol-table tr.tol-expired td {
     opacity: .55;
 }

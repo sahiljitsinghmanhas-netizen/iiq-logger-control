@@ -918,7 +918,11 @@
 
         groups.forEach(function (g) {
             box.appendChild(hostChips(g.hosts));
-            var t = el('table', 'tol-table');
+            // Fixed geometry, because there is one of these per picked host
+            // and a table that sizes itself to its own content puts every
+            // column somewhere different. Reading two hosts side by side means
+            // reading down a column.
+            var t = el('table', 'tol-table tol-table-live');
             t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', '']));
             var tb = el('tbody');
             g.rows.forEach(function (r) {
