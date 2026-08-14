@@ -130,10 +130,14 @@ table and the audit trail both say where it came from.
 
 ### Reading the log
 
-One box, one scope, one button. **This host** reads the end of the file here and
-filters it immediately - blank shows the most recent lines. **All hosts**
-records what to look for; every host checks its own file on its next sync, so
-this host replies at once and the rest take up to a minute.
+Two things, both across every host:
+
+- **Output last N lines** - the raw end of each host's log, no filter, for when
+  a search finds nothing and you just want to see what a host is writing.
+- **Search all hosts** - lines matching some text.
+
+**Stop** ends either. The host serving the page answers immediately; the rest
+answer on their next sync and show as dashed chips until they do.
 
 Results are a **chip per host** with its match count. Click a chip to read that
 host, or press its **×** to drop it - on a thirteen-host cluster, stacking every

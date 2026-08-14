@@ -317,11 +317,16 @@ not touch any logger that is currently on.</p>
   <figcaption>The end of a log file on the host serving the page, with a text filter.</figcaption>
 </figure>
 <p>Having turned a logger on, the next question is where to read it.</p>
-<p>One box, one scope, one button. <strong>This host</strong> reads the end of the file here and
-filters it, immediately - leave the box blank to just see the most recent lines.
-<strong>All hosts</strong> records what to look for; every host then checks its own file on its
-next sync and publishes what it found, so this host replies at once and the rest take up to a
-minute.</p>
+<p>Two things you can ask for, both across every host:</p>
+<dl>
+  <dt>Output last N lines</dt>
+  <dd>The raw end of each host's log, with no filter - for when a search finds nothing and you just
+  want to see what the host is actually writing. 20, 40 or 100 lines.</dd>
+  <dt>Search all hosts</dt>
+  <dd>Lines matching some text - a logger name, an identity, an error.</dd>
+</dl>
+<p><strong>Stop</strong> ends either one. The host serving the page answers immediately; the others
+answer on their next sync, and appear as dashed chips until they do.</p>
 <p>Results appear as a <strong>chip per host</strong> with its match count. Click a chip to read
 that host, or press its <strong>&times;</strong> to drop it from the results - on a thirteen-host
 cluster, stacking every host buries the one you care about.</p>

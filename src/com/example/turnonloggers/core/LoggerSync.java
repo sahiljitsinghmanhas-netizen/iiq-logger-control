@@ -142,9 +142,13 @@ public final class LoggerSync {
         // read another's disk, so each one looks in its own file and publishes
         // what it found; the page merges them.
         try {
-            String q = LoggerConfigStore.logQuery(ctx);
-            if (q != null && !q.isEmpty()) {
-                r.logMatches = Log4jAgent.available() ? LogTail.search(q) : new ArrayList<String>();
+            if (LoggerConfigStore.logRequestActive(ctx)) {
+                String mode = LoggerConfigStore.logMode(ctx);
+                if ("tail".equals(mode)) {
+                    r.logMatches = LogTail.tailLines(LoggerConfigStore.logLines(ctx));
+                } else {
+                    r.logMatches = LogTail.search(LoggerConfigStore.logQuery(ctx));
+                }
                 r.logAnsweredAt = System.currentTimeMillis();
                 List<String> files = HostFacts.logFilePaths();
                 r.logPath = files.isEmpty() ? "" : files.get(0);

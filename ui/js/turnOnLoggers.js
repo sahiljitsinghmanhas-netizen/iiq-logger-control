@@ -1083,24 +1083,21 @@
         return box;
     }
 
-    var logState = {
-        index: 0, scope: 'here', text: '',
-        results: {},        // host -> { lines, meta, source }
-        selected: null,
-        hidden: {}          // host -> true, dismissed from the strip
-    };
+    var logState = { lines: 40, text: '', selected: null, hidden: {} };
 
     /**
-     * Log lines, from this host or from every host.
+     * Log lines from every host.
      *
-     * One panel, one search box, one button. There were two buttons because
-     * the mechanisms differ - this host can be read immediately, other hosts
-     * answer on their own sync - but from the outside it is one question with a
-     * scope, so that is how it is asked.
+     * Two things you can ask for, both cluster-wide:
+     *   Output last N lines - the raw tail, for when a search finds nothing and
+     *                         you just want to see what the host is writing
+     *   Search all hosts    - lines matching some text
      *
-     * Results are a strip of host chips rather than a stack of blocks: on a
-     * thirteen-host cluster stacking them buries whichever host you actually
-     * care about. Click a host to see its lines, or dismiss it with the x.
+     * Either way every host answers about its own file, because no host can
+     * read another one's disk. The host serving the page answers immediately;
+     * the rest follow on their next sync. Which host you are reading is chosen
+     * from the chips, so there is one way to pick a host rather than a scope
+     * switch as well.
      */
     function logsSection() {
         var box = el('section', 'tol-card');
@@ -1112,154 +1109,144 @@
         }
 
         box.appendChild(el('div', 'tol-hint',
-            'Look for text in the log - a logger name, an identity, an error. This host answers '
-            + 'immediately. Every host answers about its own file on its next sync, so those take '
-            + 'up to a minute and each result says when that host replied.'));
+            'Every host reads its own log file and reports back. ' + state.thisHost
+            + ' answers immediately; the others answer on their next sync, so give them a minute. '
+            + 'Pick a host from the chips to read it.'));
 
-        var bar = el('div', 'tol-logbar');
+        // --- raw tail, any host -------------------------------------------
+        var bar1 = el('div', 'tol-logbar');
+        var lineSel = document.createElement('select');
+        lineSel.className = 'tol-input tol-log-lines';
+        [20, 40, 100].forEach(function (n) {
+            lineSel.appendChild(opt(String(n), n + ' lines', n === logState.lines));
+        });
+        lineSel.onchange = function () { logState.lines = parseInt(lineSel.value, 10); };
 
+        var tailBtn = el('button', 'tol-btn tol-btn-small', 'Output last');
+        tailBtn.title = 'The end of the log on every host, with no filter';
+        tailBtn.onclick = function () {
+            mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
+                'Reading the last ' + logState.lines + ' lines on every host.');
+        };
+        bar1.appendChild(tailBtn);
+        bar1.appendChild(lineSel);
+        bar1.appendChild(el('span', 'tol-small', 'on every host - no filter, just the raw log'));
+        box.appendChild(bar1);
+
+        // --- search --------------------------------------------------------
+        var bar2 = el('div', 'tol-logbar');
         var q = document.createElement('input');
         q.type = 'text';
         q.id = 'tol-log-q';
         q.className = 'tol-input tol-log-select';
-        q.setAttribute('placeholder', 'text to look for - leave blank to see the most recent lines');
-        q.value = logState.text || state.logQuery || '';
-        q.oninput = function () { logState.text = q.value; };
-        bar.appendChild(q);
+        q.setAttribute('placeholder', 'text to look for - a logger name, an identity, an error');
+        q.value = (state.logMode === 'search' ? state.logQuery : logState.text) || '';
+        bar2.appendChild(q);
 
-        // Scope, as a pair of chips rather than a second button.
-        var scope = el('span', 'tol-scope');
-        [['here', 'This host'], ['all', 'All hosts']].forEach(function (o) {
-            var b = el('button', 'tol-filter' + (logState.scope === o[0] ? ' tol-filter-on' : ''), o[1]);
-            b.onclick = function () { logState.scope = o[0]; render(); };
-            scope.appendChild(b);
-        });
-        bar.appendChild(scope);
-
-        var go = el('button', 'tol-btn tol-btn-primary tol-btn-small',
-            logState.scope === 'all' ? 'Search all hosts'
-                : (q.value ? 'Search this host' : 'Show recent lines'));
-        go.onclick = function () {
+        var searchBtn = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
+        searchBtn.onclick = function () {
             var text = document.getElementById('tol-log-q').value || '';
+            if (!text.trim()) { say('Type something to search for.', 'error'); return; }
             logState.text = text;
-            if (logState.scope === 'all') {
-                if (!text.trim()) { say('Type something to search every host for.', 'error'); return; }
-                mutate(api('POST', '/logquery', { text: text }),
-                    'Searching every host. ' + state.thisHost + ' is done; the rest answer on their next sync.');
-                return;
-            }
-            say('Reading the log on ' + state.thisHost + '...', 'info');
-            api('GET', '/logtail?index=' + logState.index + '&kb=' + (state.logTailKb || 64))
-                .then(function (d) {
-                    var all = d.lines || [];
-                    var f = text.trim().toLowerCase();
-                    var lines = f
-                        ? all.filter(function (l) { return String(l).toLowerCase().indexOf(f) > -1; })
-                        : all;
-                    logState.results[state.thisHost] = {
-                        lines: d.error ? [] : lines,
-                        error: d.error,
-                        meta: d.error ? d.error
-                            : (lines.length + ' of ' + all.length + ' lines'
-                               + (f ? ' matching "' + text.trim() + '"' : '')
-                               + ', last ' + Math.round(parseInt(d.readBytes, 10) / 1024) + ' KB'
-                               + (d.path ? ' - ' + d.path : '')),
-                        source: 'read'
-                    };
-                    logState.selected = state.thisHost;
-                    delete logState.hidden[state.thisHost];
-                    say(null);
-                    render();
-                }).catch(function (e) { say(e.message, 'error'); });
+            mutate(api('POST', '/logquery', { mode: 'search', text: text }),
+                'Searching every host for "' + text.trim() + '".');
         };
-        bar.appendChild(go);
+        bar2.appendChild(searchBtn);
 
-        if (state.logQuery) {
-            var stop = el('button', 'tol-btn tol-btn-small', 'Stop searching');
-            stop.title = 'Stop every host looking for "' + state.logQuery + '"';
+        if (state.logActive) {
+            var stop = el('button', 'tol-btn tol-btn-small', 'Stop');
+            stop.title = 'Stop every host reading its log';
             stop.onclick = function () {
-                mutate(api('POST', '/logquery', { text: '' }), 'Search stopped.');
+                mutate(api('POST', '/logquery', { mode: 'search', text: '' }), 'Stopped.');
             };
-            bar.appendChild(stop);
+            bar2.appendChild(stop);
         }
-        box.appendChild(bar);
+        box.appendChild(bar2);
 
-        // Merge whatever the hosts have published into the result set.
-        if (state.logQuery) {
-            (state.hosts || []).forEach(function (h) {
-                if (!h.reporting) return;
-                var answered = parseInt(h.logAnsweredAt, 10) || 0;
-                if (!answered) return;
-                if (logState.results[h.name] && logState.results[h.name].source === 'read'
-                        && h.name === state.thisHost) {
-                    return;   // a direct read is fresher than a published answer
-                }
-                var lines = h.logMatches || [];
-                logState.results[h.name] = {
-                    lines: lines,
-                    meta: lines.length + ' matching line' + (lines.length === 1 ? '' : 's')
-                          + ' for "' + state.logQuery + '", answered ' + fmtAgo(h.logAnsweredAt)
-                          + (h.logPath ? ' - ' + h.logPath : ''),
-                    source: 'search'
-                };
-            });
-        }
-
-        var hosts = Object.keys(logState.results).filter(function (h) { return !logState.hidden[h]; });
-        hosts.sort();
-        if (!hosts.length) {
+        if (!state.logActive) {
             box.appendChild(el('div', 'tol-empty',
-                state.logQuery
-                    ? 'Waiting for hosts to answer "' + state.logQuery + '"...'
-                    : 'Nothing loaded yet. Press the button to read this host, or switch to All '
-                      + 'hosts and search.'));
+                'Nothing loaded. Press "Output last" for the raw end of every host\u2019s log, or '
+                + 'search for something.'));
             return box;
         }
-        if (!logState.selected || hosts.indexOf(logState.selected) < 0) {
-            logState.selected = hosts[0];
+
+        var tailing = state.logMode === 'tail';
+        var what = tailing
+            ? 'last ' + state.logLines + ' lines'
+            : 'lines matching "' + state.logQuery + '"';
+
+        // --- one chip per host that answered -------------------------------
+        var answered = (state.hosts || []).filter(function (h) {
+            return h.reporting && (parseInt(h.logAnsweredAt, 10) || 0) > 0;
+        });
+        var waiting = (state.hosts || []).filter(function (h) {
+            return h.reporting && !(parseInt(h.logAnsweredAt, 10) || 0);
+        });
+
+        var visible = answered.filter(function (h) { return !logState.hidden[h.name]; });
+        if (!visible.length) {
+            box.appendChild(el('div', 'tol-empty',
+                answered.length ? 'Every host has been removed from these results.'
+                    : 'Waiting for hosts to report the ' + what + '...'));
+            if (Object.keys(logState.hidden).length) box.appendChild(restoreButton());
+            return box;
+        }
+        if (!logState.selected || !visible.some(function (h) { return h.name === logState.selected; })) {
+            logState.selected = visible[0].name;
         }
 
-        // The host strip. Clicking a chip selects it; the x drops it.
         var strip = el('div', 'tol-hoststrip');
-        hosts.forEach(function (h) {
-            var r = logState.results[h];
+        visible.forEach(function (h) {
+            var n = (h.logMatches || []).length;
             var chip = el('span', 'tol-hostchip tol-hosttab'
-                + (h === logState.selected ? ' tol-hosttab-on' : '')
-                + (h === state.thisHost ? ' tol-hostchip-self' : ''));
-            var label = el('span', 'tol-hosttab-name', h + '  (' + r.lines.length + ')');
-            label.onclick = function () { logState.selected = h; render(); };
+                + (h.name === logState.selected ? ' tol-hosttab-on' : '')
+                + (h.name === state.thisHost ? ' tol-hostchip-self' : ''));
+            var label = el('span', 'tol-hosttab-name', h.name + '  (' + n + ')');
+            label.onclick = (function (name) {
+                return function () { logState.selected = name; render(); };
+            })(h.name);
             chip.appendChild(label);
             var x = el('span', 'tol-hosttab-x', '\u00d7');
-            x.title = 'Remove ' + h + ' from these results';
-            x.onclick = function () {
-                logState.hidden[h] = true;
-                if (logState.selected === h) logState.selected = null;
-                render();
-            };
+            x.title = 'Remove ' + h.name + ' from these results';
+            x.onclick = (function (name) {
+                return function () {
+                    logState.hidden[name] = true;
+                    if (logState.selected === name) logState.selected = null;
+                    render();
+                };
+            })(h.name);
             chip.appendChild(x);
             strip.appendChild(chip);
         });
-        if (Object.keys(logState.hidden).length) {
-            var restore = el('button', 'tol-btn tol-btn-small', 'Show removed hosts');
-            restore.onclick = function () { logState.hidden = {}; render(); };
-            strip.appendChild(restore);
-        }
+        waiting.forEach(function (h) {
+            strip.appendChild(el('span', 'tol-hostchip tol-hostchip-waiting', h.name + '  ...'));
+        });
+        if (Object.keys(logState.hidden).length) strip.appendChild(restoreButton());
         box.appendChild(strip);
 
-        var sel = logState.results[logState.selected];
+        var sel = null;
+        visible.forEach(function (h) { if (h.name === logState.selected) sel = h; });
+        var lines = (sel.logMatches || []);
         box.appendChild(el('div', 'tol-small tol-logmeta',
-            logState.selected + ' - ' + sel.meta));
+            sel.name + ' - ' + lines.length + ' ' + (tailing ? 'lines' : 'matching lines')
+            + ', answered ' + fmtAgo(sel.logAnsweredAt)
+            + (sel.logPath ? ' - ' + sel.logPath : '')));
 
         var pre = el('pre', 'tol-log');
-        if (sel.error) {
-            pre.appendChild(el('div', 'tol-err-text', sel.error));
-        } else if (!sel.lines.length) {
-            pre.appendChild(el('div', 'tol-small', 'Nothing matching in this host\u2019s log.'));
+        if (!lines.length) {
+            pre.appendChild(el('div', 'tol-small',
+                tailing ? 'This host\u2019s log is empty.' : 'Nothing matching in this host\u2019s log.'));
         } else {
-            sel.lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
+            lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
         }
         box.appendChild(pre);
         return box;
+    }
+
+    function restoreButton() {
+        var b = el('button', 'tol-btn tol-btn-small', 'Show removed hosts');
+        b.onclick = function () { logState.hidden = {}; render(); };
+        return b;
     }
 
     function footer() {

@@ -221,23 +221,6 @@ try {
     Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
     Save-Shot $ws $OutDir "10-collections.png"     "#tol-sec-collections" $Width
 
-    # Load the log before capturing it, otherwise the panel is just its prompt.
-    Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @"
-(function () {
-  // The first .tol-logbar is the file tail; the second is the cluster search.
-  // Clicking the last button of all of them pressed Stop and wiped the query.
-  var bar = document.querySelector('#tol-sec-logs .tol-logbar');
-  if (!bar) return 0;
-  // "Read this host" specifically - not the last button, which is Stop.
-  var b = bar.querySelectorAll('button');
-  for (var i = 0; i < b.length; i++) {
-    var t = b[i].textContent || '';
-    if (t.indexOf('Show recent lines') > -1 || t.indexOf('Search this host') > -1) { b[i].click(); return 1; }
-  }
-  return 0;
-})()
-"@; returnByValue = $true } | Out-Null
-    Start-Sleep -Seconds 3
     Save-Shot $ws $OutDir "12-logs.png" "#tol-sec-logs" $Width
 
     # The settings form and the audit search are both client-side apps that do

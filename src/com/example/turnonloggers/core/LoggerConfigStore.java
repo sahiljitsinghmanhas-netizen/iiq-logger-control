@@ -89,6 +89,9 @@ public final class LoggerConfigStore {
     /** A cluster-wide log search: every host answers about its own file. */
     public static final String A_LOG_QUERY    = "logQuery";
     public static final String A_LOG_QUERY_AT = "logQueryAt";
+    /** "search" for matching lines, "tail" for the last N lines. */
+    public static final String A_LOG_MODE     = "logQueryMode";
+    public static final String A_LOG_LINES    = "logQueryLines";
 
     public static final String ALL_HOSTS = "*";
 
@@ -287,11 +290,18 @@ public final class LoggerConfigStore {
     /** A search stops being answered after this, so hosts do not publish forever. */
     public static final long LOG_QUERY_TTL_MS = 900000L;   // 15 minutes
 
+    /** True while hosts should be answering, whether searching or tailing. */
+    public static boolean logRequestActive(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return false;
+        long at = asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
+        return at > 0 && (System.currentTimeMillis() - at) <= LOG_QUERY_TTL_MS;
+    }
+
     public static String logQuery(SailPointContext ctx) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) return "";
-        long at = asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
-        if (at <= 0 || (System.currentTimeMillis() - at) > LOG_QUERY_TTL_MS) return "";
+        if (!logRequestActive(ctx)) return "";
         String q = cfg.getString(A_LOG_QUERY);
         return q == null ? "" : q;
     }
@@ -301,9 +311,21 @@ public final class LoggerConfigStore {
         return cfg == null ? 0L : asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
     }
 
-    /** Ask every host to look for this text in its own log. */
-    public static long setLogQuery(SailPointContext ctx, String text, String user)
-            throws GeneralException {
+    public static String logMode(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return "search";
+        String m = cfg.getString(A_LOG_MODE);
+        return (m == null || m.isEmpty()) ? "search" : m;
+    }
+
+    public static int logLines(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        return cfg == null ? 40 : asInt(cfg.getString(A_LOG_LINES), 40);
+    }
+
+    /** Ask every host to look in its own log - for text, or just for the last N lines. */
+    public static long setLogQuery(SailPointContext ctx, String text, String mode, int lines,
+                                   String user) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) {
             cfg = new Custom();
@@ -312,8 +334,12 @@ public final class LoggerConfigStore {
         }
         if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
         long now = System.currentTimeMillis();
+        boolean tailing = "tail".equals(mode);
+        boolean active = tailing || (text != null && !text.trim().isEmpty());
         cfg.put(A_LOG_QUERY, text == null ? "" : text.trim());
-        cfg.put(A_LOG_QUERY_AT, (text == null || text.trim().isEmpty()) ? "0" : String.valueOf(now));
+        cfg.put(A_LOG_MODE, tailing ? "tail" : "search");
+        cfg.put(A_LOG_LINES, String.valueOf(lines <= 0 ? 40 : lines));
+        cfg.put(A_LOG_QUERY_AT, active ? String.valueOf(now) : "0");
         // Not a revision bump: a search changes nothing about what is logged,
         // so it must not make every host look like it is behind on config.
         cfg.put(A_UPDATED, String.valueOf(now));

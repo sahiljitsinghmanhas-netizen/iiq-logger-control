@@ -779,3 +779,11 @@
 .tol-hosttab-x:hover { background: rgba(255, 255, 255, .45); }
 
 .tol-logmeta { margin: 0 0 6px 2px; }
+
+.tol-log-lines { width: 110px; flex: 0 0 auto; }
+
+.tol-hostchip-waiting {
+    background: #f5f7fa;
+    border: 1px dashed #cbd2d9;
+    color: #9aa5b1;
+}

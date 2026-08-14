@@ -39,6 +39,8 @@ public final class LogTail {
     public static final int SEARCH_KB = 256;
     /** Matching lines kept per host. Enough to see a pattern, small enough to store. */
     public static final int SEARCH_MAX_LINES = 40;
+    /** Ceiling on a raw tail, whatever the caller asks for - it travels through the database. */
+    public static final int TAIL_MAX_LINES = 100;
     /** Long lines are truncated - a stack trace line can be enormous. */
     public static final int SEARCH_MAX_CHARS = 400;
 
@@ -111,6 +113,33 @@ public final class LogTail {
         }
         // Keep the most recent, which is what anyone chasing a live problem wants.
         while (out.size() > SEARCH_MAX_LINES) out.remove(0);
+        return out;
+    }
+
+    /**
+     * The last {@code lines} lines of this host's first log file.
+     *
+     * The counterpart to {@link #search}: same bounded shape, same publishing
+     * path, but no filter - for when the search finds nothing and you just want
+     * to see what the host is actually writing.
+     */
+    public static List<String> tailLines(int lines) {
+        List<String> out = new ArrayList<>();
+        if (lines <= 0) lines = 40;
+        if (lines > TAIL_MAX_LINES) lines = TAIL_MAX_LINES;
+
+        Result r = tail(0, SEARCH_KB);
+        if (r.error != null) {
+            out.add("[" + HostFacts.hostName() + "] " + r.error);
+            return out;
+        }
+        int from = Math.max(0, r.lines.size() - lines);
+        for (int i = from; i < r.lines.size(); i++) {
+            String line = r.lines.get(i);
+            if (line == null) continue;
+            out.add(line.length() > SEARCH_MAX_CHARS
+                    ? line.substring(0, SEARCH_MAX_CHARS) + " ..." : line);
+        }
         return out;
     }
 

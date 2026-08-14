@@ -583,8 +583,20 @@ public class LoggerControlResource extends BasePluginResource {
                         "Reading log files is switched off in the plugin settings.");
             }
             String text = str(body, "text");
-            LoggerConfigStore.setLogQuery(ctx, text, user.getName());
-            if (text != null && !text.trim().isEmpty()) {
+            String mode = str(body, "mode");
+            int lines = 40;
+            try {
+                if (body != null && body.get("lines") != null) {
+                    lines = Integer.parseInt(String.valueOf(body.get("lines")).trim());
+                }
+            } catch (NumberFormatException ignored) {
+                lines = 40;
+            }
+            LoggerConfigStore.setLogQuery(ctx, text, mode, lines, user.getName());
+            if ("tail".equals(mode)) {
+                AuditWriter.log(ctx, user.getName(), "read logs on every host",
+                        "last " + lines + " lines", null, "*", 0L, null);
+            } else if (text != null && !text.trim().isEmpty()) {
                 AuditWriter.log(ctx, user.getName(), "searched logs", text.trim(),
                         null, "*", 0L, null);
             }
@@ -710,9 +722,15 @@ public class LoggerControlResource extends BasePluginResource {
         try {
             out.put("logQuery", LoggerConfigStore.logQuery(ctx));
             out.put("logQueryAt", String.valueOf(LoggerConfigStore.logQueryAt(ctx)));
+            out.put("logActive", LoggerConfigStore.logRequestActive(ctx));
+            out.put("logMode", LoggerConfigStore.logMode(ctx));
+            out.put("logLines", LoggerConfigStore.logLines(ctx));
         } catch (Throwable t) {
             out.put("logQuery", "");
             out.put("logQueryAt", "0");
+            out.put("logActive", false);
+            out.put("logMode", "search");
+            out.put("logLines", 40);
         }
         return out;
     }
