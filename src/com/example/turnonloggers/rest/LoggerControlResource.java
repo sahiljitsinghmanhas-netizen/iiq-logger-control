@@ -1,6 +1,8 @@
 package com.example.turnonloggers.rest;
 
 import com.example.turnonloggers.core.AuditWriter;
+import com.example.turnonloggers.core.CollectionStore;
+import com.example.turnonloggers.core.LogTail;
 import com.example.turnonloggers.core.HostFacts;
 import com.example.turnonloggers.core.Log4jAgent;
 import com.example.turnonloggers.core.LoggerConfigStore;
@@ -22,6 +24,8 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
@@ -353,6 +357,195 @@ public class LoggerControlResource extends BasePluginResource {
     }
 
     // ==================================================================
+    // saved collections
+    // ==================================================================
+
+    @POST
+    @Path("collections")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response saveCollection(Map<String, Object> body) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            String name = str(body, "name");
+            if (name == null || name.trim().isEmpty()) {
+                return error(Response.Status.BAD_REQUEST, "A collection needs a name.");
+            }
+            name = name.trim();
+            if (name.length() > 80) name = name.substring(0, 80);
+
+            // Either an explicit list, or a snapshot of what is on right now.
+            Map<String, String> loggers = new LinkedHashMap<>();
+            Object given = body == null ? null : body.get("loggers");
+            if (given instanceof Collection) {
+                for (Object o : (Collection<?>) given) {
+                    if (!(o instanceof Map)) continue;
+                    Map<?, ?> m = (Map<?, ?>) o;
+                    String lg = m.get("logger") == null ? null : String.valueOf(m.get("logger"));
+                    String lv = m.get("level") == null ? null : String.valueOf(m.get("level"));
+                    if (lg != null && Log4jAgent.parseLevel(lv) != null) loggers.put(lg, lv);
+                }
+            } else {
+                long now = System.currentTimeMillis();
+                for (Map<String, String> e : LoggerConfigStore.loadEntries(ctx)) {
+                    if (LoggerConfigStore.isExpired(e, now)) continue;
+                    loggers.put(e.get(LoggerConfigStore.E_LOGGER), e.get(LoggerConfigStore.E_LEVEL));
+                }
+            }
+            if (loggers.isEmpty()) {
+                return error(Response.Status.BAD_REQUEST,
+                        "Nothing to save - turn some loggers on first, or pass a list.");
+            }
+
+            CollectionStore.add(ctx, name, str(body, "description"), loggers, user.getName());
+            AuditWriter.log(ctx, user.getName(), "saved collection", name,
+                    null, null, 0L, String.valueOf(loggers.keySet()));
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] saveCollection failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
+    @POST
+    @Path("collections/{id}/apply")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response applyCollection(@PathParam("id") String id, Map<String, Object> body) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            Map<String, String> coll = CollectionStore.byId(ctx, id);
+            if (coll == null) return error(Response.Status.NOT_FOUND, "No such collection.");
+
+            String hosts = hostsOf(body);
+            List<Map<String, String>> entries = LoggerConfigStore.loadEntries(ctx);
+            List<String> applied = new ArrayList<>();
+            List<String> refused = new ArrayList<>();
+
+            for (Map<String, String> pair : CollectionStore.parse(coll.get(CollectionStore.C_LOGGERS))) {
+                String logger = pair.get("logger");
+                String level = pair.get("level");
+                String bad = validate(ctx, logger, level);
+                if (bad != null) { refused.add(logger); continue; }
+
+                long expires = resolveExpiry(ctx, body, level);
+                if (expires < 0) { refused.add(logger); continue; }
+
+                String normalized = Log4jAgent.normalize(logger);
+                for (int i = entries.size() - 1; i >= 0; i--) {
+                    Map<String, String> e = entries.get(i);
+                    if (equalsIgnoreCase(Log4jAgent.normalize(e.get(LoggerConfigStore.E_LOGGER)), normalized)
+                            && equalsIgnoreCase(e.get(LoggerConfigStore.E_HOSTS), hosts)) {
+                        entries.remove(i);
+                    }
+                }
+                // The collection name goes in the note, so the table and the
+                // audit trail both say where an override came from.
+                entries.add(LoggerConfigStore.newEntry(Log4jAgent.display(normalized), level,
+                        hosts, expires, user.getName(),
+                        "from collection: " + coll.get(CollectionStore.C_NAME)));
+                applied.add(Log4jAgent.display(normalized) + "=" + level);
+            }
+
+            if (applied.isEmpty()) {
+                return error(Response.Status.BAD_REQUEST,
+                        "Nothing in that collection could be applied. Refused: " + refused);
+            }
+            LoggerConfigStore.saveEntries(ctx, entries, user.getName());
+            AuditWriter.log(ctx, user.getName(), "applied collection",
+                    coll.get(CollectionStore.C_NAME), null, hosts, 0L,
+                    String.valueOf(applied) + (refused.isEmpty() ? "" : " refused=" + refused));
+            LoggerSync.run(ctx, "rest:collection");
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] applyCollection failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
+    @DELETE
+    @Path("collections/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response deleteCollection(@PathParam("id") String id) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            Map<String, String> coll = CollectionStore.byId(ctx, id);
+            if (coll == null) return error(Response.Status.NOT_FOUND, "No such collection.");
+            CollectionStore.remove(ctx, id);
+            AuditWriter.log(ctx, user.getName(), "deleted collection",
+                    coll.get(CollectionStore.C_NAME), null, null, 0L, null);
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] deleteCollection failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
+    // ==================================================================
+    // log tail
+    // ==================================================================
+
+    /**
+     * The end of one of this host's own log files.
+     *
+     * The file is chosen by index into the list this host reported, never by
+     * path, so there is nothing for a caller to traverse - only files this JVM
+     * already writes to are reachable.
+     */
+    @GET
+    @Path("logtail")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response logTail(@QueryParam("index") @DefaultValue("0") int index,
+                            @QueryParam("kb") @DefaultValue("64") int kb) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            if (!PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true)) {
+                return error(Response.Status.FORBIDDEN,
+                        "Reading log files is switched off in the plugin settings.");
+            }
+            int cap = PluginSettings.getInt(ctx, PluginSettings.S_LOGTAIL_KB, 64);
+            if (kb > cap) kb = cap;
+
+            LogTail.Result r = LogTail.tail(index, kb);
+            AuditWriter.log(ctx, user.getName(), "read log", r.path,
+                    null, HostFacts.hostName(), 0L, kb + "KB");
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("host", HostFacts.hostName());
+            out.put("path", r.path);
+            out.put("fileBytes", String.valueOf(r.fileBytes));
+            out.put("readBytes", String.valueOf(r.readBytes));
+            out.put("truncated", r.truncated);
+            out.put("lines", r.lines);
+            out.put("error", r.error);
+            return json(Response.Status.OK, out);
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] logTail failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
+    // ==================================================================
     // state assembly
     // ==================================================================
 
@@ -454,6 +647,15 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("localLoggers", Log4jAgent.inspect(interesting));
 
         out.put("catalog", CATALOG);
+        try {
+            out.put("collections", CollectionStore.load(ctx));
+        } catch (Throwable t) {
+            out.put("collections", new ArrayList<Object>());
+        }
+        boolean tail = PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true);
+        out.put("logTailEnabled", tail);
+        out.put("logFiles", tail ? LogTail.files() : new ArrayList<Object>());
+        out.put("logTailKb", PluginSettings.getInt(ctx, PluginSettings.S_LOGTAIL_KB, 64));
         return out;
     }
 

@@ -109,6 +109,31 @@ Loggers declared in `log4j2.properties` have no Clear: log4j2 rebuilds its
 configuration from that file on every change and restart, so the logger would
 come straight back. Suppress is the only thing that holds for them.
 
+### Saved collections
+
+A collection is a named set of loggers and levels, **shared with everyone** who
+uses the plugin. Turn the loggers on, press **Save as collection**, and the next
+person chasing the same problem can turn the whole set on in one click with an
+expiry of their choosing.
+
+Each override a collection creates is noted `from collection: <name>`, so the
+table and the audit trail both say where it came from.
+
+![Saved collections](docs/screenshots/10-collections.png)
+
+### Reading the log
+
+The page can show the end of a log file on the host serving it, with a
+plain-text filter.
+
+![Log on this host](docs/screenshots/11-log.png)
+
+Only files that host's own log4j2 configuration writes to are offered, and the
+request picks one **by index into that list, never by path** - so it cannot be
+pointed anywhere else, and there are no OS-specific paths in it at all. Reads
+are taken from the end with a seek, capped by `logTailKb` (512KB hard ceiling),
+and audited. Set `showLogFiles` to `false` to remove the panel.
+
 ### Expiry
 
 Overrides expire so logging cannot be left on by accident.
@@ -132,6 +157,8 @@ the next read; no restart.
 | `allowRootLogger` | `false` | Whether the root logger may be targeted. |
 | `untouchableLoggers` | `root,sailpoint` | Loggers the plugin refuses to change. |
 | `permanentLoggers` | *(blank)* | Loggers enabled from the settings page, with no expiry. |
+| `showLogFiles` | `true` | Whether the page can show the end of this host's log files. |
+| `logTailKb` | `64` | How much of the end to read. Capped at 512 regardless. |
 
 `untouchableLoggers` greys out Suppress and Clear for those loggers and makes
 the API reject them. Matched **exactly, not by prefix** - protecting
@@ -181,6 +208,10 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `DELETE` | `/entries/{id}` | Remove one override |
 | `DELETE` | `/entries` | Remove all overrides |
 | `POST` | `/sync` | Reconcile the host serving the request |
+| `POST` | `/collections` | Save the current overrides, or a given list, under a name |
+| `POST` | `/collections/{id}/apply` | Turn a whole collection on |
+| `DELETE` | `/collections/{id}` | Delete a collection |
+| `GET` | `/logtail?index=N&kb=K` | The end of one of this host's log files |
 | `POST` | `/cleanup` | Clear left-over loggers, or one named logger |
 | `DELETE` | `/hosts/{host}` | Forget a decommissioned host |
 

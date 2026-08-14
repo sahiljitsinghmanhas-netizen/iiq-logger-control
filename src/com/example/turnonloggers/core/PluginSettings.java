@@ -28,6 +28,8 @@ public final class PluginSettings {
     public static final String S_ALLOW_ROOT    = "allowRootLogger";
     public static final String S_PERMANENT     = "permanentLoggers";
     public static final String S_UNTOUCHABLE   = "untouchableLoggers";
+    public static final String S_LOGTAIL       = "showLogFiles";
+    public static final String S_LOGTAIL_KB    = "logTailKb";
 
     private PluginSettings() {
     }

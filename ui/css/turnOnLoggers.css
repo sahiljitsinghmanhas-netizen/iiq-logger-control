@@ -663,3 +663,34 @@
     cursor: not-allowed;
     text-decoration: line-through;
 }
+
+/* ---------- log tail ---------- */
+
+.tol-logbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 12px 0 8px 0;
+    flex-wrap: wrap;
+}
+
+.tol-log-select { flex: 2 1 420px; max-width: 640px; }
+.tol-log-filter { flex: 1 1 200px; max-width: 320px; }
+
+.tol-log {
+    background: #102a43;
+    color: #d9e2ec;
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    max-height: 460px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+.tol-log .tol-small { color: #9aa5b1; }
+.tol-log .tol-err-text { color: #ff9b9b; }

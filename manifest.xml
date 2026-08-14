@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.20.0"
+        version="2.21.0"
         minSystemVersion="8.5">
 
   <Attributes>
@@ -90,6 +90,18 @@
                      defaultValue="root,sailpoint"
                      label="Untouchable loggers"
                      helpText="Loggers this plugin refuses to change, comma separated. Their Suppress and Clear controls are greyed out on the Logger Manager page, and the API rejects any attempt to override them, so a protected logger cannot be altered from here at all. Ships with root and sailpoint: root sets the level for every logger in the JVM at once, and sailpoint is the parent of the whole product, so raising or silencing either affects far more than whoever clicked expects. Matched exactly, not by prefix - protecting sailpoint does NOT protect sailpoint.api.Provisioner, otherwise the plugin could not do its job. Clear the field to protect nothing."/>
+
+            <Setting name="showLogFiles"
+                     dataType="boolean"
+                     defaultValue="true"
+                     label="Show log files on the page"
+                     helpText="Whether the page can show the end of this host's own log files. Only files that host's log4j2 configuration already writes to can be read - one is picked from that list rather than named by path, so there is nothing to point elsewhere. Reads come from the end of the file, are capped, and are audited. Turn this off if log content is more sensitive than the capability guarding this plugin."/>
+
+            <Setting name="logTailKb"
+                     dataType="int"
+                     defaultValue="64"
+                     label="Log tail size (KB)"
+                     helpText="How much of the end of a log file to read at once. Capped at 512 regardless of this value. Larger is slower to render and rarely more useful - filter the text instead."/>
 
             <Setting name="permanentLoggers"
                      dataType="string"

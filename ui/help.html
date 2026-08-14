@@ -65,6 +65,8 @@
     <li><a href="#buttons">The buttons</a></li>
     <li><a href="#suppress-clear">Suppress versus Clear</a></li>
     <li><a href="#nofileclear">Why file loggers cannot be cleared</a></li>
+    <li><a href="#collections">Saved collections</a></li>
+    <li><a href="#logfile">Reading the log</a></li>
     <li><a href="#levels">Levels and expiry</a></li>
     <li><a href="#hosts">Hosts and propagation</a></li>
     <li><a href="#audit">Audit</a></li>
@@ -291,6 +293,36 @@ whenever the file changes and on every restart, so the logger would come straigh
 the host's declared configuration - the plugin quietly deleting it would be fighting the file behind
 your back. Overriding it to <code>OFF</code> with Suppress is the honest option, and it stays
 visible and reversible.</p>
+
+<h2 id="collections">Saved collections<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/10-collections.png" alt="The Saved collections table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Named sets of loggers, shared with everyone.</figcaption>
+</figure>
+<p>A collection is a named set of loggers and levels, <strong>shared with everyone</strong> who uses
+the plugin - not a private favourites list. The point is that whoever worked out which five loggers
+matter for an LDAP bind failure can leave that where the next person finds it.</p>
+<p>Turn the loggers on, then press <strong>Save as collection</strong> on <em>Overrides in
+effect</em>. Applying one asks how long it should stay on and turns the whole set on across every
+host; each override it creates is noted <code>from collection: &lt;name&gt;</code>, so the table and
+the audit trail both say where it came from. Deleting a collection removes it for everyone and does
+not touch any logger that is currently on.</p>
+
+<h2 id="logfile">Reading the log<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/11-log.png" alt="The Log on this host panel showing the end of sailpoint.log" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>The end of a log file on the host serving the page, with a text filter.</figcaption>
+</figure>
+<p>Having turned a logger on, the next question is where to read it. This shows the end of a log
+file on <strong>the host serving the page</strong>, with a plain-text filter.</p>
+<p>Only files that host's own log4j2 configuration writes to are offered, and the request picks one
+<strong>by index into that list rather than by path</strong> - there is no path parameter, so it
+cannot be pointed anywhere else. That is also why a mixed Windows, Linux and macOS cluster needs
+nothing special: the path is whatever that host's configuration says, in that host's own syntax.</p>
+<p>Reads come from the end of the file with a seek, so a multi-gigabyte log costs the same as a
+small one, are capped by the <code>logTailKb</code> setting (and 512KB regardless), and every read
+is audited. Other hosts write their own files - the Hosts table lists their paths. Set
+<code>showLogFiles</code> to false to remove the panel entirely.</p>
 
 <h2 id="levels">Levels and expiry<a class="top" href="#">top</a></h2>
 <p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like

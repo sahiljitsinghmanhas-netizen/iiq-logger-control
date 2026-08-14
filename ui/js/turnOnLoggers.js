@@ -202,9 +202,11 @@
         }
 
         root.appendChild(addForm());
+        root.appendChild(collectionsSection());
         root.appendChild(overridesSection());
         root.appendChild(liveLoggersSection());
         root.appendChild(hostsSection());
+        root.appendChild(logSection());
         root.appendChild(footer());
     }
 
@@ -445,6 +447,19 @@
         var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
         head.appendChild(el('h2', 'tol-card-title', 'Overrides in effect'));
+        if ((state.entries || []).length) {
+            var save = el('button', 'tol-btn tol-btn-small', 'Save as collection');
+            save.title = 'Save these loggers under a name so anyone can turn the same set on again';
+            save.onclick = function () {
+                var name = window.prompt('Name this collection - everyone using the plugin will see it.\n\n'
+                    + 'For example: LDAP connector debugging');
+                if (!name) return;
+                var desc = window.prompt('A one-line description (optional) - what is it for?') || '';
+                mutate(api('POST', '/collections', { name: name, description: desc }),
+                    'Saved as "' + name + '".');
+            };
+            head.appendChild(save);
+        }
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
             'Everything this plugin has turned on, from both this page and the plugin settings. ' +
@@ -952,6 +967,196 @@
         t.appendChild(tb);
         box.appendChild(t);
         return box;
+    }
+
+
+    /**
+     * Saved sets of loggers, shared by everyone.
+     *
+     * The point is that whoever worked out which five loggers matter for an
+     * LDAP bind failure can leave that where the next person finds it, so these
+     * are deliberately global rather than per-user favourites.
+     */
+    function collectionsSection() {
+        var colls = state.collections || [];
+        var box = el('section', 'tol-card');
+        box.appendChild(el('h2', 'tol-card-title', 'Saved collections'));
+        box.appendChild(el('div', 'tol-hint',
+            'Named sets of loggers, shared with everyone who uses this plugin. Applying one turns '
+            + 'the whole set on with the expiry you choose. Save the current overrides as a '
+            + 'collection from the section below.'));
+
+        if (!colls.length) {
+            box.appendChild(el('div', 'tol-empty',
+                'None saved yet. Turn some loggers on, then use "Save as collection".'));
+            return box;
+        }
+
+        var t = el('table', 'tol-table');
+        t.appendChild(headRow(['Collection', 'Loggers', 'Saved by', '']));
+        var tb = el('tbody');
+        colls.forEach(function (c) {
+            var tr = el('tr');
+
+            var c1 = el('td');
+            c1.appendChild(el('strong', '', c.name));
+            if (c.description) c1.appendChild(el('div', 'tol-note-text', c.description));
+            tr.appendChild(c1);
+
+            var c2 = el('td', 'tol-small');
+            String(c.loggers || '').split(',').forEach(function (pair) {
+                if (!pair.trim()) return;
+                var bits = pair.split('=');
+                var line = el('div', 'tol-mono tol-small');
+                line.appendChild(document.createTextNode(bits[0] + ' '));
+                line.appendChild(el('span', 'tol-level tol-level-' + String(bits[1]).toLowerCase(), bits[1]));
+                c2.appendChild(line);
+            });
+            tr.appendChild(c2);
+
+            var c3 = el('td', 'tol-small');
+            c3.appendChild(document.createTextNode(c.createdBy || '?'));
+            c3.appendChild(el('div', 'tol-small', fmtAgo(c.created)));
+            tr.appendChild(c3);
+
+            var c4 = el('td');
+            var apply = el('button', 'tol-btn tol-btn-small tol-btn-primary', 'Apply');
+            apply.title = 'Turn this whole set on, on every host';
+            apply.onclick = (function (coll) {
+                return function () {
+                    var mins = window.prompt('Turn on ' + coll.name + ' for how many minutes?\n\n'
+                        + 'Leave the default unless you need longer.', String(state.defaultTtlMinutes));
+                    if (mins === null) return;
+                    mutate(api('POST', '/collections/' + encodeURIComponent(coll.id) + '/apply',
+                        { ttlMinutes: parseInt(mins, 10), hosts: ['*'] }),
+                        coll.name + ' applied on every host.');
+                };
+            })(c);
+            c4.appendChild(apply);
+
+            var del = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Delete');
+            del.onclick = (function (coll) {
+                return function () {
+                    if (!window.confirm('Delete the collection "' + coll.name + '"?'
+                        + ' This removes it for everyone. Loggers currently on are not affected.')) return;
+                    mutate(api('DELETE', '/collections/' + encodeURIComponent(coll.id)),
+                        coll.name + ' deleted.');
+                };
+            })(c);
+            c4.appendChild(del);
+            tr.appendChild(c4);
+
+            tb.appendChild(tr);
+        });
+        t.appendChild(tb);
+        box.appendChild(t);
+        return box;
+    }
+
+    var logState = { index: 0, kb: 0, filter: '', lines: null, meta: null, error: null };
+
+    /**
+     * The end of a log file on the host serving this page.
+     *
+     * Only files that host's own log4j2 configuration writes to are offered,
+     * and the request names one by index rather than by path - so this cannot
+     * be pointed at anything else, and there are no OS-specific paths anywhere
+     * in it. Whatever that host calls its log file is what gets read.
+     */
+    function logSection() {
+        var box = el('section', 'tol-card');
+        var head = el('div', 'tol-card-head');
+        head.appendChild(el('h2', 'tol-card-title', 'Log on this host'));
+        box.appendChild(head);
+
+        if (state.logTailEnabled === false) {
+            box.appendChild(el('div', 'tol-empty',
+                'Switched off in the plugin settings.'));
+            return box;
+        }
+        var files = state.logFiles || [];
+        if (!files.length) {
+            box.appendChild(el('div', 'tol-empty',
+                'This host writes to no log file - its log4j2 configuration has no file appender, '
+                + 'so output goes to stdout (catalina.out or the console).'));
+            return box;
+        }
+
+        box.appendChild(el('div', 'tol-hint',
+            'The end of a log file on ' + state.thisHost + ', the host serving this page. Other hosts '
+            + 'write their own; the Hosts table lists their paths. Reads are capped and audited.'));
+
+        var bar = el('div', 'tol-logbar');
+        var sel = document.createElement('select');
+        sel.className = 'tol-input tol-log-select';
+        files.forEach(function (f) {
+            var label = f.path + (f.readable ? '' : '  (not readable)')
+                + (f.bytes >= 0 ? '  [' + Math.round(f.bytes / 1024) + ' KB]' : '');
+            sel.appendChild(opt(String(f.index), label, f.index === logState.index));
+        });
+        sel.onchange = function () { logState.index = parseInt(sel.value, 10); };
+        bar.appendChild(sel);
+
+        var flt = document.createElement('input');
+        flt.type = 'text';
+        flt.className = 'tol-input tol-log-filter';
+        flt.setAttribute('placeholder', 'filter lines (plain text)');
+        flt.value = logState.filter;
+        flt.oninput = function () { logState.filter = flt.value; paintLog(); };
+        bar.appendChild(flt);
+
+        var load = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Load');
+        load.onclick = function () {
+            var kb = logState.kb || state.logTailKb || 64;
+            say('Reading the log...', 'info');
+            api('GET', '/logtail?index=' + logState.index + '&kb=' + kb).then(function (d) {
+                logState.lines = d.lines || [];
+                logState.meta = d;
+                logState.error = d.error;
+                say(null);
+                paintLog();
+            }).catch(function (e) { say(e.message, 'error'); });
+        };
+        bar.appendChild(load);
+        box.appendChild(bar);
+
+        var out = el('pre', 'tol-log');
+        out.id = 'tol-log-output';
+        box.appendChild(out);
+        window.setTimeout(paintLog, 0);
+        return box;
+    }
+
+    function paintLog() {
+        var out = document.getElementById('tol-log-output');
+        if (!out) return;
+        clear(out);
+        if (logState.error) {
+            out.appendChild(el('div', 'tol-err-text', logState.error));
+            return;
+        }
+        if (logState.lines === null) {
+            out.appendChild(el('div', 'tol-small', 'Press Load to read the end of the file.'));
+            return;
+        }
+        var f = logState.filter.toLowerCase();
+        var shown = 0;
+        logState.lines.forEach(function (line) {
+            if (f && String(line).toLowerCase().indexOf(f) === -1) return;
+            shown++;
+            out.appendChild(document.createTextNode(line + '\n'));
+        });
+        if (!shown) {
+            out.appendChild(el('div', 'tol-small',
+                logState.lines.length ? 'No lines match the filter.' : 'The file is empty.'));
+        }
+        if (logState.meta) {
+            var m = logState.meta;
+            out.appendChild(el('div', 'tol-small',
+                '-- ' + shown + ' of ' + logState.lines.length + ' lines, last '
+                + Math.round(parseInt(m.readBytes, 10) / 1024) + ' KB of '
+                + Math.round(parseInt(m.fileBytes, 10) / 1024) + ' KB, on ' + m.host));
+        }
     }
 
     function footer() {

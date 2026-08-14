@@ -210,6 +210,18 @@ try {
     Save-Shot $ws $OutDir "04-live-loggers.png"    "#turn-on-loggers-root section.tol-card:nth-of-type(3)" $Width
     Save-Shot $ws $OutDir "05-hosts.png"           "#turn-on-loggers-root section.tol-card:nth-of-type(4)" $Width
     Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
+    Save-Shot $ws $OutDir "10-collections.png"     "#turn-on-loggers-root section.tol-card:nth-of-type(2)" $Width
+
+    # Load the log before capturing it, otherwise the panel is just its prompt.
+    Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @"
+(function () {
+  var b = document.querySelectorAll('#turn-on-loggers-root .tol-logbar button');
+  if (b.length) b[b.length - 1].click();
+  return b.length;
+})()
+"@; returnByValue = $true } | Out-Null
+    Start-Sleep -Seconds 3
+    Save-Shot $ws $OutDir "11-log.png" "#turn-on-loggers-root section.tol-card:last-of-type" $Width
 
     # The settings form and the audit search are both client-side apps that do
     # not populate from a directly-navigated URL - the settings route renders
