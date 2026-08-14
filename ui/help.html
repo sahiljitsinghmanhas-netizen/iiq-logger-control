@@ -183,21 +183,25 @@ about". In <em>Loggers live in the JVM</em> and <em>Hosts</em> that is the host'
 see <a href="#logchips">the host chips</a> under Reading the log.</p>
 
 <h3>Picked is separate from colour</h3>
-<p>Whether a chip is picked controls what appears below it, and it is drawn two ways because
-"not picked" means two different things:</p>
+<p>Whether a chip is picked controls what appears below it. Not picked is faded and struck
+through, the same in every section. What differs is only where each section starts:</p>
 <table>
-  <thead><tr><th>Section</th><th>Starts as</th><th>Not picked looks like</th></tr></thead>
+  <thead><tr><th>Section</th><th>Starts with</th></tr></thead>
   <tbody>
-    <tr><td>Loggers live in the JVM</td><td>the host serving the page, on its own</td>
-        <td>faded</td></tr>
-    <tr><td>Hosts</td><td>every host</td><td>faded and struck through</td></tr>
-    <tr><td>Logs</td><td>every host</td><td>faded and struck through</td></tr>
+    <tr><td>Loggers live in the JVM</td><td>the host serving the page, on its own</td></tr>
+    <tr><td>Hosts</td><td>every host</td></tr>
+    <tr><td>Logs</td><td>every host</td></tr>
   </tbody>
 </table>
-<p>Where everything starts picked, unpicking is a <em>removal</em> and is drawn as one. Where
-one host starts picked, the others were never removed - they are merely not chosen - so they
-only fade. Striking those through would claim you had done something you had not.</p>
-<p>Click any chip to toggle it. You can pick as many as you like.</p>
+<p>Click any chip to toggle it. You can pick as many as you like. <em>Loggers live in the
+JVM</em> starts on one host because a cluster mostly reports the same picture everywhere, so
+reading it starts with one host and widens when you are comparing.</p>
+<p>Picking several hosts there draws <strong>one table</strong> with a banner between each
+host's rows, rather than a table each. Separate tables sized their columns to their own
+content, so <code>LEVEL</code> landed somewhere different on every host - which defeats the
+point, since comparing hosts means reading down a column. One table computes one geometry
+from all the rows, stays fluid at any width, and scrolls inside its own box rather than
+pushing the page sideways.</p>
 <figure>
   <img src="img/15-live-two-hosts.png" alt="Loggers live in the JVM with two hosts picked, showing a table for each, and the remaining chips faded" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>Two hosts picked in <em>Loggers live in the JVM</em>. Both the filter counts and

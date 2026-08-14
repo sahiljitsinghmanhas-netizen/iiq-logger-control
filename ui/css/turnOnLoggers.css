@@ -243,21 +243,17 @@
     vertical-align: top;
 }
 
-/* One of these is drawn per picked host, so they have to share a geometry.
-   Left to itself each table sizes its columns to its own content, which puts
-   Level in a different place on every host and defeats the whole point of
-   picking two - comparing them means reading down a column. */
-.tol-table-live { table-layout: fixed; }
+/* The logger table can be wider than a phone. Let it scroll inside its own
+   box rather than pushing the whole page sideways. */
+.tol-tablewrap { overflow-x: auto; }
 
-.tol-table-live th:nth-child(1), .tol-table-live td:nth-child(1) { width: 40%; }
-.tol-table-live th:nth-child(2), .tol-table-live td:nth-child(2) { width: 9%; }
-.tol-table-live th:nth-child(3), .tol-table-live td:nth-child(3) { width: 15%; }
-.tol-table-live th:nth-child(4), .tol-table-live td:nth-child(4) { width: 12%; }
-.tol-table-live th:nth-child(5), .tol-table-live td:nth-child(5) { width: 24%; }
-
-/* Fixed layout will not shrink a long logger name, it will let it spill into
-   the next column. Wrap instead. */
-.tol-table-live td:nth-child(1) { overflow-wrap: anywhere; }
+/* The host banner between one host's rows and the next, inside the single
+   table that holds them all. */
+.tol-grouprow td {
+    border-bottom: none;
+    padding: 16px 8px 4px 8px;
+}
+.tol-grouprow:first-child td { padding-top: 6px; }
 
 .tol-table tr.tol-expired td {
     opacity: .55;
@@ -836,11 +832,9 @@
 
 /* --- selection: independent of colour ---
  *
- * Two ways of not being picked, because "not picked" means two different
- * things. Where everything starts picked, unpicking is a removal and is drawn
- * as one. Where one thing starts picked, the others were never removed - they
- * are merely not chosen - so they only fade. Striking those through would
- * claim the reader had done something they had not.
+ * One way of showing it, in every section that has pickable chips. Not picked
+ * is faded and struck through, whether the section started with everything
+ * picked or with one.
  */
 .tol-lhost-off { opacity: .45; }
 .tol-lhost-off .tol-lhost-name { text-decoration: line-through; }
@@ -849,9 +843,6 @@
 }
 .tol-lhost-off:hover { opacity: .7; }
 
-/* not chosen, never removed */
-.tol-lhost-dim { opacity: .5; }
-.tol-lhost-dim:hover { opacity: .8; }
 
 /* --- the waiting spinner --- */
 .tol-lhost-spin {

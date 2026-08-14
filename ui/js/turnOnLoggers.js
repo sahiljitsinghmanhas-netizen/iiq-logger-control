@@ -634,14 +634,16 @@
     /**
      * One host chip.
      *
-     * Colour is status. Whether it is picked is a separate axis, and how that
-     * reads depends on what "not picked" means in that section:
+     * Colour is status. Whether it is picked is a separate axis:
      *
-     *   strike  everything starts picked, so unpicking is a removal and looks
-     *           like one - struck through and faded
-     *   dim     one thing starts picked, so the rest were never removed; they
-     *           are just not chosen, and only fade
+     *   strike  a control - struck through and faded when it is not picked
      *   static  not a control at all, a label above some output
+     *
+     * Both pickable sections use strike, including the one that starts with a
+     * single host picked. An earlier version faded those without the line,
+     * on the theory that they had never been removed so should not look
+     * removed - but two ways of drawing the same idea is worse than one that
+     * is slightly over-stated.
      */
     function hostChip(h, opts) {
         opts = opts || {};
@@ -652,7 +654,7 @@
         var cls = 'tol-lhost tol-lhost-' + st.key;
         if (h.name === state.thisHost) cls += ' tol-lhost-self';
         if (mode === 'static') cls += ' tol-lhost-static';
-        else if (!picked) cls += (mode === 'strike' ? ' tol-lhost-off' : ' tol-lhost-dim');
+        else if (!picked) cls += ' tol-lhost-off';
 
         var chip = el(mode === 'static' ? 'span' : 'button', cls);
         if (mode !== 'static') {
@@ -830,7 +832,7 @@
             function (n) {
                 if (livePick[n]) delete livePick[n]; else livePick[n] = true;
             },
-            'dim'));
+            'strike'));
 
         var picked = all.filter(function (h) { return livePick[h.name]; });
         if (!picked.length) {
@@ -916,15 +918,25 @@
             box.appendChild(note);
         });
 
+        // One table for every picked host, with a banner row between them,
+        // rather than a table each. Separate tables each sized their columns
+        // to their own content, so Level sat somewhere different on every host
+        // - and comparing hosts means reading down a column. Pinning the widths
+        // fixed that but broke narrow screens, which is the wrong trade for a
+        // page people open on a phone during an incident. One table computes
+        // one geometry from all the rows and stays fluid.
+        var wrap = el('div', 'tol-tablewrap');
+        var t = el('table', 'tol-table');
+        t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', '']));
+
         groups.forEach(function (g) {
-            box.appendChild(hostChips(g.hosts));
-            // Fixed geometry, because there is one of these per picked host
-            // and a table that sizes itself to its own content puts every
-            // column somewhere different. Reading two hosts side by side means
-            // reading down a column.
-            var t = el('table', 'tol-table tol-table-live');
-            t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', '']));
             var tb = el('tbody');
+            var banner = el('tr', 'tol-grouprow');
+            var bcell = el('td');
+            bcell.setAttribute('colspan', '5');
+            bcell.appendChild(hostChips(g.hosts));
+            banner.appendChild(bcell);
+            tb.appendChild(banner);
             g.rows.forEach(function (r) {
                 var tr = el('tr');
 
@@ -1087,8 +1099,9 @@
                 tb.appendChild(tr);
             });
             t.appendChild(tb);
-            box.appendChild(t);
         });
+        wrap.appendChild(t);
+        box.appendChild(wrap);
         return box;
     }
 

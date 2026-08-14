@@ -96,18 +96,24 @@ about. In *Loggers live in the JVM* and *Hosts* that is the host's own health:
 
 In *Logs* there is a query to answer, so the colour is what that host found instead.
 
-**Picked is separate from colour**, and is drawn two ways because "not picked" means
-two different things:
+**Picked is separate from colour.** Not picked is faded and struck through, the same
+in every section. What differs is only where each section starts:
 
-| Section | Starts as | Not picked |
-|---|---|---|
-| Loggers live in the JVM | the host serving the page, alone | faded |
-| Hosts | every host | faded and struck through |
-| Logs | every host | faded and struck through |
+| Section | Starts with |
+|---|---|
+| Loggers live in the JVM | the host serving the page, alone |
+| Hosts | every host |
+| Logs | every host |
 
-Where everything starts picked, unpicking is a removal and looks like one. Where one
-host starts picked, the rest were never removed, so they only fade. Click any chip to
-toggle it; pick as many as you like.
+Click any chip to toggle it; pick as many as you like. *Loggers live in the JVM*
+starts on one host because a cluster mostly reports the same picture everywhere, so
+reading it starts with one host and widens when you are comparing.
+
+Picking several hosts there draws one table with a banner between each host's rows,
+rather than a table each. Separate tables sized their columns to their own content,
+so `LEVEL` landed somewhere different on every host - and comparing hosts means
+reading down a column. One table computes one geometry from all the rows, stays fluid
+at any width, and scrolls inside its own box rather than pushing the page sideways.
 
 ![Two hosts picked](docs/screenshots/15-live-two-hosts.png)
 
