@@ -201,12 +201,20 @@
             root.appendChild(nolog);
         }
 
-        root.appendChild(addForm());
-        root.appendChild(collectionsSection());
-        root.appendChild(overridesSection());
-        root.appendChild(liveLoggersSection());
-        root.appendChild(hostsSection());
-        root.appendChild(logSection());
+        // Stable ids rather than positional selectors: the sections have been
+        // reordered twice, and anything targeting them by position - the
+        // screenshot tool, a stylesheet, a bookmarklet - silently pointed at
+        // the wrong one each time.
+        [[addForm(), 'tol-sec-form'],
+         [collectionsSection(), 'tol-sec-collections'],
+         [overridesSection(), 'tol-sec-overrides'],
+         [liveLoggersSection(), 'tol-sec-live'],
+         [hostsSection(), 'tol-sec-hosts'],
+         [logsSection(), 'tol-sec-logs']].forEach(function (pair) {
+            if (!pair[0]) return;
+            pair[0].id = pair[1];
+            root.appendChild(pair[0]);
+        });
         root.appendChild(footer());
     }
 
@@ -1066,196 +1074,166 @@
         return box;
     }
 
-    var logState = { index: 0, kb: 0, filter: '', lines: null, meta: null, error: null };
+    var logState = { index: 0, filter: '', lines: null, meta: null, error: null };
 
     /**
-     * The end of a log file on the host serving this page.
+     * Log lines, from this host or from every host.
      *
-     * Only files that host's own log4j2 configuration writes to are offered,
-     * and the request names one by index rather than by path - so this cannot
-     * be pointed at anything else, and there are no OS-specific paths anywhere
-     * in it. Whatever that host calls its log file is what gets read.
+     * One panel rather than two. They were separate because the mechanisms
+     * differ - this host can be read immediately, other hosts have to answer on
+     * their own sync - but that is an implementation detail, and making the
+     * reader hold two mental models for "show me the log" was the wrong trade.
+     * Every result block is labelled with the host it came from, whichever way
+     * it was fetched.
      */
-    function logSection() {
+    function logsSection() {
         var box = el('section', 'tol-card');
-        var head = el('div', 'tol-card-head');
-        head.appendChild(el('h2', 'tol-card-title', 'Log on this host'));
-        box.appendChild(head);
+        box.appendChild(el('h2', 'tol-card-title', 'Logs'));
 
         if (state.logTailEnabled === false) {
-            box.appendChild(el('div', 'tol-empty',
-                'Switched off in the plugin settings.'));
+            box.appendChild(el('div', 'tol-empty', 'Switched off in the plugin settings.'));
             return box;
         }
         var files = state.logFiles || [];
-        if (!files.length) {
-            box.appendChild(el('div', 'tol-empty',
-                'This host writes to no log file - its log4j2 configuration has no file appender, '
-                + 'so output goes to stdout (catalina.out or the console).'));
+        if (!files.length && !(state.hosts || []).length) {
+            box.appendChild(el('div', 'tol-empty', 'No host has reported a log file yet.'));
             return box;
         }
 
         box.appendChild(el('div', 'tol-hint',
-            'The end of a log file on ' + state.thisHost + ', the host serving this page. Other hosts '
-            + 'write their own; the Hosts table lists their paths. Reads are capped and audited.'));
-
-        var bar = el('div', 'tol-logbar');
-        var sel = document.createElement('select');
-        sel.className = 'tol-input tol-log-select';
-        files.forEach(function (f) {
-            var label = f.path + (f.readable ? '' : '  (not readable)')
-                + (f.bytes >= 0 ? '  [' + Math.round(f.bytes / 1024) + ' KB]' : '');
-            sel.appendChild(opt(String(f.index), label, f.index === logState.index));
-        });
-        sel.onchange = function () { logState.index = parseInt(sel.value, 10); };
-        bar.appendChild(sel);
-
-        var flt = document.createElement('input');
-        flt.type = 'text';
-        flt.className = 'tol-input tol-log-filter';
-        flt.setAttribute('placeholder', 'filter lines (plain text)');
-        flt.value = logState.filter;
-        flt.oninput = function () { logState.filter = flt.value; paintLog(); };
-        bar.appendChild(flt);
-
-        var load = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Load');
-        load.onclick = function () {
-            var kb = logState.kb || state.logTailKb || 64;
-            say('Reading the log...', 'info');
-            api('GET', '/logtail?index=' + logState.index + '&kb=' + kb).then(function (d) {
-                logState.lines = d.lines || [];
-                logState.meta = d;
-                logState.error = d.error;
-                say(null);
-                paintLog();
-            }).catch(function (e) { say(e.message, 'error'); });
-        };
-        bar.appendChild(load);
-        box.appendChild(bar);
-
-        var out = el('pre', 'tol-log');
-        out.id = 'tol-log-output';
-        box.appendChild(out);
-        window.setTimeout(paintLog, 0);
-
-        box.appendChild(clusterSearch());
-        return box;
-    }
-
-    /**
-     * Searching every host at once.
-     *
-     * Nothing is fetched from another host here - no host can read another's
-     * disk. The text is recorded, and each host looks in its own file on its
-     * next sync and publishes what it found. The host serving the page answers
-     * straight away; the rest arrive within one interval, and each result says
-     * how long ago that host answered.
-     */
-    function clusterSearch() {
-        var wrap = el('div', 'tol-cluster');
-        wrap.appendChild(el('h3', 'tol-subhead', 'Search every host'));
-        wrap.appendChild(el('div', 'tol-hint',
-            'Looks for text in every host\u2019s own log - a logger name, an identity, an error. '
-            + 'This host answers immediately; the others answer on their next sync, so give it a '
-            + 'minute. Each host reports up to 40 matching lines from the end of its file.'));
+            'Read the end of the log on this host, or search every host at once. Searching all '
+            + 'hosts records what to look for and each host answers about its own file on its next '
+            + 'sync, so this host replies immediately and the others take up to a minute. Every '
+            + 'result says which host it came from and when that host answered.'));
 
         var bar = el('div', 'tol-logbar');
         var q = document.createElement('input');
         q.type = 'text';
-        q.id = 'tol-cluster-q';
+        q.id = 'tol-log-q';
         q.className = 'tol-input tol-log-select';
-        q.setAttribute('placeholder', 'e.g. sailpoint.connector.LDAPConnector, or an identity name');
-        q.value = state.logQuery || '';
+        q.setAttribute('placeholder', 'text to look for - a logger name, an identity, an error. Blank shows the tail.');
+        q.value = state.logQuery || logState.filter || '';
         bar.appendChild(q);
 
-        var go = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
-        go.onclick = function () {
-            var text = document.getElementById('tol-cluster-q').value;
+        var here = el('button', 'tol-btn tol-btn-small', 'Read this host');
+        here.title = 'Read the end of the file on ' + state.thisHost + ' and filter it';
+        here.onclick = function () {
+            logState.filter = document.getElementById('tol-log-q').value || '';
+            say('Reading the log on ' + state.thisHost + '...', 'info');
+            api('GET', '/logtail?index=' + logState.index + '&kb=' + (state.logTailKb || 64))
+                .then(function (d) {
+                    logState.lines = d.lines || [];
+                    logState.meta = d;
+                    logState.error = d.error;
+                    say(null);
+                    render();
+                }).catch(function (e) { say(e.message, 'error'); });
+        };
+        bar.appendChild(here);
+
+        var all = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
+        all.onclick = function () {
+            var text = document.getElementById('tol-log-q').value;
             if (!text || !text.trim()) { say('Type something to search for.', 'error'); return; }
             mutate(api('POST', '/logquery', { text: text }),
-                'Searching every host. This one is done; the others answer on their next sync.');
+                'Searching every host. ' + state.thisHost + ' is done; the others answer on their next sync.');
         };
-        bar.appendChild(go);
+        bar.appendChild(all);
 
         if (state.logQuery) {
-            var stop = el('button', 'tol-btn tol-btn-small', 'Stop');
+            var stop = el('button', 'tol-btn tol-btn-small', 'Stop searching');
             stop.title = 'Stop every host looking for this';
             stop.onclick = function () {
                 mutate(api('POST', '/logquery', { text: '' }), 'Search stopped.');
             };
             bar.appendChild(stop);
         }
-        wrap.appendChild(bar);
 
-        if (!state.logQuery) return wrap;
-
-        var any = false;
-        (state.hosts || []).forEach(function (h) {
-            var lines = h.logMatches || [];
-            var answered = parseInt(h.logAnsweredAt, 10) || 0;
-            if (!h.reporting) return;
-            any = true;
-
-            var head = el('div', 'tol-cluster-host');
-            head.appendChild(hostChips([h.name]));
-            var meta = el('span', 'tol-small');
-            if (!answered) {
-                meta.appendChild(document.createTextNode(' waiting for this host to answer...'));
-            } else {
-                meta.appendChild(document.createTextNode(
-                    ' ' + lines.length + ' matching line' + (lines.length === 1 ? '' : 's')
-                    + ', answered ' + fmtAgo(h.logAnsweredAt)
-                    + (h.logPath ? ' - ' + h.logPath : '')));
-            }
-            head.appendChild(meta);
-            wrap.appendChild(head);
-
-            if (answered) {
-                var pre = el('pre', 'tol-log tol-log-small');
-                if (!lines.length) {
-                    pre.appendChild(el('div', 'tol-small', 'Nothing matching in this host\u2019s log.'));
-                } else {
-                    lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
-                }
-                wrap.appendChild(pre);
-            }
-        });
-        if (!any) {
-            wrap.appendChild(el('div', 'tol-empty', 'No host has reported yet.'));
+        if (files.length > 1) {
+            var sel = document.createElement('select');
+            sel.className = 'tol-input tol-log-filter';
+            files.forEach(function (f) {
+                sel.appendChild(opt(String(f.index), f.path.split(/[\\/]/).pop(), f.index === logState.index));
+            });
+            sel.onchange = function () { logState.index = parseInt(sel.value, 10); };
+            bar.appendChild(sel);
         }
-        return wrap;
+        box.appendChild(bar);
+
+        var shown = false;
+
+        // This host, read directly.
+        if (logState.error) {
+            box.appendChild(logBlock(state.thisHost, logState.error, null, true));
+            shown = true;
+        } else if (logState.lines !== null) {
+            var f = (logState.filter || '').toLowerCase();
+            var lines = f
+                ? logState.lines.filter(function (l) { return String(l).toLowerCase().indexOf(f) > -1; })
+                : logState.lines;
+            var m = logState.meta || {};
+            var meta = lines.length + ' of ' + logState.lines.length + ' lines'
+                + (f ? ' matching "' + logState.filter + '"' : '')
+                + ', last ' + Math.round(parseInt(m.readBytes, 10) / 1024) + ' KB'
+                + (m.path ? ' - ' + m.path : '');
+            box.appendChild(logBlock(state.thisHost, meta, lines, false));
+            shown = true;
+        }
+
+        // Every host, each answering about its own file.
+        if (state.logQuery) {
+            box.appendChild(el('div', 'tol-hint',
+                'Every host, looking for "' + state.logQuery + '":'));
+            (state.hosts || []).forEach(function (h) {
+                if (!h.reporting) return;
+                var answered = parseInt(h.logAnsweredAt, 10) || 0;
+                var lines = h.logMatches || [];
+                var meta = answered
+                    ? lines.length + ' matching line' + (lines.length === 1 ? '' : 's')
+                      + ', answered ' + fmtAgo(h.logAnsweredAt)
+                      + (h.logPath ? ' - ' + h.logPath : '')
+                    : 'waiting for this host to answer...';
+                box.appendChild(logBlock(h.name, meta, answered ? lines : null, false));
+                shown = true;
+            });
+        }
+
+        if (!shown) {
+            box.appendChild(el('div', 'tol-empty',
+                'Press "Read this host" for the end of the log here, or type something and press '
+                + '"Search all hosts".'));
+        }
+        return box;
     }
 
-    function paintLog() {
-        var out = document.getElementById('tol-log-output');
-        if (!out) return;
-        clear(out);
-        if (logState.error) {
-            out.appendChild(el('div', 'tol-err-text', logState.error));
-            return;
+    /** One host's worth of log output, always labelled with the host. */
+    function logBlock(host, meta, lines, isError) {
+        var wrap = el('div', 'tol-logblock');
+
+        var head = el('div', 'tol-cluster-host');
+        head.appendChild(hostChips([host]));
+        if (host === state.thisHost) {
+            head.appendChild(el('span', 'tol-badge tol-badge-ok', 'serving this page'));
         }
-        if (logState.lines === null) {
-            out.appendChild(el('div', 'tol-small', 'Press Load to read the end of the file.'));
-            return;
+        head.appendChild(el('span', 'tol-small', meta));
+        wrap.appendChild(head);
+
+        if (isError) {
+            var e = el('pre', 'tol-log tol-log-small');
+            e.appendChild(el('div', 'tol-err-text', meta));
+            wrap.appendChild(e);
+            return wrap;
         }
-        var f = logState.filter.toLowerCase();
-        var shown = 0;
-        logState.lines.forEach(function (line) {
-            if (f && String(line).toLowerCase().indexOf(f) === -1) return;
-            shown++;
-            out.appendChild(document.createTextNode(line + '\n'));
-        });
-        if (!shown) {
-            out.appendChild(el('div', 'tol-small',
-                logState.lines.length ? 'No lines match the filter.' : 'The file is empty.'));
+        if (lines === null) return wrap;
+
+        var pre = el('pre', 'tol-log' + (lines.length > 60 ? '' : ' tol-log-small'));
+        if (!lines.length) {
+            pre.appendChild(el('div', 'tol-small', 'Nothing matching in this host\u2019s log.'));
+        } else {
+            lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
         }
-        if (logState.meta) {
-            var m = logState.meta;
-            out.appendChild(el('div', 'tol-small',
-                '-- ' + shown + ' of ' + logState.lines.length + ' lines, last '
-                + Math.round(parseInt(m.readBytes, 10) / 1024) + ' KB of '
-                + Math.round(parseInt(m.fileBytes, 10) / 1024) + ' KB, on ' + m.host));
-        }
+        wrap.appendChild(pre);
+        return wrap;
     }
 
     function footer() {

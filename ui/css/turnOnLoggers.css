@@ -722,3 +722,13 @@
     max-height: 260px;
     font-size: 11px;
 }
+
+/* ---------- one log panel, one block per host ---------- */
+
+.tol-logblock {
+    margin: 14px 0 0 0;
+}
+
+.tol-logblock .tol-cluster-host {
+    margin: 0 0 4px 0;
+}

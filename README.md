@@ -126,7 +126,7 @@ table and the audit trail both say where it came from.
 The page can show the end of a log file on the host serving it, with a
 plain-text filter.
 
-![Log on this host](docs/screenshots/11-log.png)
+![Log on this host](docs/screenshots/12-logs.png)
 
 Only files that host's own log4j2 configuration writes to are offered, and the
 request picks one **by index into that list, never by path** - so it cannot be
@@ -135,8 +135,6 @@ are taken from the end with a seek, capped by `logTailKb` (512KB hard ceiling),
 and audited. Set `showLogFiles` to `false` to remove the panel.
 
 ### Searching every host
-
-![Search every host](docs/screenshots/12-cluster-search.png)
 
 A single search, answered by every host about its own file. Nothing is fetched
 remotely - no host can read another's disk. The text is recorded once, each

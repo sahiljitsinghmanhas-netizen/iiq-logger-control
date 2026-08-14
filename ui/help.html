@@ -310,7 +310,7 @@ not touch any logger that is currently on.</p>
 
 <h2 id="logfile">Reading the log<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/11-log.png" alt="The Log on this host panel showing the end of sailpoint.log" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/12-logs.png" alt="The Log on this host panel showing the end of sailpoint.log" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>The end of a log file on the host serving the page, with a text filter.</figcaption>
 </figure>
 <p>Having turned a logger on, the next question is where to read it. This shows the end of a log
@@ -324,10 +324,6 @@ small one, are capped by the <code>logTailKb</code> setting (and 512KB regardles
 is audited. Set <code>showLogFiles</code> to false to remove the panel entirely.</p>
 
 <h3>Searching every host</h3>
-<figure>
-  <img src="img/12-cluster-search.png" alt="Search every host, showing matching lines from one host with how long ago it answered" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
-  <figcaption>One search, answered by every host about its own file.</figcaption>
-</figure>
 <p>No host can read another one's disk, so this does not fetch anything remotely. The text is
 recorded once, and <strong>every host looks in its own log on its next sync</strong> and publishes
 what it found. The host serving the page answers immediately; the rest arrive within one interval,

@@ -169,15 +169,24 @@ try {
         param($ws, $OutDir, $File, $Selector, $Width)
         $clip = $null
         if ($Selector) {
-            $doc = Invoke-Cdp $ws "DOM.getDocument" @{ depth = -1 }
-            $node = Invoke-Cdp $ws "DOM.querySelector" @{ nodeId = $doc.root.nodeId; selector = $Selector }
-            if ($node.nodeId -gt 0) {
-                $box = Invoke-Cdp $ws "DOM.getBoxModel" @{ nodeId = $node.nodeId }
-                $q = $box.model.border
-                $clip = @{ x = $q[0]; y = $q[1]; width = ($q[2] - $q[0]); height = ($q[5] - $q[1]); scale = 1 }
-            } else {
-                Write-Host ("  skip {0}: no element matching {1}" -f $File, $Selector); return
+            # The page re-renders on its own 10s timer, which invalidates node
+            # ids between the query and the box model. Retry rather than fail.
+            $box = $null
+            for ($attempt = 1; $attempt -le 3 -and -not $box; $attempt++) {
+                try {
+                    $doc = Invoke-Cdp $ws "DOM.getDocument" @{ depth = -1 }
+                    $node = Invoke-Cdp $ws "DOM.querySelector" @{ nodeId = $doc.root.nodeId; selector = $Selector }
+                    if ($node.nodeId -le 0) {
+                        Write-Host ("  skip {0}: nothing matches {1}" -f $File, $Selector); return
+                    }
+                    $box = Invoke-Cdp $ws "DOM.getBoxModel" @{ nodeId = $node.nodeId }
+                } catch {
+                    if ($attempt -eq 3) { Write-Host ("  skip {0}: {1}" -f $File, $_.Exception.Message); return }
+                    Start-Sleep -Milliseconds 600
+                }
             }
+            $q = $box.model.border
+            $clip = @{ x = $q[0]; y = $q[1]; width = ($q[2] - $q[0]); height = ($q[5] - $q[1]); scale = 1 }
         }
         $p = @{ format = "png"; captureBeyondViewport = $true }
         if ($clip) { $p.clip = $clip }
@@ -205,28 +214,30 @@ try {
     Write-Host "the plugin page"
     Go $ws $page 7 $Width
     Save-Shot $ws $OutDir "01-logger-manager.png" $null $Width
-    Save-Shot $ws $OutDir "02-turn-on-form.png"    "#turn-on-loggers-root section.tol-card:nth-of-type(1)" $Width
-    Save-Shot $ws $OutDir "03-overrides.png"       "#turn-on-loggers-root section.tol-card:nth-of-type(2)" $Width
-    Save-Shot $ws $OutDir "04-live-loggers.png"    "#turn-on-loggers-root section.tol-card:nth-of-type(3)" $Width
-    Save-Shot $ws $OutDir "05-hosts.png"           "#turn-on-loggers-root section.tol-card:nth-of-type(4)" $Width
+    Save-Shot $ws $OutDir "02-turn-on-form.png"    "#tol-sec-form" $Width
+    Save-Shot $ws $OutDir "03-overrides.png"       "#tol-sec-overrides" $Width
+    Save-Shot $ws $OutDir "04-live-loggers.png"    "#tol-sec-live" $Width
+    Save-Shot $ws $OutDir "05-hosts.png"           "#tol-sec-hosts" $Width
     Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
-    Save-Shot $ws $OutDir "10-collections.png"     "#turn-on-loggers-root section.tol-card:nth-of-type(2)" $Width
+    Save-Shot $ws $OutDir "10-collections.png"     "#tol-sec-collections" $Width
 
     # Load the log before capturing it, otherwise the panel is just its prompt.
     Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @"
 (function () {
   // The first .tol-logbar is the file tail; the second is the cluster search.
   // Clicking the last button of all of them pressed Stop and wiped the query.
-  var bar = document.querySelector('#turn-on-loggers-root .tol-logbar');
+  var bar = document.querySelector('#tol-sec-logs .tol-logbar');
   if (!bar) return 0;
+  // "Read this host" specifically - not the last button, which is Stop.
   var b = bar.querySelectorAll('button');
-  if (b.length) b[b.length - 1].click();
-  return b.length;
+  for (var i = 0; i < b.length; i++) {
+    if ((b[i].textContent || '').indexOf('Read this host') > -1) { b[i].click(); return 1; }
+  }
+  return 0;
 })()
 "@; returnByValue = $true } | Out-Null
     Start-Sleep -Seconds 3
-    Save-Shot $ws $OutDir "11-log.png" "#turn-on-loggers-root section.tol-card:last-of-type" $Width
-    Save-Shot $ws $OutDir "12-cluster-search.png" "#turn-on-loggers-root .tol-cluster" $Width
+    Save-Shot $ws $OutDir "12-logs.png" "#tol-sec-logs" $Width
 
     # The settings form and the audit search are both client-side apps that do
     # not populate from a directly-navigated URL - the settings route renders
