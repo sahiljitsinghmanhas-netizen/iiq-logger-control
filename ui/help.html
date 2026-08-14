@@ -320,15 +320,17 @@ not touch any logger that is currently on.</p>
 <p>Two things you can ask for, both across every host:</p>
 <dl>
   <dt>Output last N lines</dt>
-  <dd>The raw end of the log, with no filter and <strong>no search term</strong> - for when a search
-  finds nothing and you just want to see what a host is actually writing. Choose 20, 40 or 100
-  lines, and either every host or <strong>one named host</strong>. Targeting one host asks only that
-  host, rather than making thirteen of them read their files so you can look at one.</dd>
+  <dd>The raw end of every host's log, with no filter and <strong>no search term needed</strong> -
+  for when a search finds nothing and you just want to see what a host is actually writing. 20, 40
+  or 100 lines. <strong>Leaving the search box blank and pressing Search all hosts does the same
+  thing.</strong></dd>
   <dt>Search all hosts</dt>
   <dd>Lines matching some text - a logger name, an identity, an error.</dd>
 </dl>
 <p><strong>Stop</strong> ends either one. The host serving the page answers immediately; the others
 answer on their next sync, and appear as dashed chips until they do.</p>
+<p>Whichever you press, <strong>every host answers and you pick which one to read from the
+chips</strong> - there is one way to choose a host, not two.</p>
 <p>Results appear as a <strong>chip per host</strong> with its match count. Click a chip to read
 that host, or press its <strong>&times;</strong> to drop it from the results - on a thirteen-host
 cluster, stacking every host buries the one you care about.</p>

@@ -132,17 +132,16 @@ table and the audit trail both say where it came from.
 
 Two things, both across every host:
 
-- **Output last N lines** - the raw end of the log, no filter and no search
-  term, for when a search finds nothing and you just want to see what a host is
-  writing. 20, 40 or 100 lines, on every host or on one named host - targeting
-  one asks only that host.
+- **Output last N lines** - the raw end of every host's log, no filter and no
+  search term needed, for when a search finds nothing and you just want to see
+  what a host is writing. Leaving the search box blank does the same thing.
 - **Search all hosts** - lines matching some text.
 
 **Stop** ends either. The host serving the page answers immediately; the rest
 answer on their next sync and show as dashed chips until they do.
 
-Results are a **chip per host** with its match count. Click a chip to read that
-host, or press its **×** to drop it - on a thirteen-host cluster, stacking every
+Every host answers and you pick which to read from the **chips**, one per host
+with its line count. Click a chip to read that host, or press its **×** to drop it - on a thirteen-host cluster, stacking every
 host buries the one that matters.
 
 ![Log on this host](docs/screenshots/12-logs.png)

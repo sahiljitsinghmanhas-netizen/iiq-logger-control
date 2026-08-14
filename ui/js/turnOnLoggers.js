@@ -1083,7 +1083,7 @@
         return box;
     }
 
-    var logState = { lines: 40, host: '', text: '', selected: null, hidden: {} };
+    var logState = { lines: 40, text: '', selected: null, hidden: {} };
 
     /**
      * Log lines from every host.
@@ -1122,29 +1122,16 @@
         });
         lineSel.onchange = function () { logState.lines = parseInt(lineSel.value, 10); };
 
-        // Which host, so "the last 40 lines on iiq-app-03" is one request
-        // rather than asking thirteen hosts and reading one answer.
-        var hostSel = document.createElement('select');
-        hostSel.className = 'tol-input tol-log-host';
-        hostSel.appendChild(opt('', 'on every host', logState.host === ''));
-        (state.hosts || []).forEach(function (h) {
-            hostSel.appendChild(opt(h.name, 'on ' + h.name, logState.host === h.name));
-        });
-        hostSel.onchange = function () { logState.host = hostSel.value; };
-
         var tailBtn = el('button', 'tol-btn tol-btn-small', 'Output last');
         tailBtn.title = 'The end of the log, with no filter - no search term needed';
         tailBtn.onclick = function () {
-            var where = logState.host || '';
-            mutate(api('POST', '/logquery',
-                { mode: 'tail', lines: logState.lines, host: where, text: '' }),
-                'Reading the last ' + logState.lines + ' lines on '
-                    + (where || 'every host') + '.');
+            mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
+                'Reading the last ' + logState.lines + ' lines on every host.');
         };
         bar1.appendChild(tailBtn);
         bar1.appendChild(lineSel);
-        bar1.appendChild(hostSel);
-        bar1.appendChild(el('span', 'tol-small', 'no filter, just the raw log'));
+        bar1.appendChild(el('span', 'tol-small',
+            'on every host - no filter, just the raw log. Pick a host from the chips below.'));
         box.appendChild(bar1);
 
         // --- search --------------------------------------------------------
@@ -1153,15 +1140,26 @@
         q.type = 'text';
         q.id = 'tol-log-q';
         q.className = 'tol-input tol-log-select';
-        q.setAttribute('placeholder', 'text to look for - a logger name, an identity, an error');
+        q.setAttribute('placeholder',
+            'text to look for - a logger name, an identity, an error. Leave blank for the recent log.');
+        q.title = 'Text to look for in every host’s log - a logger name, an identity, an '
+            + 'error message. Leave it blank and this shows the most recent lines instead, the '
+            + 'same as "Output last".';
         q.value = (state.logMode === 'search' ? state.logQuery : logState.text) || '';
         bar2.appendChild(q);
 
         var searchBtn = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
         searchBtn.onclick = function () {
             var text = document.getElementById('tol-log-q').value || '';
-            if (!text.trim()) { say('Type something to search for.', 'error'); return; }
             logState.text = text;
+            if (!text.trim()) {
+                // Blank is not an error, it is a reasonable thing to mean: show
+                // me the log. Refusing it would just be a lecture.
+                mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
+                    'No search term, so showing the last ' + logState.lines
+                        + ' lines on every host.');
+                return;
+            }
             mutate(api('POST', '/logquery', { mode: 'search', text: text }),
                 'Searching every host for "' + text.trim() + '".');
         };
