@@ -28,6 +28,10 @@
 
     function el(tag, cls, text) {
         var n = document.createElement(tag);
+        // A <button> with no type is a submit button. Nothing on this page sits
+        // inside a form today, so it is harmless today - but if IIQ ever wraps
+        // the plugin include in one, every button here would post the page.
+        if (tag === 'button') n.type = 'button';
         if (cls) n.className = cls;
         if (text !== undefined && text !== null) n.appendChild(document.createTextNode(String(text)));
         return n;
@@ -181,6 +185,15 @@
 
     function render() {
         if (!root || !state) return;
+
+        // Rebuilding the whole tree empties the page for an instant. If the
+        // reader was scrolled further down than the momentarily-shorter
+        // document allows, the browser clamps the scroll position - and pressing
+        // a button that changes one row throws you back to the top. Note the
+        // position before tearing it down and put it back afterwards.
+        var scroller = document.scrollingElement || document.documentElement;
+        var wasAt = (scroller && scroller.scrollTop) || window.scrollY || 0;
+
         clear(root);
 
         root.appendChild(header());
@@ -217,6 +230,13 @@
             root.appendChild(pair[0]);
         });
         root.appendChild(footer());
+
+        if (wasAt > 0) {
+            // Clamped by the browser if the new page really is shorter, which is
+            // the right answer in that case.
+            if (scroller) scroller.scrollTop = wasAt;
+            if (window.scrollY !== wasAt && window.scrollTo) window.scrollTo(0, wasAt);
+        }
     }
 
     function header() {
@@ -676,8 +696,34 @@
         return chip;
     }
 
+    /**
+     * All / None, for when clicking twelve chips individually is the wrong
+     * way to say "just this one" or "put them all back".
+     *
+     * Only drawn when there is more than one host - on a single-host install
+     * they would be two buttons that cannot change anything.
+     */
+    function bulkPick(hosts, setAll, isPicked) {
+        var wrap = el('span', 'tol-hostbulk');
+        var allOn = hosts.every(isPicked);
+        var allOff = !hosts.some(isPicked);
+
+        var all = el('button', 'tol-bulk', 'All');
+        all.title = 'Pick every host';
+        all.disabled = allOn;
+        all.onclick = function () { setAll(true); render(); };
+        wrap.appendChild(all);
+
+        var none = el('button', 'tol-bulk', 'None');
+        none.title = 'Pick no host';
+        none.disabled = allOff;
+        none.onclick = function () { setAll(false); render(); };
+        wrap.appendChild(none);
+        return wrap;
+    }
+
     /** A row of chips, for the sections that pick hosts rather than answer queries. */
-    function hostPicker(hosts, isPicked, toggle, mode) {
+    function hostPicker(hosts, isPicked, toggle, mode, setAll) {
         var strip = el('div', 'tol-hoststrip');
         hosts.forEach(function (h) {
             strip.appendChild(hostChip(h, {
@@ -688,6 +734,7 @@
                 })(h.name)
             }));
         });
+        if (setAll && hosts.length > 1) strip.appendChild(bulkPick(hosts, setAll, isPicked));
         return strip;
     }
 
@@ -703,7 +750,7 @@
     }
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
-    var livePick = null;
+    var livePick = null;   // reassigned wholesale by All/None
     // Hosts clicked out of Host Status. Everything starts in it.
     var hostHide = {};
 
@@ -858,7 +905,11 @@
             function (n) {
                 if (livePick[n]) delete livePick[n]; else livePick[n] = true;
             },
-            'strike'));
+            'strike',
+            function (on) {
+                livePick = {};
+                if (on) all.forEach(function (h) { livePick[h.name] = true; });
+            }));
 
         var picked = all.filter(function (h) { return livePick[h.name]; });
         if (!picked.length) {
@@ -1142,7 +1193,11 @@
             function (n) {
                 if (hostHide[n]) delete hostHide[n]; else hostHide[n] = true;
             },
-            'strike'));
+            'strike',
+            function (on) {
+                hostHide = {};
+                if (!on) all.forEach(function (h) { hostHide[h.name] = true; });
+            }));
 
         var hosts = all.filter(function (h) { return !hostHide[h.name]; });
         if (!hosts.length) {
@@ -1496,6 +1551,14 @@
                 })(h.name)
             }));
         });
+        if (hosts.length > 1) {
+            strip.appendChild(bulkPick(hosts,
+                function (on) {
+                    logState.off = {};
+                    if (!on) hosts.forEach(function (h) { logState.off[h.name] = true; });
+                },
+                function (h) { return !logState.off[h.name]; }));
+        }
         box.appendChild(strip);
 
         if (!state.logActive) {
@@ -1566,6 +1629,11 @@
     var historyState = { open: false, rows: null, loading: false, error: null, kind: 'change' };
 
     function loadHistory() {
+        // Deliberately does not clear the rows it already has. Blanking them
+        // shrinks this panel from fifty rows to one line, the document loses
+        // several thousand pixels of height, and the browser clamps the scroll
+        // position - which is what "pressing Refresh jumps me to the top" was.
+        // The old rows stay on screen, greyed, until the new ones arrive.
         historyState.loading = true;
         historyState.error = null;
         render();
@@ -1596,18 +1664,23 @@
             b.title = o[0] === 'change'
                 ? 'Overrides added, removed and expired; collections; hosts forgotten'
                 : 'Changes plus log reads, searches and forced syncs';
+            b.disabled = !!historyState.loading;
             b.onclick = (function (k) {
                 return function () {
                     if (historyState.kind === k) return;
                     historyState.kind = k;
-                    historyState.rows = null;
                     loadHistory();
                 };
             })(o[0]);
             bar.appendChild(b);
         });
-        var refresh = el('button', 'tol-btn tol-btn-small', 'Refresh');
-        refresh.onclick = function () { historyState.rows = null; loadHistory(); };
+        var refresh = el('button', 'tol-btn tol-btn-small');
+        if (historyState.loading) refresh.appendChild(el('span', 'tol-spin'));
+        refresh.appendChild(document.createTextNode(
+            historyState.loading ? 'Refreshing' : 'Refresh history'));
+        refresh.disabled = !!historyState.loading;
+        refresh.title = 'Re-read the audit trail. This does not reload the page.';
+        refresh.onclick = function () { loadHistory(); };
         bar.appendChild(refresh);
         return bar;
     }
@@ -1654,7 +1727,7 @@
             box.appendChild(el('div', 'tol-banner tol-error', historyState.error));
             return box;
         }
-        if (historyState.loading || historyState.rows === null) {
+        if (historyState.rows === null) {
             box.appendChild(el('div', 'tol-empty', 'Reading the audit trail...'));
             return box;
         }
@@ -1666,7 +1739,7 @@
             return box;
         }
 
-        var wrap = el('div', 'tol-tablewrap');
+        var wrap = el('div', 'tol-tablewrap' + (historyState.loading ? ' tol-stale' : ''));
         var t = el('table', 'tol-table');
         t.appendChild(headRow(['Rev', 'When', 'Who', 'What', 'Logger', 'Level', 'Hosts',
             'Expires', 'Note']));

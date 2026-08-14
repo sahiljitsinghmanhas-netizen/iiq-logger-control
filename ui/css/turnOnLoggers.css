@@ -844,6 +844,51 @@
 .tol-lhost-off:hover { opacity: .7; }
 
 
+/* All / None, at the end of a chip strip. Deliberately quieter than the chips:
+   they are a shortcut, not the primary way to choose a host. */
+.tol-hostbulk {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 6px;
+    padding-left: 8px;
+    border-left: 1px solid #e4e7eb;
+}
+
+.tol-bulk {
+    border: 1px solid #cbd2d9;
+    background: #fff;
+    color: #52606d;
+    border-radius: 3px;
+    padding: 3px 9px;
+    font: 600 11px "Segoe UI", Arial, sans-serif;
+    cursor: pointer;
+}
+
+.tol-bulk:hover:not(:disabled) { background: #f5f7fa; }
+.tol-bulk:disabled { opacity: .4; cursor: default; }
+
+/* Content being replaced, still readable while the new version is fetched.
+   Blanking it instead would collapse the panel and throw the reader's scroll
+   position away. */
+.tol-stale { opacity: .5; transition: opacity .15s; }
+
+/* A spinner for a button, in the button's own colour rather than amber. */
+.tol-spin {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    vertical-align: -1px;
+    border: 2px solid rgba(82, 96, 109, .25);
+    border-top-color: #52606d;
+    border-radius: 50%;
+    animation: tol-spin .7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tol-spin { animation: none; }
+}
+
 /* --- the waiting spinner --- */
 .tol-lhost-spin {
     display: inline-block;

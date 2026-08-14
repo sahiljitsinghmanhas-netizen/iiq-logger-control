@@ -107,7 +107,9 @@ in every section. What differs is only where each section starts:
 | Host Status | every host |
 | Log Viewer | every host |
 
-Click any chip to toggle it; pick as many as you like. *All Logger Status*
+Click any chip to toggle it; pick as many as you like. **All** / **None** at the
+end of the strip save clicking through twelve of them, and appear only when there
+is more than one host. *All Logger Status*
 starts on one host because a cluster mostly reports the same picture everywhere, so
 reading it starts with one host and widens when you are comparing.
 
