@@ -707,6 +707,31 @@
     var hostHide = {};
 
     /**
+     * The rows this section would draw for one source filter, grouped exactly
+     * the way it draws them - hosts reporting an identical picture share a
+     * table. Used for the filter counts as well as the rendering, so the two
+     * cannot drift apart.
+     */
+    function liveGroups(hosts, filterKey) {
+        var groups = [];
+        hosts.forEach(function (h) {
+            var rows = (h.liveLoggers || []).filter(function (r) {
+                return filterKey === 'all' || r.source === filterKey;
+            });
+            if (!rows.length) return;
+            rows.sort(function (a, b) { return a.logger < b.logger ? -1 : 1; });
+            var sig = rows.map(function (r) {
+                return r.logger + '=' + r.level + '/' + r.source;
+            }).join('|');
+            var found = null;
+            groups.forEach(function (g) { if (g.sig === sig) found = g; });
+            if (found) found.hosts.push(h.name);
+            else groups.push({ sig: sig, hosts: [h.name], rows: rows });
+        });
+        return groups;
+    }
+
+    /**
      * The UI-managed override behind a live logger row, if there is exactly
      * one. Ambiguous cases (the same logger pinned to several host subsets)
      * are left to the Overrides table rather than guessed at here.
@@ -841,37 +866,36 @@
             return box;
         }
 
-        // Distinct logger names, not one per host. The same logger on ten hosts
-        // is one logger; counting rows made "Set at runtime (3)" mean two
-        // loggers, which reads as a discrepancy against the tables below.
-        var seen = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
-        var hostsWith = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
-        picked.forEach(function (h) {
-            (h.liveLoggers || []).forEach(function (r) {
-                seen.all[r.logger] = 1;
-                hostsWith.all[h.name] = 1;
-                if (seen[r.source]) {
-                    seen[r.source][r.logger] = 1;
-                    hostsWith[r.source][h.name] = 1;
-                }
-            });
-        });
+        // Rows you would actually see, not distinct logger names. Counting
+        // distinct names meant two picked hosts with eleven and five loggers
+        // reported twelve, because four of the five were the same names - a
+        // number that matches nothing on screen. This counts what the tables
+        // below will contain, which is why it is computed by the same function
+        // that builds them: hosts reporting an identical picture share one
+        // table and are therefore counted once, and hosts that differ are
+        // counted separately because they are drawn separately.
         var counts = {};
         var hostCounts = {};
-        for (var k in seen) {
-            if (seen.hasOwnProperty(k)) {
-                counts[k] = Object.keys(seen[k]).length;
-                hostCounts[k] = Object.keys(hostsWith[k]).length;
-            }
-        }
+        ['all', 'file', 'plugin', 'leftover', 'runtime', 'unknown'].forEach(function (k) {
+            var gs = liveGroups(picked, k);
+            var rows = 0, hs = {};
+            gs.forEach(function (g) {
+                rows += g.rows.length;
+                g.hosts.forEach(function (n) { hs[n] = 1; });
+            });
+            counts[k] = rows;
+            hostCounts[k] = Object.keys(hs).length;
+        });
         var bar = el('div', 'tol-filters');
         [['all', 'All'], ['file', 'From the file (log4j2.properties)'], ['plugin', 'This plugin'],
             ['leftover', 'Left over'], ['runtime', 'Set at runtime']].forEach(function (f) {
             if (f[0] !== 'all' && !counts[f[0]]) return;
             var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
                 f[1] + ' (' + counts[f[0]] + ')');
-            b.title = counts[f[0]] + ' distinct logger' + (counts[f[0]] === 1 ? '' : 's')
-                + ' across ' + hostCounts[f[0]] + ' host' + (hostCounts[f[0]] === 1 ? '' : 's');
+            b.title = counts[f[0]] + ' row' + (counts[f[0]] === 1 ? '' : 's')
+                + ' across ' + hostCounts[f[0]] + ' host' + (hostCounts[f[0]] === 1 ? '' : 's')
+                + ' - what you will see below. Hosts reporting an identical picture share '
+                + 'one table, so they count once.';
             b.onclick = (function (key) {
                 return function () { liveFilter = key; render(); };
             })(f[0]);
@@ -882,18 +906,7 @@
         // Among the picked hosts, ones reporting an identical picture share a
         // table, so the one host that differs stands out instead of being
         // buried under repeats.
-        var groups = [];
-        picked.forEach(function (h) {
-            var rows = (h.liveLoggers || []).filter(function (r) {
-                return liveFilter === 'all' || r.source === liveFilter;
-            });
-            if (!rows.length) return;
-            rows.sort(function (a, b) { return a.logger < b.logger ? -1 : 1; });
-            var sig = rows.map(function (r) { return r.logger + '=' + r.level + '/' + r.source; }).join('|');
-            var found = null;
-            groups.forEach(function (g) { if (g.sig === sig) found = g; });
-            if (found) { found.hosts.push(h.name); } else { groups.push({ sig: sig, hosts: [h.name], rows: rows }); }
-        });
+        var groups = liveGroups(picked, liveFilter);
 
         if (!groups.length) {
             box.appendChild(el('div', 'tol-empty',

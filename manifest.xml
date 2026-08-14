@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.30.0"
+        version="2.30.1"
         minSystemVersion="8.5">
 
   <Attributes>
