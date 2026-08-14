@@ -121,6 +121,16 @@ at any width, and scrolls inside its own box rather than pushing the page sidewa
 
 ![Two hosts picked](docs/screenshots/15-live-two-hosts.png)
 
+### What the filter counts mean
+
+The number on each source filter is **distinct logger names** across the hosts
+you have picked. A logger set by a rule on nine hosts counts once, not nine
+times, even though each host lists it separately below.
+
+That means the count is usually smaller than the number of rows on screen. The
+difference is itself the useful bit — it says a logger is running in more than
+one place — so each button's tooltip states both.
+
 ### Where a logger came from
 
 | Source | Meaning | Cleared automatically? |

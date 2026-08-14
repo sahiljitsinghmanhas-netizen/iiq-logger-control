@@ -867,7 +867,8 @@
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
             + 'Pick the hosts you want below - this starts on the host serving the page, because '
             + 'a cluster mostly reports the same picture everywhere and reading it starts with '
-            + 'one host. Both the counts and the tables follow what you pick. Last sync says how '
+            + 'one host. The counts are distinct logger names, so a logger set on nine hosts '
+            + 'counts once even though each host lists it separately. Last sync says how '
             + 'long ago the host reported each row - watch it change to see that this page is '
             + 'polling, not a snapshot.'));
         var legend = el('div', 'tol-hint');
@@ -950,24 +951,34 @@
             return box;
         }
 
-        // Rows you would actually see, not distinct logger names. Counting
-        // distinct names meant two picked hosts with eleven and five loggers
-        // reported twelve, because four of the five were the same names - a
-        // number that matches nothing on screen. This counts what the tables
-        // below will contain, which is why it is computed by the same function
-        // that builds them: hosts reporting an identical picture share one
-        // table and are therefore counted once, and hosts that differ are
-        // counted separately because they are drawn separately.
+        // Distinct logger names across the picked hosts. One logger set on nine
+        // hosts is one logger.
+        //
+        // This counted rendered rows for a while, so the number on the button
+        // always matched the rows underneath it. That property is nice, but it
+        // made the button answer the wrong question: these are category
+        // filters, and "3 set at runtime" when two of the three are the same
+        // logger on different hosts is not true. It also looked arbitrary,
+        // because a cluster with identical log4j2.properties collapses into a
+        // single group where rows and distinct names are the same number - so
+        // only the categories that genuinely vary per host appeared wrong.
+        //
+        // The row count is kept rather than discarded: where the two differ,
+        // that difference is itself the finding - this logger is on more than
+        // one host - so the tooltip says so instead of hiding it.
         var counts = {};
         var hostCounts = {};
+        var rowCounts = {};
         ['all', 'file', 'plugin', 'leftover', 'runtime', 'unknown'].forEach(function (k) {
             var gs = liveGroups(picked, k);
-            var rows = 0, hs = {};
+            var rows = 0, hs = {}, names = {};
             gs.forEach(function (g) {
                 rows += g.rows.length;
                 g.hosts.forEach(function (n) { hs[n] = 1; });
+                g.rows.forEach(function (r) { names[r.logger] = 1; });
             });
-            counts[k] = rows;
+            counts[k] = Object.keys(names).length;
+            rowCounts[k] = rows;
             hostCounts[k] = Object.keys(hs).length;
         });
         var bar = el('div', 'tol-filters');
@@ -976,10 +987,12 @@
             if (f[0] !== 'all' && !counts[f[0]]) return;
             var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
                 f[1] + ' (' + counts[f[0]] + ')');
-            b.title = counts[f[0]] + ' row' + (counts[f[0]] === 1 ? '' : 's')
-                + ' across ' + hostCounts[f[0]] + ' host' + (hostCounts[f[0]] === 1 ? '' : 's')
-                + ' - what you will see below. Hosts reporting an identical picture share '
-                + 'one table, so they count once.';
+            var dn = counts[f[0]], rc = rowCounts[f[0]], hc = hostCounts[f[0]];
+            b.title = dn + ' distinct logger' + (dn === 1 ? '' : 's')
+                + ' across ' + hc + ' host' + (hc === 1 ? '' : 's')
+                + (rc === dn ? '.'
+                    : '. ' + rc + ' rows below - some of these are set on more than one host, '
+                      + 'and each host is listed separately.');
             b.onclick = (function (key) {
                 return function () { liveFilter = key; render(); };
             })(f[0]);
