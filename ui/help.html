@@ -313,7 +313,8 @@ so it reads without relying on colour alone.</figcaption>
   <dd>Deletes the logger from the running configuration once, then lets go. Nothing is enforced
   afterwards, so whatever created it can create it again. It is a cluster-wide request: the host you
   are on does it immediately and the others follow on their next sync, which the page shows while it
-  is in flight.</dd>
+  is in flight. Available on a <code>log4j2.properties</code> logger too - see
+  <a href="#fileclear">Clearing a file-declared logger</a>.</dd>
 
   <dt>Remove override</dt>
   <dd>Deletes one of this plugin's overrides. The logger returns to its
@@ -601,6 +602,17 @@ actions that matter.</p>
   <dt>Allow root logger</dt><dd>Whether the root logger may be targeted at all.</dd>
   <dt>Permanent loggers</dt><dd>Loggers enabled from the settings page with no expiry. They appear
   in <em>Plugin Logger Status</em> marked <em>from settings</em> and can only be changed there.</dd>
+
+  <dt>Untouchable loggers</dt><dd>Comma-separated, <code>root,sailpoint</code> by default. Their
+  Suppress and Clear controls are shown but disabled, so it is clear the action exists and is being
+  refused rather than missing. Enforced by the API as well as the page, so it holds for anything
+  calling the REST endpoints directly.</dd>
+
+  <dt>Show log files</dt><dd>Whether <em>Log Viewer</em> appears at all. Off removes the panel and
+  with it any ability to read logs from this page.</dd>
+
+  <dt>Log tail KB</dt><dd>How much of the end of a file a single read looks at, 64 KB by default.
+  Capped at 512 KB whatever this is set to, since the result travels through the database.</dd>
 </dl>
 
 <h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>

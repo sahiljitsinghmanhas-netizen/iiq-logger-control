@@ -398,19 +398,26 @@ to defaults. Logger overrides live in the `Custom` object and survive.
 - **Overrides live in the IIQ database**, so a database refresh carries them
   between environments.
 
-## Screenshots
+## Building from source
 
-`tools/screenshot.ps1` drives headless Chrome over the DevTools protocol to
-regenerate `docs/screenshots/`. It needs Chrome and nothing else - no Selenium,
-Playwright or Node.
+`build.sh` or `build.bat` is all you need. Set `IIQ_LIB` to your IdentityIQ
+`WEB-INF/lib` folder if it is not at the default path.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\screenshot.ps1 `
-    -BaseUrl http://localhost:8080/identityiq -User spadmin -Password admin
-```
+Before packaging, the build runs `tools/render-check.js` under `jjs`, which
+executes `ui/js/turnOnLoggers.js` against a stub DOM and a set of state
+fixtures - once as the plugin page, once as the Configure page. If the page
+would not render, the build aborts rather than producing a zip that installs
+and then shows nothing. It exists because a single unescaped apostrophe once
+shipped in three consecutive releases.
+
+The screenshots in `docs/screenshots/` are captured by a separate maintainer
+tool that takes admin credentials, so it lives in a private repository. The
+build copies that folder into `ui/img/` so the help page shipped inside the
+plugin always matches the README.
 
 The plugin settings form and IIQ's audit search are client-side apps that do
-not populate from a directly-navigated URL, so those two are not captured.
+not populate from a directly-navigated URL, so those two screens are described
+in words rather than captured.
 
 ## Author
 
