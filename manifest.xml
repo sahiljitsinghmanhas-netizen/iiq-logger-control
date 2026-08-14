@@ -3,8 +3,27 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.34.2"
-        minSystemVersion="8.5">
+        version="2.35.0"
+        minSystemVersion="8.3">
+
+  <!--
+    8.3 is the floor because that is where IdentityIQ moved to log4j2.
+    Everything this plugin does is built on log4j2's runtime configuration
+    API - org.apache.logging.log4j.core.config.Configuration and LoggerConfig -
+    and the file parser reads log4j2's properties syntax (logger.X.name /
+    logger.X.level / rootLogger.level). On 8.2 and earlier IdentityIQ shipped
+    log4j 1.x, where none of those classes exist and the config file uses the
+    entirely different log4j.logger.X=LEVEL form, so there is nothing here that
+    could work. That is a missing mechanism, not conservatism.
+
+    The compiled classes also target Java 11, which suits 8.3 and later - 8.2
+    could still run on Java 8, where they would not load at all.
+
+    No maxSystemVersion on purpose: nothing here depends on a version ceiling,
+    and Log4jAgent.available() probes for the capability at runtime rather than
+    inferring it from a version number. Where log4j2-core cannot be reached the
+    page says so plainly instead of failing.
+  -->
 
   <Attributes>
     <Map>

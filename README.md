@@ -4,7 +4,15 @@ An IdentityIQ plugin for turning log4j2 loggers on and off across every host in
 a deployment, from the IIQ UI. No shell access, no editing `log4j2.properties`,
 no restart.
 
-Built for IdentityIQ 8.5 (JDK 11, log4j2). Tested on Tomcat 9 with SQL Server.
+Requires IdentityIQ **8.3 or later** (JDK 11, log4j2). Developed and tested on
+8.5 with Tomcat 9 and SQL Server; 8.3 and 8.4 meet the same requirements but
+have not been tested here.
+
+8.3 is the floor because that is where IdentityIQ moved to log4j2. This plugin
+drives log4j2's runtime configuration API and reads log4j2's properties syntax,
+neither of which exists on 8.2 and earlier - those ship log4j 1.x. If log4j2-core
+cannot be reached the page says so rather than failing, so a wrong guess about a
+given release degrades to a clear message.
 
 ![The Logger Manager page](docs/screenshots/01-logger-manager.png)
 
