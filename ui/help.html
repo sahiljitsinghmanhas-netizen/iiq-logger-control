@@ -313,8 +313,9 @@ not touch any logger that is currently on.</p>
 
 <h2 id="logfile">Reading the log<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/12-logs.png" alt="The Log on this host panel showing the end of sailpoint.log" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
-  <figcaption>The end of a log file on the host serving the page, with a text filter.</figcaption>
+  <img src="img/12-logs.png" alt="The Logs panel: a search across five hosts, with a chip per host coloured by what it found" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>A cluster-wide search. Each host answers about its own file; hosts that matched
+  nothing say so in one line rather than an empty panel.</figcaption>
 </figure>
 <p>Having turned a logger on, the next question is where to read it.</p>
 <p>Two things you can ask for, both across every host:</p>
@@ -327,13 +328,41 @@ not touch any logger that is currently on.</p>
   <dt>Search all hosts</dt>
   <dd>Lines matching some text - a logger name, an identity, an error.</dd>
 </dl>
-<p><strong>Stop</strong> ends either one. The host serving the page answers immediately; the others
-answer on their next sync, and appear as dashed chips until they do.</p>
-<p>Whichever you press, <strong>every host answers and you pick which one to read from the
-chips</strong> - there is one way to choose a host, not two.</p>
-<p>Results appear as a <strong>chip per host</strong> with its match count. Click a chip to read
-that host, or press its <strong>&times;</strong> to drop it from the results - on a thirteen-host
-cluster, stacking every host buries the one you care about.</p>
+<p><strong>Stop</strong> ends either one.</p>
+<p>There is also a <strong>Find in logs</strong> button on every row of <em>Loggers live in the
+JVM</em>. Turning a logger on and then reading what it wrote are the same errand, so the row that
+shows the logger running will start the search for you. It searches for the last four components of
+the logger name, because IIQ's stock pattern prints loggers as <code>%c{4}</code> and the full name
+would match nothing.</p>
+
+<h3 id="logchips">The host chips</h3>
+<figure>
+  <img src="img/13-log-hosts.png" alt="A strip of host chips: two green with match counts, one amber with a spinner, one red, one grey with a zero" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Every host gets a chip. Colour is what it found.</figcaption>
+</figure>
+<p>Every host has a chip from the moment the panel is open, whether or not anything has been asked
+yet. The chips carry <strong>two independent things</strong>.</p>
+<p><strong>Colour is status</strong> - what that host did with the request:</p>
+<dl>
+  <dt>Grey, no count</dt><dd>Nothing has been asked yet.</dd>
+  <dt>Amber, with a spinner</dt><dd>Asked, still reading. It answers on its next sync.</dd>
+  <dt>Green, with a count</dt><dd>Answered, and it found that many lines.</dd>
+  <dt>Grey, with a zero</dt><dd>Answered, read its log fine, matched nothing. This is
+  <strong>not</strong> an error - on a cluster search most hosts legitimately match nothing, and
+  which hosts those are is usually the finding.</dd>
+  <dt>Red</dt><dd>Could not read its log, or is not reporting at all. Hover for the reason.</dd>
+</dl>
+<figure>
+  <img src="img/14-log-hosts-off.png" alt="The same strip with the second chip struck through and faded while still green" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Struck through is selection, and it is independent of colour: this host found two
+  lines and has been clicked out of the output.</figcaption>
+</figure>
+<p><strong>Struck through is selection</strong> - whether that host is in the output below. Click a
+chip to drop it, click it again to bring it back. On a thirteen-host cluster, stacking every host's
+output buries the one you care about, so narrow it down to the hosts you are working on.</p>
+<p>The narrowing <strong>survives the next query</strong>. Pick your three hosts once, then run a
+tail, then a search, then another search - the chips keep their colours up to date and keep your
+selection.</p>
 <p>Only files that host's own log4j2 configuration writes to are offered, and the request picks one
 <strong>by index into that list rather than by path</strong> - there is no path parameter, so it
 cannot be pointed anywhere else. That is also why a mixed Windows, Linux and macOS cluster needs

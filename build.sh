@@ -50,10 +50,17 @@ JJS="${JAVA_HOME:-}/bin/jjs"
 [[ -x "$JJS" ]] || JJS="$(command -v jjs || true)"
 if [[ -x "$JJS" ]]; then
     echo "Running render check..."
-    "$JJS" "$HERE/tools/render-check.js" -- "$HERE/ui/js/turnOnLoggers.js" "$HERE/tools/state-fixture.json"         || { echo "ERROR: render check failed - the page would not load. Build aborted." >&2; exit 1; }
+    "$JJS" "$HERE/tools/render-check.js" -- "$HERE/ui/js/turnOnLoggers.js" "$HERE/tools/state-fixture.json" "$HERE/tools/state-fixture-logs.json"         || { echo "ERROR: render check failed - the page would not load. Build aborted." >&2; exit 1; }
 else
     echo "WARNING: jjs not found, skipping render check." >&2
 fi
+
+# The help page ships inside the zip and reads its images from ui/img, but the
+# screenshot tool writes to docs/screenshots. Keeping those in step by hand
+# meant they were not. Copy on every build instead.
+echo "Syncing help-page images..."
+mkdir -p "$HERE/ui/img"
+cp -f "$HERE"/docs/screenshots/*.png "$HERE/ui/img/"
 
 echo "Packaging $JAR_NAME..."
 (cd "$CLASSES_DIR" && "$JAR_EXE" cf "$LIB_DIR/$JAR_NAME" com)

@@ -745,47 +745,126 @@
     margin: 14px 0 6px 0;
 }
 
-.tol-hosttab {
+/* ---------- log host chips ----------
+ *
+ * Two things are being shown at once and they are independent, so they use two
+ * different channels. Colour is what the host did: grey nothing asked, amber
+ * still reading, green found lines, plain grey read fine and found nothing,
+ * red could not read. Struck through and faded is whether you are looking at
+ * it, which you control by clicking. A green struck-through chip means "this
+ * host has results and you have chosen not to see them", which is a real state
+ * and needs to be readable as one.
+ *
+ * "Found nothing" is deliberately not red. On a cluster search most hosts
+ * legitimately match nothing, and that is usually the finding - a strip of red
+ * would read as a broken cluster every single time.
+ */
+
+.tol-lhost {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 4px 2px 9px;
+    padding: 3px 5px 3px 10px;
+    border-radius: 3px;
+    border: 1px solid #cbd2d9;
+    background: #f5f7fa;
+    color: #52606d;
+    font: 600 11px Consolas, "Courier New", monospace;
+    letter-spacing: .01em;
     cursor: pointer;
-    opacity: .75;
 }
 
-.tol-hosttab:hover { opacity: 1; }
+.tol-lhost:hover { filter: brightness(.97); }
+.tol-lhost:focus { outline: 2px solid #2186eb; outline-offset: 1px; }
 
-.tol-hosttab-on {
-    opacity: 1;
-    box-shadow: 0 0 0 2px rgba(33, 134, 235, .35);
-}
+/* Not a control - the same chip reused as a label above a block of output. */
+.tol-lhost-static { cursor: default; padding-right: 10px; }
+.tol-lhost-static:hover { filter: none; }
 
-.tol-hosttab-name { cursor: pointer; }
-
-.tol-hosttab-x {
+.tol-lhost-count {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 15px;
+    min-width: 17px;
     height: 15px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, .22);
-    font-size: 12px;
-    line-height: 1;
-    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, .12);
+    font-size: 10px;
 }
 
-.tol-hosttab-x:hover { background: rgba(255, 255, 255, .45); }
+/* --- status: colour only --- */
 
-.tol-logmeta { margin: 0 0 6px 2px; }
+/* nothing asked yet */
+.tol-lhost-idle { }
+
+/* still reading its log */
+.tol-lhost-wait {
+    border-color: #f0b429;
+    background: #fffaeb;
+    color: #8d6708;
+}
+
+/* answered, has lines */
+.tol-lhost-ok {
+    border-color: #3ebd93;
+    background: #effcf6;
+    color: #147d64;
+}
+.tol-lhost-ok .tol-lhost-count { background: #3ebd93; color: #fff; }
+
+/* answered, read the file fine, matched nothing */
+.tol-lhost-none {
+    border-color: #cbd2d9;
+    background: #e4e7eb;
+    color: #616e7c;
+}
+
+/* could not read its log, or is not reporting at all */
+.tol-lhost-error,
+.tol-lhost-down {
+    border-color: #ef4e4e;
+    background: #ffeeee;
+    color: #ab091e;
+}
+.tol-lhost-error .tol-lhost-count { background: #ef4e4e; color: #fff; }
+.tol-lhost-down { border-style: dashed; opacity: .8; }
+
+/* The host serving the page, so it is obvious which one answered instantly. */
+.tol-lhost-self .tol-lhost-name { text-decoration: underline; text-underline-offset: 2px; }
+
+/* --- selection: independent of colour --- */
+.tol-lhost-off { opacity: .45; }
+.tol-lhost-off .tol-lhost-name { text-decoration: line-through; }
+.tol-lhost-off.tol-lhost-self .tol-lhost-name {
+    text-decoration: line-through underline;
+}
+.tol-lhost-off:hover { opacity: .7; }
+
+/* --- the waiting spinner --- */
+.tol-lhost-spin {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(141, 103, 8, .3);
+    border-top-color: #8d6708;
+    border-radius: 50%;
+    animation: tol-spin .7s linear infinite;
+}
+
+@keyframes tol-spin { to { transform: rotate(360deg); } }
+
+/* Respect the setting rather than spinning at someone who asked it not to. */
+@media (prefers-reduced-motion: reduce) {
+    .tol-lhost-spin { animation: none; }
+}
+
+.tol-logmeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 6px 2px;
+}
 
 .tol-log-lines { width: 110px; flex: 0 0 auto; }
 
-.tol-hostchip-waiting {
-    background: #f5f7fa;
-    border: 1px dashed #cbd2d9;
-    color: #9aa5b1;
-}
-
-.tol-log-host { width: 210px; flex: 0 0 auto; }

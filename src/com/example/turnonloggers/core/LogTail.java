@@ -86,6 +86,21 @@ public final class LogTail {
      * @param kb    how much of the end to read, clamped to {@link #MAX_KB}
      */
     /**
+     * What one host has to say about the current request.
+     *
+     * The lines and the failure are kept apart deliberately. They used to be
+     * merged - a host that could not read its file returned the error as though
+     * it were a line of log - which made "this host matched nothing" and "this
+     * host is broken" indistinguishable to anything downstream. On a cluster
+     * search most hosts legitimately match nothing, so that distinction is the
+     * whole point of the answer.
+     */
+    public static final class Answer {
+        public final List<String> lines = new ArrayList<>();
+        public String error = null;
+    }
+
+    /**
      * Lines from the end of this host's first log file containing {@code text}.
      *
      * Used by the cluster-wide search: every host runs this against its own
@@ -94,26 +109,25 @@ public final class LogTail {
      * number of lines, and each line truncated - because the result is stored
      * in a Custom object rather than streamed.
      */
-    public static List<String> search(String text) {
-        List<String> out = new ArrayList<>();
-        if (text == null || text.trim().isEmpty()) return out;
+    public static Answer search(String text) {
+        Answer a = new Answer();
+        if (text == null || text.trim().isEmpty()) return a;
         String needle = text.trim().toLowerCase(java.util.Locale.ROOT);
 
         Result r = tail(0, SEARCH_KB);
         if (r.error != null) {
-            out.add("[" + HostFacts.hostName() + "] " + r.error);
-            return out;
+            a.error = r.error;
+            return a;
         }
         for (String line : r.lines) {
             if (line == null) continue;
             if (line.toLowerCase(java.util.Locale.ROOT).indexOf(needle) < 0) continue;
-            String keep = line.length() > SEARCH_MAX_CHARS
-                    ? line.substring(0, SEARCH_MAX_CHARS) + " ..." : line;
-            out.add(keep);
+            a.lines.add(line.length() > SEARCH_MAX_CHARS
+                    ? line.substring(0, SEARCH_MAX_CHARS) + " ..." : line);
         }
         // Keep the most recent, which is what anyone chasing a live problem wants.
-        while (out.size() > SEARCH_MAX_LINES) out.remove(0);
-        return out;
+        while (a.lines.size() > SEARCH_MAX_LINES) a.lines.remove(0);
+        return a;
     }
 
     /**
@@ -123,24 +137,24 @@ public final class LogTail {
      * path, but no filter - for when the search finds nothing and you just want
      * to see what the host is actually writing.
      */
-    public static List<String> tailLines(int lines) {
-        List<String> out = new ArrayList<>();
+    public static Answer tailLines(int lines) {
+        Answer a = new Answer();
         if (lines <= 0) lines = 40;
         if (lines > TAIL_MAX_LINES) lines = TAIL_MAX_LINES;
 
         Result r = tail(0, SEARCH_KB);
         if (r.error != null) {
-            out.add("[" + HostFacts.hostName() + "] " + r.error);
-            return out;
+            a.error = r.error;
+            return a;
         }
         int from = Math.max(0, r.lines.size() - lines);
         for (int i = from; i < r.lines.size(); i++) {
             String line = r.lines.get(i);
             if (line == null) continue;
-            out.add(line.length() > SEARCH_MAX_CHARS
+            a.lines.add(line.length() > SEARCH_MAX_CHARS
                     ? line.substring(0, SEARCH_MAX_CHARS) + " ..." : line);
         }
-        return out;
+        return a;
     }
 
     public static Result tail(int index, int kb) {

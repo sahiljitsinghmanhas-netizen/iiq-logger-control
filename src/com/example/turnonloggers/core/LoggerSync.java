@@ -42,6 +42,7 @@ public final class LoggerSync {
         public List<String> logMatches = new ArrayList<>();
         public long logAnsweredAt;
         public String logPath = "";
+        public String logError = "";
     }
 
     public static synchronized SyncResult run(SailPointContext ctx, String trigger) {
@@ -145,17 +146,21 @@ public final class LoggerSync {
             if (LoggerConfigStore.logRequestActive(ctx)
                     && LoggerConfigStore.logTargets(ctx, r.host)) {
                 String mode = LoggerConfigStore.logMode(ctx);
-                if ("tail".equals(mode)) {
-                    r.logMatches = LogTail.tailLines(LoggerConfigStore.logLines(ctx));
-                } else {
-                    r.logMatches = LogTail.search(LoggerConfigStore.logQuery(ctx));
-                }
+                LogTail.Answer a = "tail".equals(mode)
+                        ? LogTail.tailLines(LoggerConfigStore.logLines(ctx))
+                        : LogTail.search(LoggerConfigStore.logQuery(ctx));
+                r.logMatches = a.lines;
+                r.logError = a.error == null ? "" : a.error;
                 r.logAnsweredAt = System.currentTimeMillis();
                 List<String> files = HostFacts.logFilePaths();
                 r.logPath = files.isEmpty() ? "" : files.get(0);
             }
         } catch (Throwable t) {
             LOG.warn("[TurnOnLoggers] log search failed on " + r.host + ": " + t);
+            // Say so rather than staying silent: a host that never answers looks
+            // like a host that is still thinking, and it would spin for ever.
+            r.logError = String.valueOf(t);
+            r.logAnsweredAt = System.currentTimeMillis();
         }
 
         writeStatusQuietly(ctx, r, trigger);
@@ -174,7 +179,7 @@ public final class LoggerSync {
     private static void writeStatusQuietly(SailPointContext ctx, SyncResult r, String trigger) {
         try {
             LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors,
-                    r.lastClear, r.logMatches, r.logAnsweredAt, r.logPath);
+                    r.lastClear, r.logMatches, r.logAnsweredAt, r.logPath, r.logError);
         } catch (Throwable t) {
             // Status is diagnostics. Failing to publish it must never undo a
             // successful apply.

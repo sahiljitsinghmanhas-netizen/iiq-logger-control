@@ -222,6 +222,19 @@ try {
     Save-Shot $ws $OutDir "10-collections.png"     "#tol-sec-collections" $Width
 
     Save-Shot $ws $OutDir "12-logs.png" "#tol-sec-logs" $Width
+    Save-Shot $ws $OutDir "13-log-hosts.png" "#tol-sec-logs .tol-hoststrip" $Width
+
+    # Selection is half of what the chips do, and it is invisible in a shot of
+    # the default state, so click one out of the results before capturing again.
+    Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @'
+(function () {
+    var c = document.querySelectorAll('#tol-sec-logs .tol-hoststrip .tol-lhost');
+    if (c.length > 1) c[1].click();
+    return c.length;
+})()
+'@ } | Out-Null
+    Start-Sleep -Milliseconds 500
+    Save-Shot $ws $OutDir "14-log-hosts-off.png" "#tol-sec-logs .tol-hoststrip" $Width
 
     # The settings form and the audit search are both client-side apps that do
     # not populate from a directly-navigated URL - the settings route renders
@@ -233,9 +246,11 @@ try {
     Go $ws "$BaseUrl/plugins/plugins.jsf" 6 $Width 1400
     Save-Shot $ws $OutDir "07-plugins-list.png" $null $Width
 
-    Write-Host "the help page"
-    Go $ws "$BaseUrl/plugin/TurnOnLoggers/ui/help.html" 2 $Width 2600
-    Save-Shot $ws $OutDir "08-help.png" $null $Width
+    # No screenshot of the help page. It ships inside the plugin and anyone can
+    # open it; a megabyte of PNG of a page we already deliver is pure weight,
+    # and it lands in ui\img on the next build because that folder is synced
+    # from here.
+
 
     # The audit search type is an Ext ComboBox, not a select, so driving it
     # reliably from here is not worth the fragility. The page is captured as a

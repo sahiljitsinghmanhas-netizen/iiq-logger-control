@@ -76,6 +76,8 @@ public final class LoggerConfigStore {
     public static final String S_LOG_MATCHES = "logMatches";
     public static final String S_LOG_ANSWERED = "logAnsweredAt";
     public static final String S_LOG_PATH    = "logPath";
+    /** Why this host could not answer, blank when it answered fine. */
+    public static final String S_LOG_ERROR   = "logError";
     /** Loggers this plugin created here - the only ones cleanup may remove. */
     public static final String S_CREATED = "created";
     /** Every logger live in this host's JVM, with level and source. */
@@ -411,7 +413,8 @@ public final class LoggerConfigStore {
                                    long lastClear,
                                    List<String> logMatches,
                                    long logAnsweredAt,
-                                   String logPath) throws GeneralException {
+                                   String logPath,
+                                   String logError) throws GeneralException {
         String name = statusName(host);
         Custom st = ctx.getObjectByName(Custom.class, name);
         if (st == null) {
@@ -457,6 +460,7 @@ public final class LoggerConfigStore {
         st.put(S_LOG_MATCHES, new ArrayList<String>(logMatches));
         st.put(S_LOG_ANSWERED, String.valueOf(logAnsweredAt));
         st.put(S_LOG_PATH, logPath == null ? "" : logPath);
+        st.put(S_LOG_ERROR, logError == null ? "" : logError);
         ctx.saveObject(st);
         ctx.commitTransaction();
     }

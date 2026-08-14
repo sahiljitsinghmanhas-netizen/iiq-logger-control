@@ -139,14 +139,39 @@ Two things, both across every host:
   what a host is writing. Leaving the search box blank does the same thing.
 - **Search all hosts** - lines matching some text.
 
-**Stop** ends either. The host serving the page answers immediately; the rest
-answer on their next sync and show as dashed chips until they do.
+**Stop** ends either. **Find in logs**, on every row of *Loggers live in the
+JVM*, starts a search for that logger without retyping the name.
 
-Every host answers and you pick which to read from the **chips**, one per host
-with its line count. Click a chip to read that host, or press its **×** to drop it - on a thirteen-host cluster, stacking every
-host buries the one that matters.
+![The Logs panel](docs/screenshots/12-logs.png)
 
-![Log on this host](docs/screenshots/12-logs.png)
+### The host chips
+
+Every host has a chip, from the moment the panel is open. The chips carry two
+independent things.
+
+**Colour is status** - what that host did with the request:
+
+| Chip | Meaning |
+|---|---|
+| grey, no count | nothing asked yet |
+| amber, spinner | asked, still reading - answers on its next sync |
+| green, with a count | answered, found that many lines |
+| grey, with a zero | answered, read its log fine, matched nothing |
+| red | could not read its log, or is not reporting |
+
+Grey-with-a-zero is deliberately not red. On a cluster search most hosts
+legitimately match nothing, and which hosts those are is usually the finding.
+
+**Struck through is selection** - whether that host is in the output below.
+Click a chip to drop it, click again to bring it back. The two are independent,
+so a host that found forty lines and has been clicked out is green *and* struck
+through.
+
+![Host chips, one deselected](docs/screenshots/14-log-hosts-off.png)
+
+The selection survives the next query: narrow the cluster down to the three
+hosts you are working on once, then run a tail, then a search, then another
+search. The colours keep up; the selection holds.
 
 Only files that host's own log4j2 configuration writes to are offered, and the
 request picks one **by index into that list, never by path** - so it cannot be
@@ -163,7 +188,8 @@ page merges the results with how long ago each host answered.
 
 Bounded deliberately: up to 40 matching lines per host from the last 256KB,
 long lines truncated, and the search stops being answered after fifteen
-minutes. **Find in logs** on any override searches for that logger by name.
+minutes. Hosts that cannot read their log say so as a red chip rather than
+returning the error as though it were a line of log.
 
 ### Expiry
 

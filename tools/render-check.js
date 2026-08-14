@@ -15,11 +15,15 @@
  *   1. the plugin full page  - the root div exists, the page must render
  *   2. the Configure page    - no root div, the banner must be inserted
  *
- * Run: jjs tools/render-check.js -- ui/js/turnOnLoggers.js tools/state-fixture.json
+ * The plugin page is rendered once per state fixture, because the interesting
+ * regressions are state-dependent: a log panel that renders fine with nothing
+ * loaded can still throw the moment a host reports an error.
+ *
+ * Run: jjs tools/render-check.js -- ui/js/turnOnLoggers.js state1.json [state2.json ...]
  */
 
 var scriptPath = arguments[0];
-var statePath = arguments[1];
+var statePaths = Array.prototype.slice.call(arguments, 1);
 
 var Files = Java.type('java.nio.file.Files');
 var Paths = Java.type('java.nio.file.Paths');
@@ -91,8 +95,8 @@ Elem.prototype.textLen = function () {
     return n;
 };
 
-var stateJson = readFile(statePath);
 var src = readFile(scriptPath);
+var stateJson = null;   // set per run
 
 function run(scenario) {
     var rootEl = new Elem('div'); rootEl.id = 'turn-on-loggers-root';
@@ -156,11 +160,15 @@ function run(scenario) {
 }
 
 print('render-check:');
-run({
-    name: 'plugin page',
-    hasRoot: true,
-    location: { pathname: '/identityiq/plugins/pluginPage.jsf', search: '?pn=TurnOnLoggers', hash: '' }
+statePaths.forEach(function (sp) {
+    stateJson = readFile(sp);
+    run({
+        name: 'plugin page [' + sp.replace(/^.*[\\/]/, '') + ']',
+        hasRoot: true,
+        location: { pathname: '/identityiq/plugins/pluginPage.jsf', search: '?pn=TurnOnLoggers', hash: '' }
+    });
 });
+stateJson = readFile(statePaths[0]);
 run({
     name: 'configure page',
     hasRoot: false,

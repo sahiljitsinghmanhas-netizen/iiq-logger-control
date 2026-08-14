@@ -907,6 +907,29 @@
                     })(r.logger, r.source);
                     c5.appendChild(rm);
                 }
+                // Turning a logger on and then reading what it wrote are the
+                // same errand, so the row that shows it running is the right
+                // place to start the search.
+                if (state.logTailEnabled !== false) {
+                    var find = el('button', 'tol-btn tol-btn-small', 'Find in logs');
+                    var needle = logNeedle(r.logger);
+                    find.title = 'Search every host\u2019s log for "' + needle + '"'
+                        + (needle !== r.logger
+                            ? ' - the last four components of the name, because the stock IIQ '
+                              + 'pattern prints loggers as %c{4} and the full name would match '
+                              + 'nothing.'
+                            : '.');
+                    find.onclick = (function (text) {
+                        return function () {
+                            runLogSearch(text).then(function () {
+                                var sec = document.getElementById('tol-sec-logs');
+                                if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: 'start' });
+                            });
+                        };
+                    })(needle);
+                    c5.appendChild(find);
+                }
+
                 tr.appendChild(c5);
                 tb.appendChild(tr);
             });
@@ -1083,7 +1106,75 @@
         return box;
     }
 
-    var logState = { lines: 40, text: '', selected: null, hidden: {} };
+    // "off" is a set of hosts the reader has clicked out of the results. It is
+    // deliberately never reset by a query: you narrow the cluster down to the
+    // three hosts you care about once, then run tail, then a search, then
+    // another search, and the narrowing holds across all of them. Rebuilding it
+    // per query would make the chips useless for the thing they are for.
+    var logState = { lines: 40, text: '', off: {} };
+
+    /**
+     * What one host has to say about the request that is currently out.
+     *
+     * Status and selection are separate things. This is status only - whether
+     * the host has answered and what came back - and it is computed against
+     * the timestamp of the current request, not "has this host ever answered",
+     * so a second search sends every chip back to waiting instead of leaving
+     * the previous answer sitting there looking current.
+     */
+    function logStatus(h) {
+        if (!h.reporting) {
+            return { key: 'down', count: '', why: h.name + ' is not reporting, so it will not answer.' };
+        }
+        if (!state.logActive) {
+            return { key: 'idle', count: '', why: 'Nothing asked yet.' };
+        }
+        var askedAt = parseInt(state.logQueryAt, 10) || 0;
+        var answeredAt = parseInt(h.logAnsweredAt, 10) || 0;
+        if (answeredAt < askedAt) {
+            return { key: 'wait', count: '', why: 'Reading its log - answers on its next sync.' };
+        }
+        if (h.logError) {
+            return { key: 'error', count: '!', why: h.logError };
+        }
+        var n = (h.logMatches || []).length;
+        if (!n) {
+            return {
+                key: 'none', count: '0',
+                why: state.logMode === 'tail'
+                    ? 'Its log is empty.'
+                    : 'Read its log fine, nothing matched.'
+            };
+        }
+        return {
+            key: 'ok', count: String(n),
+            why: n + ' line' + (n === 1 ? '' : 's') + ', answered ' + fmtAgo(h.logAnsweredAt)
+        };
+    }
+
+    /**
+     * Ask every host to look for some text. Shared with the Find in logs
+     * buttons in the live logger table, which is the same request arrived at
+     * from a different direction.
+     */
+    function runLogSearch(text) {
+        logState.text = text;
+        return mutate(api('POST', '/logquery', { mode: 'search', text: text }),
+            'Searching every host for "' + text + '".');
+    }
+
+    /**
+     * The logger name as it is likely to appear in a log line.
+     *
+     * IIQ's stock pattern uses %c{4}, which prints only the last four
+     * components, so searching for the full sailpoint.a.b.c.d.Whatever would
+     * match nothing. The last four components are a substring of the full name
+     * as well, so this matches whichever the host's pattern happens to print.
+     */
+    function logNeedle(logger) {
+        var parts = String(logger).split('.');
+        return parts.length > 4 ? parts.slice(parts.length - 4).join('.') : String(logger);
+    }
 
     /**
      * Log lines from every host.
@@ -1095,9 +1186,13 @@
      *
      * Either way every host answers about its own file, because no host can
      * read another one's disk. The host serving the page answers immediately;
-     * the rest follow on their next sync. Which host you are reading is chosen
-     * from the chips, so there is one way to pick a host rather than a scope
-     * switch as well.
+     * the rest follow on their next sync.
+     *
+     * Every host gets a chip, from the moment the panel is open, whether or not
+     * anything has been asked. Colour is what the host did; struck through is
+     * whether you are looking at it. The two are independent, so a host that
+     * found forty lines and has been clicked out of the results is green and
+     * struck through, which is exactly what it is.
      */
     function logsSection() {
         var box = el('section', 'tol-card');
@@ -1111,9 +1206,10 @@
         box.appendChild(el('div', 'tol-hint',
             'Every host reads its own log file and reports back. ' + state.thisHost
             + ' answers immediately; the others answer on their next sync, so give them a minute. '
-            + 'Pick a host from the chips to read it.'));
+            + 'The chips below show what each host found - click one to drop it from the output, '
+            + 'click it again to bring it back.'));
 
-        // --- raw tail, any host -------------------------------------------
+        // --- raw tail -------------------------------------------------------
         var bar1 = el('div', 'tol-logbar');
         var lineSel = document.createElement('select');
         lineSel.className = 'tol-input tol-log-lines';
@@ -1130,11 +1226,10 @@
         };
         bar1.appendChild(tailBtn);
         bar1.appendChild(lineSel);
-        bar1.appendChild(el('span', 'tol-small',
-            'on every host - no filter, just the raw log. Pick a host from the chips below.'));
+        bar1.appendChild(el('span', 'tol-small', 'on every host - no filter, just the raw log'));
         box.appendChild(bar1);
 
-        // --- search --------------------------------------------------------
+        // --- search ---------------------------------------------------------
         var bar2 = el('div', 'tol-logbar');
         var q = document.createElement('input');
         q.type = 'text';
@@ -1142,7 +1237,7 @@
         q.className = 'tol-input tol-log-select';
         q.setAttribute('placeholder',
             'text to look for - a logger name, an identity, an error. Leave blank for the recent log.');
-        q.title = 'Text to look for in every host’s log - a logger name, an identity, an '
+        q.title = 'Text to look for in every host\u2019s log - a logger name, an identity, an '
             + 'error message. Leave it blank and this shows the most recent lines instead, the '
             + 'same as "Output last".';
         q.value = (state.logMode === 'search' ? state.logQuery : logState.text) || '';
@@ -1160,8 +1255,7 @@
                         + ' lines on every host.');
                 return;
             }
-            mutate(api('POST', '/logquery', { mode: 'search', text: text }),
-                'Searching every host for "' + text.trim() + '".');
+            runLogSearch(text.trim());
         };
         bar2.appendChild(searchBtn);
 
@@ -1175,6 +1269,41 @@
         }
         box.appendChild(bar2);
 
+        // --- one chip per host, always ---------------------------------------
+        var hosts = (state.hosts || []).slice();
+        hosts.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+        if (!hosts.length) {
+            box.appendChild(el('div', 'tol-empty', 'No host has reported in yet.'));
+            return box;
+        }
+
+        var strip = el('div', 'tol-hoststrip');
+        hosts.forEach(function (h) {
+            var st = logStatus(h);
+            var off = !!logState.off[h.name];
+            var chip = el('button', 'tol-lhost tol-lhost-' + st.key
+                + (off ? ' tol-lhost-off' : '')
+                + (h.name === state.thisHost ? ' tol-lhost-self' : ''));
+            chip.setAttribute('aria-pressed', off ? 'false' : 'true');
+            chip.title = st.why + '\n\n' + (off
+                ? 'Click to put ' + h.name + ' back in the output.'
+                : 'Click to drop ' + h.name + ' from the output.');
+
+            if (st.key === 'wait') chip.appendChild(el('span', 'tol-lhost-spin'));
+            chip.appendChild(el('span', 'tol-lhost-name', h.name));
+            if (st.count) chip.appendChild(el('span', 'tol-lhost-count', st.count));
+
+            chip.onclick = (function (name) {
+                return function () {
+                    if (logState.off[name]) delete logState.off[name];
+                    else logState.off[name] = true;
+                    render();
+                };
+            })(h.name);
+            strip.appendChild(chip);
+        });
+        box.appendChild(strip);
+
         if (!state.logActive) {
             box.appendChild(el('div', 'tol-empty',
                 'Nothing loaded. Press "Output last" for the raw end of every host\u2019s log, or '
@@ -1183,88 +1312,59 @@
         }
 
         var tailing = state.logMode === 'tail';
-        var what = (tailing
-            ? 'last ' + state.logLines + ' lines'
-            : 'lines matching "' + state.logQuery + '"')
-            + (state.logHost ? ' on ' + state.logHost : '');
-
-        // --- one chip per host that answered -------------------------------
-        var answered = (state.hosts || []).filter(function (h) {
-            if (!h.reporting || !((parseInt(h.logAnsweredAt, 10) || 0) > 0)) return false;
-            var t = state.logHost || '';
-            return !t || h.name === t;   // an untargeted host may hold a stale answer
-        });
-        var target = state.logHost || '';
-        var waiting = (state.hosts || []).filter(function (h) {
-            if (!h.reporting) return false;
-            if (target && h.name !== target) return false;   // never asked
-            return !(parseInt(h.logAnsweredAt, 10) || 0);
-        });
-
-        var visible = answered.filter(function (h) { return !logState.hidden[h.name]; });
-        if (!visible.length) {
+        var shown = hosts.filter(function (h) { return !logState.off[h.name]; });
+        if (!shown.length) {
             box.appendChild(el('div', 'tol-empty',
-                answered.length ? 'Every host has been removed from these results.'
-                    : 'Waiting for hosts to report the ' + what + '...'));
-            if (Object.keys(logState.hidden).length) box.appendChild(restoreButton());
+                'Every host has been clicked out of the output. Click a chip to bring one back.'));
             return box;
         }
-        if (!logState.selected || !visible.some(function (h) { return h.name === logState.selected; })) {
-            logState.selected = visible[0].name;
-        }
 
-        var strip = el('div', 'tol-hoststrip');
-        visible.forEach(function (h) {
-            var n = (h.logMatches || []).length;
-            var chip = el('span', 'tol-hostchip tol-hosttab'
-                + (h.name === logState.selected ? ' tol-hosttab-on' : '')
-                + (h.name === state.thisHost ? ' tol-hostchip-self' : ''));
-            var label = el('span', 'tol-hosttab-name', h.name + '  (' + n + ')');
-            label.onclick = (function (name) {
-                return function () { logState.selected = name; render(); };
-            })(h.name);
-            chip.appendChild(label);
-            var x = el('span', 'tol-hosttab-x', '\u00d7');
-            x.title = 'Remove ' + h.name + ' from these results';
-            x.onclick = (function (name) {
-                return function () {
-                    logState.hidden[name] = true;
-                    if (logState.selected === name) logState.selected = null;
-                    render();
-                };
-            })(h.name);
-            chip.appendChild(x);
-            strip.appendChild(chip);
+        // --- one block per host still in the output --------------------------
+        var any = false;
+        shown.forEach(function (h) {
+            var st = logStatus(h);
+            if (st.key === 'idle' || st.key === 'down') return;
+            any = true;
+
+            var head = el('div', 'tol-logmeta');
+            head.appendChild(el('span', 'tol-lhost tol-lhost-' + st.key
+                + ' tol-lhost-static' + (h.name === state.thisHost ? ' tol-lhost-self' : ''),
+                h.name));
+            // Deliberately not st.why for the failure cases. That text is the
+            // chip's tooltip and belongs in one place: printing it here as well
+            // put the same sentence twice on screen, once in grey and once in
+            // red, which reads as two different problems.
+            var line = st.key === 'wait' ? 'reading its log...'
+                : st.key === 'error' ? 'could not read its log'
+                : st.key === 'none' ? (tailing
+                    ? 'its log is empty'
+                    : 'read its log fine, nothing matched "' + state.logQuery + '"')
+                : st.why;
+            head.appendChild(el('span', 'tol-small',
+                line + (h.logPath ? ' - ' + h.logPath : '')));
+            box.appendChild(head);
+
+            // No black panel for a host with nothing to show. On a thirteen-host
+            // search most hosts match nothing, and thirteen empty terminals to
+            // scroll past would bury the two hosts that actually answered. The
+            // line above already says what happened.
+            if (st.key === 'wait' || st.key === 'none') return;
+
+            var pre = el('pre', 'tol-log');
+            if (st.key === 'error') {
+                pre.appendChild(el('div', 'tol-err-text', h.logError));
+            } else {
+                (h.logMatches || []).forEach(function (l) {
+                    pre.appendChild(document.createTextNode(l + '\n'));
+                });
+            }
+            box.appendChild(pre);
         });
-        waiting.forEach(function (h) {
-            strip.appendChild(el('span', 'tol-hostchip tol-hostchip-waiting', h.name + '  ...'));
-        });
-        if (Object.keys(logState.hidden).length) strip.appendChild(restoreButton());
-        box.appendChild(strip);
 
-        var sel = null;
-        visible.forEach(function (h) { if (h.name === logState.selected) sel = h; });
-        var lines = (sel.logMatches || []);
-        box.appendChild(el('div', 'tol-small tol-logmeta',
-            sel.name + ' - ' + lines.length + ' ' + (tailing ? 'lines' : 'matching lines')
-            + ', answered ' + fmtAgo(sel.logAnsweredAt)
-            + (sel.logPath ? ' - ' + sel.logPath : '')));
-
-        var pre = el('pre', 'tol-log');
-        if (!lines.length) {
-            pre.appendChild(el('div', 'tol-small',
-                tailing ? 'This host\u2019s log is empty.' : 'Nothing matching in this host\u2019s log.'));
-        } else {
-            lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
+        if (!any) {
+            box.appendChild(el('div', 'tol-empty', 'Waiting for hosts to answer...'));
         }
-        box.appendChild(pre);
         return box;
-    }
-
-    function restoreButton() {
-        var b = el('button', 'tol-btn tol-btn-small', 'Show removed hosts');
-        b.onclick = function () { logState.hidden = {}; render(); };
-        return b;
     }
 
     function footer() {

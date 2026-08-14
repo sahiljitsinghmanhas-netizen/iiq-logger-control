@@ -815,6 +815,7 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("logAnsweredAt", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LOG_ANSWERED)), 0L)));
             h.put("logPath", st.get(LoggerConfigStore.S_LOG_PATH));
+            h.put("logError", st.get(LoggerConfigStore.S_LOG_ERROR));
             h.put("lastClear", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LAST_CLEAR)), 0L)));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));

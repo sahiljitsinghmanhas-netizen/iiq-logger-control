@@ -59,13 +59,26 @@ REM fails the build if the page does not render.
 set "JJS=%JAVA_HOME%\bin\jjs.exe"
 if exist "%JJS%" (
     echo Running render check...
-    "%JJS%" "%~dp0tools\render-check.js" -- "%~dp0ui\js\turnOnLoggers.js" "%~dp0tools\state-fixture.json"
+    "%JJS%" "%~dp0tools\render-check.js" -- "%~dp0ui\js\turnOnLoggers.js" "%~dp0tools\state-fixture.json" "%~dp0tools\state-fixture-logs.json"
     if errorlevel 1 (
         echo ERROR: render check failed - the page would not load. Build aborted.
         exit /b 1
     )
 ) else (
     echo WARNING: jjs not found, skipping render check.
+)
+
+REM ---- Help-page images -------------------------------------------------
+REM The help page ships inside the zip and reads its images from ui\img, but
+REM the screenshot tool writes to docs\screenshots. Those were kept in step by
+REM hand, which means they were not: the help page showed a UI two releases old
+REM while the README showed the current one. Copy on every build instead.
+echo Syncing help-page images...
+if not exist "%~dp0ui\img" mkdir "%~dp0ui\img"
+copy /Y "%~dp0docs\screenshots\*.png" "%~dp0ui\img\" >nul
+if errorlevel 1 (
+    echo ERROR: could not copy docs\screenshots to ui\img.
+    exit /b 1
 )
 
 REM ---- Jar --------------------------------------------------------------
