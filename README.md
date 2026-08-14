@@ -51,6 +51,8 @@ reconciler in every JVM.
 Download the zip from the [latest release](../../releases/latest), then
 **gear icon → Plugins → New** and upload it. No restart needed.
 
+![The Plugins list after installing](docs/screenshots/07-plugins-list.png)
+
 To build instead:
 
 ```bash
