@@ -210,7 +210,8 @@
          [overridesSection(), 'tol-sec-overrides'],
          [liveLoggersSection(), 'tol-sec-live'],
          [hostsSection(), 'tol-sec-hosts'],
-         [logsSection(), 'tol-sec-logs']].forEach(function (pair) {
+         [logsSection(), 'tol-sec-logs'],
+         [historySection(), 'tol-sec-history']].forEach(function (pair) {
             if (!pair[0]) return;
             pair[0].id = pair[1];
             root.appendChild(pair[0]);
@@ -238,7 +239,7 @@
         var sync = el('button', 'tol-btn', 'Sync this host now');
         sync.title = 'Reconcile the host serving this page immediately. Every other host '
             + 'reconciles itself on its own timer, so there is nothing to force there - '
-            + 'watch Last sync in the Hosts table.';
+            + 'watch Last sync in the Host Status table.';
         sync.onclick = function () {
             mutate(api('POST', '/sync'), 'This host reconciled against the stored configuration.');
         };
@@ -281,7 +282,7 @@
 
     function addForm() {
         var box = el('section', 'tol-card');
-        box.appendChild(el('h2', 'tol-card-title', 'Turn on a logger'));
+        box.appendChild(el('h2', 'tol-card-title', 'Add a Logger'));
 
         var form = el('form', 'tol-form');
         form.onsubmit = function (ev) { ev.preventDefault(); submit(); };
@@ -463,7 +464,7 @@
     function overridesSection() {
         var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
-        head.appendChild(el('h2', 'tol-card-title', 'Overrides in effect'));
+        head.appendChild(el('h2', 'tol-card-title', 'Plugin Logger Status'));
         if ((state.entries || []).length) {
             var save = el('button', 'tol-btn tol-btn-small', 'Save as collection');
             save.title = 'Save these loggers under a name so anyone can turn the same set on again';
@@ -703,7 +704,7 @@
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
     var livePick = null;
-    // Hosts clicked out of the Hosts table. Everything starts in it.
+    // Hosts clicked out of Host Status. Everything starts in it.
     var hostHide = {};
 
     /**
@@ -764,7 +765,7 @@
     function liveLoggersSection() {
         var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
-        head.appendChild(el('h2', 'tol-card-title', 'Loggers live in the JVM'));
+        head.appendChild(el('h2', 'tol-card-title', 'All Logger Status'));
 
         var anyLeftover = false;
         (state.hosts || []).forEach(function (h) {
@@ -1014,7 +1015,7 @@
                         // subsets; which one to lift is not ours to guess.
                         tgl.disabled = true;
                         tgl.title = 'This logger is covered by more than one override - '
-                            + 'manage them in Overrides in effect.';
+                            + 'manage them in Plugin Logger Status.';
                     } else if (suppressed) {
                         tgl.title = 'Held at OFF by this plugin. Click to lift it - the logger goes '
                             + 'back to whatever sets it.';
@@ -1121,7 +1122,7 @@
 
     function hostsSection() {
         var box = el('section', 'tol-card');
-        box.appendChild(el('h2', 'tol-card-title', 'Hosts'));
+        box.appendChild(el('h2', 'tol-card-title', 'Host Status'));
         box.appendChild(el('div', 'tol-hint',
             'Every IIQ JVM reports its own OS, its log4j2 config file and where it writes logs. ' +
             'That is the host-specific part - the level change itself works the same everywhere. ' +
@@ -1232,7 +1233,7 @@
     function collectionsSection() {
         var colls = state.collections || [];
         var box = el('section', 'tol-card');
-        box.appendChild(el('h2', 'tol-card-title', 'Saved collections'));
+        box.appendChild(el('h2', 'tol-card-title', 'Saved Logger Collections'));
         box.appendChild(el('div', 'tol-hint',
             'Named sets of loggers, shared with everyone who uses this plugin. Applying one turns '
             + 'the whole set on with the expiry you choose. Save the current overrides as a '
@@ -1395,7 +1396,7 @@
      */
     function logsSection() {
         var box = el('section', 'tol-card');
-        box.appendChild(el('h2', 'tol-card-title', 'Logs'));
+        box.appendChild(el('h2', 'tol-card-title', 'Log Viewer'));
 
         if (state.logTailEnabled === false) {
             box.appendChild(el('div', 'tol-empty', 'Switched off in the plugin settings.'));
@@ -1554,6 +1555,156 @@
 
         if (!any) {
             box.appendChild(el('div', 'tol-empty', 'Waiting for hosts to answer...'));
+        }
+        return box;
+    }
+
+    // Closed until asked for. It is a look-back, not something you need in
+    // front of you while working, and fetching it on every ten-second refresh
+    // would be a query nobody asked for. Rows are kept once loaded so the
+    // refresh timer does not re-fetch them either.
+    var historyState = { open: false, rows: null, loading: false, error: null, kind: 'change' };
+
+    function loadHistory() {
+        historyState.loading = true;
+        historyState.error = null;
+        render();
+        api('GET', '/history?limit=50&kind=' + historyState.kind).then(function (d) {
+            historyState.rows = d.rows || [];
+            historyState.truncated = !!d.truncated;
+            historyState.loading = false;
+            render();
+        }).catch(function (e) {
+            historyState.loading = false;
+            historyState.error = e.message;
+            render();
+        });
+    }
+
+    /**
+     * Changes, or changes and reads.
+     *
+     * Reading production logs is audited too, and should be - but a handful of
+     * searches will bury the one override anyone is looking for, so the default
+     * is changes only and the reads are a click away.
+     */
+    function historyBar() {
+        var bar = el('div', 'tol-filters');
+        [['change', 'Changes'], ['all', 'Everything']].forEach(function (o) {
+            var b = el('button', 'tol-filter' + (historyState.kind === o[0] ? ' tol-filter-on' : ''),
+                o[1]);
+            b.title = o[0] === 'change'
+                ? 'Overrides added, removed and expired; collections; hosts forgotten'
+                : 'Changes plus log reads, searches and forced syncs';
+            b.onclick = (function (k) {
+                return function () {
+                    if (historyState.kind === k) return;
+                    historyState.kind = k;
+                    historyState.rows = null;
+                    loadHistory();
+                };
+            })(o[0]);
+            bar.appendChild(b);
+        });
+        var refresh = el('button', 'tol-btn tol-btn-small', 'Refresh');
+        refresh.onclick = function () { historyState.rows = null; loadHistory(); };
+        bar.appendChild(refresh);
+        return bar;
+    }
+
+    /**
+     * What has been changed through this plugin, newest first.
+     *
+     * Read back out of the audit trail, which is the record - not a second
+     * copy kept for the page's convenience. So this shows exactly what an
+     * auditor would see in Audit Search, and it is honest about its one blind
+     * spot: a rule calling Logger.getLogger(...).setLevel(...) never came
+     * through here and so is not in it.
+     */
+    function historySection() {
+        var box = el('section', 'tol-card');
+        var head = el('div', 'tol-card-head');
+        head.appendChild(el('h2', 'tol-card-title', 'History'));
+
+        var toggle = el('button', 'tol-btn tol-btn-small',
+            historyState.open ? 'Hide' : 'Show');
+        toggle.setAttribute('aria-expanded', historyState.open ? 'true' : 'false');
+        toggle.title = historyState.open
+            ? 'Collapse the history'
+            : 'Every change made through this plugin, newest first';
+        toggle.onclick = function () {
+            historyState.open = !historyState.open;
+            if (historyState.open && historyState.rows === null) loadHistory();
+            else render();
+        };
+        head.appendChild(toggle);
+        box.appendChild(head);
+
+        if (!historyState.open) return box;
+
+        box.appendChild(el('div', 'tol-hint',
+            'Read back out of the IIQ audit trail, newest first. The revision column is the '
+            + 'configuration revision that change produced, so the number in the page header ties '
+            + 'back to a row here. Reading and searching logs is audited too but is not a change, '
+            + 'so it sits behind Everything. Changes made by a rule calling '
+            + 'Logger.getLogger(...).setLevel(...) never came through this plugin and are in '
+            + 'neither.'));
+
+        if (historyState.error) {
+            box.appendChild(el('div', 'tol-banner tol-error', historyState.error));
+            return box;
+        }
+        if (historyState.loading || historyState.rows === null) {
+            box.appendChild(el('div', 'tol-empty', 'Reading the audit trail...'));
+            return box;
+        }
+        box.appendChild(historyBar());
+        if (!historyState.rows.length) {
+            box.appendChild(el('div', 'tol-empty', historyState.kind === 'change'
+                ? 'No changes recorded yet. Switch to Everything to include log reads and searches.'
+                : 'Nothing recorded yet. Every action from this page is written here as it happens.'));
+            return box;
+        }
+
+        var wrap = el('div', 'tol-tablewrap');
+        var t = el('table', 'tol-table');
+        t.appendChild(headRow(['Rev', 'When', 'Who', 'What', 'Logger', 'Level', 'Hosts',
+            'Expires', 'Note']));
+        var tb = el('tbody');
+        historyState.rows.forEach(function (r) {
+            var tr = el('tr');
+            tr.appendChild(el('td', 'tol-small tol-mono', r.revision || '-'));
+            var when = el('td', 'tol-small');
+            when.appendChild(document.createTextNode(fmtTime(r.when)));
+            when.appendChild(el('div', 'tol-small', fmtAgo(r.when)));
+            tr.appendChild(when);
+            tr.appendChild(el('td', 'tol-small', r.who || '-'));
+            tr.appendChild(el('td', 'tol-small', r.what || '-'));
+            var lg = el('td');
+            lg.appendChild(el('code', 'tol-logger-name', r.logger || '-'));
+            tr.appendChild(lg);
+            var lv = el('td');
+            if (r.level) {
+                lv.appendChild(el('span', 'tol-level tol-level-' + String(r.level).toLowerCase(),
+                    r.level));
+            } else {
+                lv.appendChild(document.createTextNode('-'));
+            }
+            tr.appendChild(lv);
+            tr.appendChild(el('td', 'tol-small tol-mono', r.hosts || '-'));
+            tr.appendChild(el('td', 'tol-small', r.expires || '-'));
+            tr.appendChild(el('td', 'tol-small', r.note || ''));
+            tb.appendChild(tr);
+        });
+        t.appendChild(tb);
+        wrap.appendChild(t);
+        box.appendChild(wrap);
+
+        if (historyState.truncated) {
+            box.appendChild(el('div', 'tol-small',
+                'Showing the most recent ' + historyState.rows.length
+                + '. Older changes are still in the audit trail - search Audit Search for the '
+                + '"Logger Manager change" action.'));
         }
         return box;
     }

@@ -81,6 +81,33 @@ public final class AuditWriter {
     }
 
     /**
+     * Verbs that record someone looking at something rather than changing it.
+     *
+     * Reading production logs is worth auditing - that is why these are written
+     * at all - but they are not changes, and on a busy day a handful of
+     * searches will bury the one override anyone is trying to find. The
+     * distinction is stamped on the event at write time so it is durable, and
+     * kept here rather than in the UI so there is one list rather than two that
+     * can disagree.
+     */
+    private static final java.util.Set<String> READ_VERBS = new java.util.HashSet<>(
+            java.util.Arrays.asList("read log", "read logs", "searched logs", "synced"));
+
+    /** True if {@code what} records a look rather than a change. */
+    public static boolean isRead(String what) {
+        return what != null && READ_VERBS.contains(what);
+    }
+
+    /** Never let reading the revision be the thing that breaks an audit write. */
+    private static int revisionOrZero(SailPointContext ctx) {
+        try {
+            return LoggerConfigStore.revision(ctx);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /**
      * Record one change.
      *
      * @param what   short verb: enabled, disabled, updated, silenced, cleared...
@@ -93,6 +120,7 @@ public final class AuditWriter {
                 + (level == null ? "" : "=" + level)
                 + (hosts == null ? "" : " hosts=" + hosts)
                 + (expires <= 0 ? "" : " until=" + new Date(expires))
+                + " rev=" + revisionOrZero(ctx)
                 + (note == null || note.isEmpty() ? "" : " note=" + note));
         try {
             if (!registrationTried) {
@@ -109,6 +137,14 @@ public final class AuditWriter {
             e.setString4(expires <= 0 ? "never" : String.valueOf(new Date(expires)));
             if (note != null && !note.isEmpty()) e.setAttribute("note", note);
             e.setAttribute("plugin", PluginSettings.PLUGIN_NAME);
+            // The revision this change produced. On its own the counter only
+            // answers "is this host up to date"; stamped here it also answers
+            // "what was revision 131", which is the question people actually
+            // ask. Read rather than passed in, because every caller has already
+            // saved the configuration by this point - so no call site changes,
+            // and none of them can forget.
+            e.setAttribute("revision", String.valueOf(revisionOrZero(ctx)));
+            e.setAttribute("kind", isRead(what) ? "read" : "change");
             // Written unconditionally, NOT gated on the action being enabled in
             // Audit Configuration. These are privileged changes to what a
             // production system logs; whether they are recorded must not be

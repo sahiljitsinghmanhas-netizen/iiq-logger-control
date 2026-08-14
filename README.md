@@ -72,20 +72,22 @@ than most people need.
 
 | Section | What it shows |
 |---|---|
-| Turn on a logger | The form. The logger box is free text; the dropdown only suggests common IIQ loggers. A note is required. |
-| Overrides in effect | What this plugin is holding, and which hosts have confirmed each one. |
-| Loggers live in the JVM | Every logger log4j2 has configured on each host, with its source. |
-| Hosts | Each JVM's OS, log4j2 config path, log files and last sync. |
+| Add a Logger | The form. The logger box is free text; the dropdown only suggests common IIQ loggers. A note is required. |
+| Plugin Logger Status | What this plugin is holding, and which hosts have confirmed each one. |
+| All Logger Status | Every logger log4j2 has configured on each host, with its source. |
+| Host Status | Each JVM's OS, log4j2 config path, log files and last sync. |
+| Log Viewer | The log itself: the last N lines, or a search across every host. |
+| History | What has been changed through this plugin. Collapsed until asked for. |
 
-![Loggers live in the JVM](docs/screenshots/04-live-loggers.png)
+![All Logger Status](docs/screenshots/04-live-loggers.png)
 
 ### Host chips
 
-*Loggers live in the JVM*, *Hosts* and *Logs* each draw a row of host chips. They
+*All Logger Status*, *Host Status* and *Log Viewer* each draw a row of host chips. They
 behave the same everywhere and carry two independent things.
 
 **Colour is status** - how that host is doing with respect to what the section is
-about. In *Loggers live in the JVM* and *Hosts* that is the host's own health:
+about. In *All Logger Status* and *Host Status* that is the host's own health:
 
 | Chip | Meaning |
 |---|---|
@@ -94,18 +96,18 @@ about. In *Loggers live in the JVM* and *Hosts* that is the host's own health:
 | amber, no spinner | stale; reporting, but its last sync is old enough to distrust |
 | red | not reporting, or reporting an error of its own |
 
-In *Logs* there is a query to answer, so the colour is what that host found instead.
+In *Log Viewer* there is a query to answer, so the colour is what that host found instead.
 
 **Picked is separate from colour.** Not picked is faded and struck through, the same
 in every section. What differs is only where each section starts:
 
 | Section | Starts with |
 |---|---|
-| Loggers live in the JVM | the host serving the page, alone |
-| Hosts | every host |
-| Logs | every host |
+| All Logger Status | the host serving the page, alone |
+| Host Status | every host |
+| Log Viewer | every host |
 
-Click any chip to toggle it; pick as many as you like. *Loggers live in the JVM*
+Click any chip to toggle it; pick as many as you like. *All Logger Status*
 starts on one host because a cluster mostly reports the same picture everywhere, so
 reading it starts with one host and widens when you are comparing.
 
@@ -147,7 +149,7 @@ Loggers declared in `log4j2.properties` have no Clear: log4j2 rebuilds its
 configuration from that file on every change and restart, so the logger would
 come straight back. Suppress is the only thing that holds for them.
 
-![Overrides in effect](docs/screenshots/03-overrides.png)
+![Plugin Logger Status](docs/screenshots/03-overrides.png)
 
 ### Every override needs a note
 
@@ -156,7 +158,7 @@ recorded in the audit event and shown in the table to whoever finds the logger
 later. "Who turned this on" is answerable from the audit trail afterwards;
 "why" is not, unless someone was made to say so at the time.
 
-### Saved collections
+### Saved Logger Collections
 
 A collection is a named set of loggers and levels, **shared with everyone** who
 uses the plugin. Turn the loggers on, press **Save as collection**, and the next
@@ -166,7 +168,7 @@ expiry of their choosing.
 Each override a collection creates is noted `from collection: <name>`, so the
 table and the audit trail both say where it came from.
 
-![Saved collections](docs/screenshots/10-collections.png)
+![Saved Logger Collections](docs/screenshots/10-collections.png)
 
 ### Reading the log
 
@@ -180,7 +182,7 @@ Two things, both across every host:
 **Stop** ends either. **Find in logs**, on every row of *Loggers live in the
 JVM*, starts a search for that logger without retyping the name.
 
-![The Logs panel](docs/screenshots/12-logs.png)
+![The Log Viewer](docs/screenshots/12-logs.png)
 
 ### The host chips
 
@@ -317,6 +319,30 @@ curl -u user:pass -H 'X-XSRF-TOKEN: t' -H 'Content-Type: application/json' \
   https://iiq.example.com/identityiq/plugin/rest/TurnOnLoggers/entries
 ```
 
+
+## History
+
+![History](docs/screenshots/16-history.png)
+
+Collapsed until you press **Show** — it is a look-back, not something you need in
+front of you while working, so it is not fetched until you open it and not
+re-fetched by the page's refresh.
+
+The **Rev** column is the configuration revision that change produced. That is
+what makes the counter in the page header mean anything: `revision 131` on its own
+only tells hosts whether they are up to date, but matched against a row here it
+tells you what happened.
+
+**Changes** is the default. Reading and searching logs is audited too — deliberately,
+someone read production logs — but those are not changes, and an afternoon of
+searching would bury the one override you are looking for. **Everything** includes them.
+
+This reads straight out of the IIQ audit trail. There is no second copy kept for the
+page's convenience, so what you see here is what an auditor sees in **Audit Search**
+under the `Logger Manager change` action, and it survives the plugin being uninstalled.
+It also inherits the trail's blind spot: a rule calling
+`Logger.getLogger(...).setLevel(...)` never came through this plugin, so it is not
+here — *All Logger Status* is where those show up, tagged `set at runtime`.
 
 ## Where state lives
 

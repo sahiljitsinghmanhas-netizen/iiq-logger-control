@@ -66,10 +66,11 @@
     <li><a href="#buttons">The buttons</a></li>
     <li><a href="#suppress-clear">Suppress versus Clear</a></li>
     <li><a href="#nofileclear">Why file loggers cannot be cleared</a></li>
-    <li><a href="#collections">Saved collections</a></li>
+    <li><a href="#collections">Saved Logger Collections</a></li>
     <li><a href="#logfile">Reading the log</a></li>
+    <li><a href="#history">History</a></li>
     <li><a href="#levels">Levels and expiry</a></li>
-    <li><a href="#hosts">Hosts and propagation</a></li>
+    <li><a href="#hosts">Host Status and propagation</a></li>
     <li><a href="#audit">Audit</a></li>
     <li><a href="#settings">Plugin settings</a></li>
     <li><a href="#trouble">If something looks wrong</a></li>
@@ -80,7 +81,7 @@
 
 <h2 id="what">What this page does<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/01-logger-manager.png" alt="The Logger Manager page: the Turn on a logger form, Overrides in effect, Loggers live in the JVM with per-host tables, and the Hosts table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/01-logger-manager.png" alt="The Logger Manager page: the Add a Logger form, Plugin Logger Status, All Logger Status with per-host tables, and the Host Status table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>The page in full.</figcaption>
 </figure>
 <p>Sets logger levels across every host in the deployment without shell access, without editing
@@ -92,18 +93,18 @@ overrides back up.</p>
 
 <h2 id="sections">The sections<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/03-overrides.png" alt="Overrides in effect showing three overrides with their level, hosts, expiry and confirming hosts" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
-  <figcaption>Overrides in effect. Live on shows which hosts have actually confirmed each one.</figcaption>
+  <img src="img/03-overrides.png" alt="Plugin Logger Status showing three overrides with their level, hosts, expiry and confirming hosts" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Plugin Logger Status. Live on shows which hosts have actually confirmed each one.</figcaption>
 </figure>
 
 <figure>
-  <img src="img/02-turn-on-form.png" alt="The Turn on a logger form: logger name, level, expiry, hosts and note" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/02-turn-on-form.png" alt="The Add a Logger form: logger name, level, expiry, hosts and note" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>The form. Every field carries its own hint - the logger box is free text, the dropdown only suggests.</figcaption>
 </figure>
 
 <figure>
 <svg viewBox="0 0 640 300" width="100%" height="auto" role="img"
-     aria-label="Diagram of the page layout: header, then Turn on a logger, Overrides in effect, Loggers live in the JVM, and Hosts">
+     aria-label="Diagram of the page layout: header, then Add a Logger, Plugin Logger Status, All Logger Status, and Host Status">
   <defs><style>
     .bx{fill:#fff;stroke:#cbd2d9}
     .hd{fill:#f0f4f8;stroke:#bcccdc}
@@ -123,20 +124,20 @@ overrides back up.</p>
   <text class="bt" x="556" y="32">Remove all</text>
 
   <rect class="bx" x="8" y="64" width="624" height="46" rx="4"/>
-  <text class="t" x="20" y="86">Turn on a logger</text>
+  <text class="t" x="20" y="86">Add a Logger</text>
   <text class="d" x="20" y="102">logger name - level - expiry - hosts - note</text>
 
   <rect class="bx" x="8" y="120" width="624" height="52" rx="4"/>
-  <text class="t" x="20" y="142">Overrides in effect</text>
+  <text class="t" x="20" y="142">Plugin Logger Status</text>
   <text class="d" x="20" y="158">what this plugin is holding - action: Remove override</text>
 
   <rect class="bx" x="8" y="182" width="624" height="58" rx="4"/>
-  <text class="t" x="20" y="204">Loggers live in the JVM</text>
+  <text class="t" x="20" y="204">All Logger Status</text>
   <text class="d" x="20" y="220">every logger, its level, its source - actions: Suppress toggle, Clear</text>
   <text class="d" x="20" y="234">grouped by host, filter chips above</text>
 
   <rect class="bx" x="8" y="250" width="624" height="42" rx="4"/>
-  <text class="t" x="20" y="272">Hosts</text>
+  <text class="t" x="20" y="272">Host Status</text>
   <text class="d" x="20" y="286">OS - JVM - log4j2 config path - log files - last sync</text>
 </svg>
 <figcaption>The page, top to bottom. The first two sections are about this plugin&#39;s own
@@ -144,33 +145,41 @@ overrides; the third is the truth of what log4j2 has configured, whoever put it 
 </figure>
 
 <dl>
-  <dt>Turn on a logger</dt>
+  <dt>Add a Logger</dt>
   <dd>The form. Type <strong>any</strong> logger name - the dropdown is only a list of common IIQ
   loggers and does not restrict what you can type. Custom loggers from your own rules work, for
   example <code>rule.myCustomRule</code>.</dd>
 
-  <dt>Overrides in effect</dt>
+  <dt>Plugin Logger Status</dt>
   <dd>Everything this plugin is currently holding, from this page and from the
   <code>Permanent loggers</code> plugin setting. Every row is an override, and the only thing you
   can do to one is remove it.</dd>
 
-  <dt>Loggers live in the JVM</dt>
+  <dt>All Logger Status</dt>
   <dd>Every logger log4j2 actually has configured on each host, whatever put it there, with its
   source stated. This is the truth of what is running.</dd>
 
-  <dt>Hosts</dt>
+  <dt>Host Status</dt>
   <dd>Every IIQ JVM: its OS, its JVM, which <code>log4j2.properties</code> it loaded, where it
   writes logs, and when it last reconciled.</dd>
+
+  <dt>Log Viewer</dt>
+  <dd>The log itself - the last N lines, or a search across every host. See
+  <a href="#logfile">Reading the log</a>.</dd>
+
+  <dt>History</dt>
+  <dd>What has been changed through this plugin, newest first. Collapsed until you ask for it.
+  See <a href="#history">History</a>.</dd>
 </dl>
 
 <h2 id="chips">Host chips<a class="top" href="#">top</a></h2>
-<p>Three sections draw a row of host chips - <em>Loggers live in the JVM</em>,
-<em>Hosts</em> and <em>Logs</em>. They look and behave the same everywhere, and every chip
+<p>Three sections draw a row of host chips - <em>All Logger Status</em>,
+<em>Host Status</em> and <em>Log Viewer</em>. They look and behave the same everywhere, and every chip
 carries <strong>two independent things</strong>.</p>
 
 <h3>Colour is status</h3>
 <p>Colour always means "how is this host doing with respect to what this section is
-about". In <em>Loggers live in the JVM</em> and <em>Hosts</em> that is the host's own health:</p>
+about". In <em>All Logger Status</em> and <em>Host Status</em> that is the host's own health:</p>
 <dl>
   <dt>Green</dt><dd>In sync.</dd>
   <dt>Amber, with a spinner</dt><dd>Catching up - it has an older revision and will apply the
@@ -179,7 +188,7 @@ about". In <em>Loggers live in the JVM</em> and <em>Hosts</em> that is the host'
   distrust. Nothing is in flight; it has gone quiet.</dd>
   <dt>Red</dt><dd>Not reporting at all, or reporting an error of its own. Hover for the reason.</dd>
 </dl>
-<p>In <em>Logs</em> there is a query to answer, so the colour is what that host found instead -
+<p>In <em>Log Viewer</em> there is a query to answer, so the colour is what that host found instead -
 see <a href="#logchips">the host chips</a> under Reading the log.</p>
 
 <h3>Picked is separate from colour</h3>
@@ -188,9 +197,9 @@ through, the same in every section. What differs is only where each section star
 <table>
   <thead><tr><th>Section</th><th>Starts with</th></tr></thead>
   <tbody>
-    <tr><td>Loggers live in the JVM</td><td>the host serving the page, on its own</td></tr>
-    <tr><td>Hosts</td><td>every host</td></tr>
-    <tr><td>Logs</td><td>every host</td></tr>
+    <tr><td>All Logger Status</td><td>the host serving the page, on its own</td></tr>
+    <tr><td>Host Status</td><td>every host</td></tr>
+    <tr><td>Log Viewer</td><td>every host</td></tr>
   </tbody>
 </table>
 <p>Click any chip to toggle it. You can pick as many as you like. <em>Loggers live in the
@@ -203,14 +212,14 @@ point, since comparing hosts means reading down a column. One table computes one
 from all the rows, stays fluid at any width, and scrolls inside its own box rather than
 pushing the page sideways.</p>
 <figure>
-  <img src="img/15-live-two-hosts.png" alt="Loggers live in the JVM with two hosts picked, showing a table for each, and the remaining chips faded" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
-  <figcaption>Two hosts picked in <em>Loggers live in the JVM</em>. Both the filter counts and
+  <img src="img/15-live-two-hosts.png" alt="All Logger Status with two hosts picked, showing a table for each, and the remaining chips faded" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Two hosts picked in <em>All Logger Status</em>. Both the filter counts and
   the tables follow what you pick, and hosts reporting an identical picture share one table.</figcaption>
 </figure>
 
 <h2 id="sources">Where a logger came from<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/04-live-loggers.png" alt="Loggers live in the JVM with source tags, file levels and per-row actions" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/04-live-loggers.png" alt="All Logger Status with source tags, file levels and per-row actions" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>Every live logger with its source, for the hosts you pick. root and sailpoint are
   in the untouchable list, so their controls are greyed out. This section starts on the host
   serving the page - see <a href="#chips">Host chips</a>.</figcaption>
@@ -321,7 +330,7 @@ so it reads without relying on colour alone.</figcaption>
 
   <dt>Sync this host now</dt>
   <dd>Reconciles the host serving this page immediately. Every other host reconciles itself on its
-  own timer, so there is nothing to force there - watch <em>Last sync</em> in the Hosts table.</dd>
+  own timer, so there is nothing to force there - watch <em>Last sync</em> in the Host Status table.</dd>
 </dl>
 
 <h2 id="suppress-clear">Suppress versus Clear<a class="top" href="#">top</a></h2>
@@ -345,9 +354,9 @@ the host's declared configuration - the plugin quietly deleting it would be figh
 your back. Overriding it to <code>OFF</code> with Suppress is the honest option, and it stays
 visible and reversible.</p>
 
-<h2 id="collections">Saved collections<a class="top" href="#">top</a></h2>
+<h2 id="collections">Saved Logger Collections<a class="top" href="#">top</a></h2>
 <figure>
-  <img src="img/10-collections.png" alt="The Saved collections table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/10-collections.png" alt="The Saved Logger Collections table" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>Named sets of loggers, shared with everyone.</figcaption>
 </figure>
 <p>A collection is a named set of loggers and levels, <strong>shared with everyone</strong> who uses
@@ -443,6 +452,31 @@ the next question every time you turn one on.</p>
   handled the request - the others will show nothing.</li>
 </ol>
 
+<h2 id="history">History<a class="top" href="#">top</a></h2>
+<figure>
+  <img src="img/16-history.png" alt="The History panel expanded, showing recent changes with the revision each one produced" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Each change with the configuration revision it produced.</figcaption>
+</figure>
+<p>Collapsed until you press <strong>Show</strong>, because it is a look-back rather than
+something you need in front of you while working. It is not fetched until you open it, and not
+re-fetched by the page's own refresh.</p>
+<p>The <strong>Rev</strong> column is the configuration revision that change produced. That is
+what makes the counter in the page header mean something: <em>revision 131</em> on its own only
+tells hosts whether they are up to date, but matched against a row here it tells you what
+happened. Rows recorded before this column existed show a dash rather than a made-up number.</p>
+<p><strong>Changes</strong> is the default. Reading and searching logs is audited too - that is
+deliberate, someone read production logs - but they are not changes, and a busy afternoon of
+searching would bury the one override you are looking for. <strong>Everything</strong> includes
+them.</p>
+<p>This is read straight back out of the IIQ audit trail. There is no second copy kept for the
+page's convenience, which means what you see here is exactly what an auditor sees in <em>Audit
+Search</em> under the <em>Logger Manager change</em> action, and it survives the plugin being
+uninstalled. It also means the panel inherits the trail's one blind spot: a rule calling
+<code>Logger.getLogger(...).setLevel(...)</code> never came through this plugin, so it is not
+here. <em>All Logger Status</em> is where you see those, tagged <em>set at runtime</em>.</p>
+<p>The panel shows the most recent 50. Older changes are still in the trail - search Audit Search
+for the action by name.</p>
+
 <h2 id="levels">Levels and expiry<a class="top" href="#">top</a></h2>
 <p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like
 this causes an incident.</p>
@@ -457,7 +491,7 @@ this causes an incident.</p>
   to <code>DEBUG</code> turns on every logger in the JVM at once.</dd>
 </dl>
 
-<h2 id="hosts">Hosts and propagation<a class="top" href="#">top</a></h2>
+<h2 id="hosts">Host Status and propagation<a class="top" href="#">top</a></h2>
 <figure>
   <img src="img/05-hosts.png" alt="The Hosts table showing OS, JVM, state, last sync, what is applied and the log4j2 paths" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>Each host reports its own OS, JVM, config path and log files - the host-specific
@@ -528,7 +562,7 @@ next sync - 60 seconds by default. Hosts reporting an identical picture are grou
 so the one host that differs stands out instead of being buried under repeats.</p>
 <p>A mixed Windows, Linux, macOS or container cluster needs no special handling: the level change is
 the same log4j2 call everywhere. What differs per host - the OS, the config file path, where the
-logs are written - is reported in the Hosts table rather than acted on.</p>
+logs are written - is reported in the Host Status table rather than acted on.</p>
 
 <h2 id="audit">Audit<a class="top" href="#">top</a></h2>
 
@@ -555,7 +589,7 @@ actions that matter.</p>
   Maximum to 0 to allow permanent overrides at any level.</dd>
   <dt>Allow root logger</dt><dd>Whether the root logger may be targeted at all.</dd>
   <dt>Permanent loggers</dt><dd>Loggers enabled from the settings page with no expiry. They appear
-  in <em>Overrides in effect</em> marked <em>from settings</em> and can only be changed there.</dd>
+  in <em>Plugin Logger Status</em> marked <em>from settings</em> and can only be changed there.</dd>
 </dl>
 
 <h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>
@@ -570,7 +604,7 @@ actions that matter.</p>
   <dd>The message still has to reach an appender. Check that host's log file paths in the Hosts
   table - on a stock IIQ install the file appender is commented out and everything goes to stdout.</dd>
   <dt>A logger is noisy and nobody here turned it on</dt>
-  <dd>Read the <strong>Source</strong> column in <em>Loggers live in the JVM</em>. <strong>File
+  <dd>Read the <strong>Source</strong> column in <em>All Logger Status</em>. <strong>File
   says</strong> shows what <code>log4j2.properties</code> declares; <em>differs from file</em> means
   something changed it at runtime.</dd>
 </dl>

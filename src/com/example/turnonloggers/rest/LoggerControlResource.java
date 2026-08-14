@@ -10,8 +10,11 @@ import com.example.turnonloggers.core.LoggerSync;
 import com.example.turnonloggers.core.PluginSettings;
 import org.apache.log4j.Logger;
 import sailpoint.api.SailPointContext;
+import sailpoint.object.AuditEvent;
 import sailpoint.object.Capability;
+import sailpoint.object.Filter;
 import sailpoint.object.Identity;
+import sailpoint.object.QueryOptions;
 import sailpoint.object.Server;
 import sailpoint.rest.plugin.AllowAll;
 import sailpoint.rest.plugin.BasePluginResource;
@@ -518,6 +521,91 @@ public class LoggerControlResource extends BasePluginResource {
      * path, so there is nothing for a caller to traverse - only files this JVM
      * already writes to are reachable.
      */
+    /** How much history the panel will show. Enough to cover a working week. */
+    private static final int HISTORY_MAX = 200;
+
+    /**
+     * What has been changed through this plugin, most recent first.
+     *
+     * Read straight back out of the audit trail rather than from a separate
+     * history object. The trail is already the record - it is written on every
+     * action, it cannot be switched off from inside the plugin, and it outlives
+     * the plugin being uninstalled. A second copy in a Custom would be a second
+     * thing to keep correct, would reintroduce the multi-writer contention the
+     * configuration object was shaped to avoid, and would eventually have to
+     * throw history away to stay a sensible size. This throws nothing away.
+     */
+    @GET
+    @Path("history")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response history(@QueryParam("limit") @DefaultValue("50") int limit,
+                            @QueryParam("kind") @DefaultValue("change") String kind) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            if (limit <= 0) limit = 50;
+            if (limit > HISTORY_MAX) limit = HISTORY_MAX;
+
+            SailPointContext ctx = getContext();
+            QueryOptions qo = new QueryOptions();
+            qo.add(Filter.eq("action", AuditWriter.ACTION));
+            qo.setOrderBy("created");
+            qo.setOrderAscending(false);
+            // Over-fetch and filter here rather than in the query: the change/read
+            // marker lives in the event's attribute map, which is a CLOB and not
+            // something to build a Filter around. Fifty changes are worth finding
+            // even if a few hundred searches happened in between.
+            qo.setResultLimit(HISTORY_MAX);
+
+            List<Map<String, Object>> rows = new ArrayList<>();
+            List<AuditEvent> events = ctx.getObjects(AuditEvent.class, qo);
+            if (events != null) {
+                boolean changesOnly = !"all".equalsIgnoreCase(kind);
+                for (AuditEvent e : events) {
+                    if (rows.size() >= limit) break;
+                    // Older events predate the marker; fall back to the same
+                    // verb list rather than guessing or dropping them.
+                    Object k = e.getAttribute("kind");
+                    boolean isRead = k != null
+                            ? "read".equalsIgnoreCase(String.valueOf(k))
+                            : AuditWriter.isRead(e.getString1());
+                    if (changesOnly && isRead) continue;
+
+                    Map<String, Object> r = new LinkedHashMap<>();
+                    r.put("kind", isRead ? "read" : "change");
+                    r.put("when", e.getCreated() == null ? "0"
+                            : String.valueOf(e.getCreated().getTime()));
+                    r.put("who", e.getSource());
+                    r.put("what", e.getString1());
+                    r.put("logger", e.getTarget());
+                    r.put("level", e.getString2());
+                    r.put("hosts", e.getString3());
+                    r.put("expires", e.getString4());
+                    Object rev = e.getAttribute("revision");
+                    // Blank rather than a made-up number for anything recorded
+                    // before the revision was stamped on.
+                    r.put("revision", rev == null ? "" : String.valueOf(rev));
+                    Object note = e.getAttribute("note");
+                    r.put("note", note == null ? "" : String.valueOf(note));
+                    rows.add(r);
+                }
+            }
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("rows", rows);
+            out.put("limit", limit);
+            out.put("kind", "all".equalsIgnoreCase(kind) ? "all" : "change");
+            out.put("truncated", rows.size() >= limit);
+            return json(Response.Status.OK, out);
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] history failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     @GET
     @Path("logtail")
     @Produces(MediaType.APPLICATION_JSON)

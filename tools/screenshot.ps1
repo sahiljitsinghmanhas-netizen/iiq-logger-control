@@ -166,7 +166,7 @@ try {
     Invoke-Cdp $ws "DOM.enable" @{} | Out-Null
 
     function Save-Shot {
-        param($ws, $OutDir, $File, $Selector, $Width)
+        param($ws, $OutDir, $File, $Selector, $Width, $ClipHeight = 0)
         $clip = $null
         if ($Selector) {
             # The page re-renders on its own 10s timer, which invalidates node
@@ -186,7 +186,13 @@ try {
                 }
             }
             $q = $box.model.border
-            $clip = @{ x = $q[0]; y = $q[1]; width = ($q[2] - $q[0]); height = ($q[5] - $q[1]); scale = 1 }
+            $h = $q[5] - $q[1]
+            # Some panels are unboundedly long - the history is fifty rows of
+            # whatever this database happens to hold. Documentation needs the
+            # shape, not the contents, and an uncapped capture of live data is
+            # how something you did not mean to publish ends up in a PNG.
+            if ($ClipHeight -gt 0 -and $h -gt $ClipHeight) { $h = $ClipHeight }
+            $clip = @{ x = $q[0]; y = $q[1]; width = ($q[2] - $q[0]); height = $h; scale = 1 }
         }
         $p = @{ format = "png"; captureBeyondViewport = $true }
         if ($clip) { $p.clip = $clip }
@@ -247,6 +253,17 @@ try {
 '@ } | Out-Null
     Start-Sleep -Milliseconds 500
     Save-Shot $ws $OutDir "14-log-hosts-off.png" "#tol-sec-logs .tol-hoststrip" $Width
+
+    # History is collapsed until asked for, so open it before capturing.
+    Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @'
+(function () {
+    var b = document.querySelector('#tol-sec-history button');
+    if (b && b.textContent === 'Show') { b.click(); return 'opened'; }
+    return b ? b.textContent : 'no button';
+})()
+'@ } | Out-Null
+    Start-Sleep -Seconds 2
+    Save-Shot $ws $OutDir "16-history.png" "#tol-sec-history" $Width 620
 
     # The settings form and the audit search are both client-side apps that do
     # not populate from a directly-navigated URL - the settings route renders
