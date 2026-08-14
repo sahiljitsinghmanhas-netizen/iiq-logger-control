@@ -279,7 +279,6 @@ curl -u user:pass -H 'X-XSRF-TOKEN: t' -H 'Content-Type: application/json' \
   https://iiq.example.com/identityiq/plugin/rest/TurnOnLoggers/entries
 ```
 
-`dev-cycle.sh` wraps the common operations for development.
 
 ## Where state lives
 

@@ -1,6 +1,7 @@
+dev-cycle.sh
 .env.local
+.env.local.template
 build/
 lib/
 *.zip
-docs/screenshots/08-help.png
 
