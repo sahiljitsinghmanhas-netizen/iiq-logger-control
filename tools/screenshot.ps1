@@ -231,7 +231,8 @@ try {
   // "Read this host" specifically - not the last button, which is Stop.
   var b = bar.querySelectorAll('button');
   for (var i = 0; i < b.length; i++) {
-    if ((b[i].textContent || '').indexOf('Read this host') > -1) { b[i].click(); return 1; }
+    var t = b[i].textContent || '';
+    if (t.indexOf('Show recent lines') > -1 || t.indexOf('Search this host') > -1) { b[i].click(); return 1; }
   }
   return 0;
 })()

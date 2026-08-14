@@ -242,7 +242,10 @@ so it reads without relying on colour alone.</figcaption>
 </figure>
 
 <dl>
-  <dt>Turn on</dt><dd>Creates an override at the level you choose.</dd>
+  <dt>Turn on</dt><dd>Creates an override at the level you choose. <strong>A note is
+  required</strong> - a ticket number or a sentence. It goes into the audit event and is shown to
+  whoever finds the logger later, because "who turned this on" is answerable afterwards but "why"
+  is not unless someone was made to say so at the time.</dd>
 
   <dt>Suppress (a toggle)</dt>
   <dd>Holds a logger at <code>OFF</code> and keeps it there. The plugin re-applies it on every sync,
@@ -313,8 +316,15 @@ not touch any logger that is currently on.</p>
   <img src="img/12-logs.png" alt="The Log on this host panel showing the end of sailpoint.log" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>The end of a log file on the host serving the page, with a text filter.</figcaption>
 </figure>
-<p>Having turned a logger on, the next question is where to read it. This shows the end of a log
-file on <strong>the host serving the page</strong>, with a plain-text filter.</p>
+<p>Having turned a logger on, the next question is where to read it.</p>
+<p>One box, one scope, one button. <strong>This host</strong> reads the end of the file here and
+filters it, immediately - leave the box blank to just see the most recent lines.
+<strong>All hosts</strong> records what to look for; every host then checks its own file on its
+next sync and publishes what it found, so this host replies at once and the rest take up to a
+minute.</p>
+<p>Results appear as a <strong>chip per host</strong> with its match count. Click a chip to read
+that host, or press its <strong>&times;</strong> to drop it from the results - on a thirteen-host
+cluster, stacking every host buries the one you care about.</p>
 <p>Only files that host's own log4j2 configuration writes to are offered, and the request picks one
 <strong>by index into that list rather than by path</strong> - there is no path parameter, so it
 cannot be pointed anywhere else. That is also why a mixed Windows, Linux and macOS cluster needs
@@ -334,6 +344,18 @@ being answered after fifteen minutes, so hosts are not left scanning forever, an
 ends it immediately.</p>
 <p><strong>Find in logs</strong> on any override runs this search for that logger's name - which is
 the next question every time you turn one on.</p>
+<h3>A worked example</h3>
+<p>Provisioning to AD is failing for one identity.</p>
+<ol>
+  <li>Turn on <code>sailpoint.api.Provisioner</code> at <code>DEBUG</code> for 15 minutes, with the
+  note <em>INC0012345 - AD provisioning failures</em>. The note is required and goes into the audit
+  event.</li>
+  <li>Reproduce the failure.</li>
+  <li>Press <strong>Find in logs</strong> on that override, or type the identity name and choose
+  <strong>All hosts</strong>.</li>
+  <li>Each host reports its matching lines. Click through the host chips to find the one that
+  handled the request - the others will show nothing.</li>
+</ol>
 
 <h2 id="levels">Levels and expiry<a class="top" href="#">top</a></h2>
 <p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like

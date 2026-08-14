@@ -72,7 +72,7 @@ than most people need.
 
 | Section | What it shows |
 |---|---|
-| Turn on a logger | The form. The logger box is free text; the dropdown only suggests common IIQ loggers. |
+| Turn on a logger | The form. The logger box is free text; the dropdown only suggests common IIQ loggers. A note is required. |
 | Overrides in effect | What this plugin is holding, and which hosts have confirmed each one. |
 | Loggers live in the JVM | Every logger log4j2 has configured on each host, with its source. |
 | Hosts | Each JVM's OS, log4j2 config path, log files and last sync. |
@@ -109,6 +109,13 @@ Loggers declared in `log4j2.properties` have no Clear: log4j2 rebuilds its
 configuration from that file on every change and restart, so the logger would
 come straight back. Suppress is the only thing that holds for them.
 
+### Every override needs a note
+
+Turning a logger on requires a note - a ticket number or a sentence. It is
+recorded in the audit event and shown in the table to whoever finds the logger
+later. "Who turned this on" is answerable from the audit trail afterwards;
+"why" is not, unless someone was made to say so at the time.
+
 ### Saved collections
 
 A collection is a named set of loggers and levels, **shared with everyone** who
@@ -123,8 +130,14 @@ table and the audit trail both say where it came from.
 
 ### Reading the log
 
-The page can show the end of a log file on the host serving it, with a
-plain-text filter.
+One box, one scope, one button. **This host** reads the end of the file here and
+filters it immediately - blank shows the most recent lines. **All hosts**
+records what to look for; every host checks its own file on its next sync, so
+this host replies at once and the rest take up to a minute.
+
+Results are a **chip per host** with its match count. Click a chip to read that
+host, or press its **×** to drop it - on a thirteen-host cluster, stacking every
+host buries the one that matters.
 
 ![Log on this host](docs/screenshots/12-logs.png)
 

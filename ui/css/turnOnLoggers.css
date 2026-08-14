@@ -732,3 +732,50 @@
 .tol-logblock .tol-cluster-host {
     margin: 0 0 4px 0;
 }
+
+/* ---------- host strip: one chip per host that answered ---------- */
+
+.tol-scope { display: inline-flex; gap: 4px; }
+
+.tol-hoststrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin: 14px 0 6px 0;
+}
+
+.tol-hosttab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px 2px 9px;
+    cursor: pointer;
+    opacity: .75;
+}
+
+.tol-hosttab:hover { opacity: 1; }
+
+.tol-hosttab-on {
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(33, 134, 235, .35);
+}
+
+.tol-hosttab-name { cursor: pointer; }
+
+.tol-hosttab-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .22);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tol-hosttab-x:hover { background: rgba(255, 255, 255, .45); }
+
+.tol-logmeta { margin: 0 0 6px 2px; }

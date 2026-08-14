@@ -113,6 +113,17 @@ public class LoggerControlResource extends BasePluginResource {
             String hosts = hostsOf(body);
             String note = str(body, "note");
 
+            // Required, not optional. Six months on, "who turned this on" is
+            // answerable from the audit trail but "why" is not, unless someone
+            // was made to say so at the time.
+            if (note == null || note.trim().length() < 3) {
+                return error(Response.Status.BAD_REQUEST,
+                        "A note is required - say why this logger is being turned on. "
+                                + "A ticket number or a sentence is enough; it is recorded in the "
+                                + "audit trail and shown to whoever finds the logger later.");
+            }
+            note = note.trim();
+
             String bad = validate(ctx, logger, level);
             if (bad != null) return error(Response.Status.BAD_REQUEST, bad);
 
