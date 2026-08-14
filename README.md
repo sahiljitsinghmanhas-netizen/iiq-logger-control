@@ -132,8 +132,10 @@ table and the audit trail both say where it came from.
 
 Two things, both across every host:
 
-- **Output last N lines** - the raw end of each host's log, no filter, for when
-  a search finds nothing and you just want to see what a host is writing.
+- **Output last N lines** - the raw end of the log, no filter and no search
+  term, for when a search finds nothing and you just want to see what a host is
+  writing. 20, 40 or 100 lines, on every host or on one named host - targeting
+  one asks only that host.
 - **Search all hosts** - lines matching some text.
 
 **Stop** ends either. The host serving the page answers immediately; the rest

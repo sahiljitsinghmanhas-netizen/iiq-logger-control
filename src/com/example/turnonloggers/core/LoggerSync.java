@@ -142,7 +142,8 @@ public final class LoggerSync {
         // read another's disk, so each one looks in its own file and publishes
         // what it found; the page merges them.
         try {
-            if (LoggerConfigStore.logRequestActive(ctx)) {
+            if (LoggerConfigStore.logRequestActive(ctx)
+                    && LoggerConfigStore.logTargets(ctx, r.host)) {
                 String mode = LoggerConfigStore.logMode(ctx);
                 if ("tail".equals(mode)) {
                     r.logMatches = LogTail.tailLines(LoggerConfigStore.logLines(ctx));

@@ -1083,7 +1083,7 @@
         return box;
     }
 
-    var logState = { lines: 40, text: '', selected: null, hidden: {} };
+    var logState = { lines: 40, host: '', text: '', selected: null, hidden: {} };
 
     /**
      * Log lines from every host.
@@ -1122,15 +1122,29 @@
         });
         lineSel.onchange = function () { logState.lines = parseInt(lineSel.value, 10); };
 
+        // Which host, so "the last 40 lines on iiq-app-03" is one request
+        // rather than asking thirteen hosts and reading one answer.
+        var hostSel = document.createElement('select');
+        hostSel.className = 'tol-input tol-log-host';
+        hostSel.appendChild(opt('', 'on every host', logState.host === ''));
+        (state.hosts || []).forEach(function (h) {
+            hostSel.appendChild(opt(h.name, 'on ' + h.name, logState.host === h.name));
+        });
+        hostSel.onchange = function () { logState.host = hostSel.value; };
+
         var tailBtn = el('button', 'tol-btn tol-btn-small', 'Output last');
-        tailBtn.title = 'The end of the log on every host, with no filter';
+        tailBtn.title = 'The end of the log, with no filter - no search term needed';
         tailBtn.onclick = function () {
-            mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
-                'Reading the last ' + logState.lines + ' lines on every host.');
+            var where = logState.host || '';
+            mutate(api('POST', '/logquery',
+                { mode: 'tail', lines: logState.lines, host: where, text: '' }),
+                'Reading the last ' + logState.lines + ' lines on '
+                    + (where || 'every host') + '.');
         };
         bar1.appendChild(tailBtn);
         bar1.appendChild(lineSel);
-        bar1.appendChild(el('span', 'tol-small', 'on every host - no filter, just the raw log'));
+        bar1.appendChild(hostSel);
+        bar1.appendChild(el('span', 'tol-small', 'no filter, just the raw log'));
         box.appendChild(bar1);
 
         // --- search --------------------------------------------------------
@@ -1171,16 +1185,22 @@
         }
 
         var tailing = state.logMode === 'tail';
-        var what = tailing
+        var what = (tailing
             ? 'last ' + state.logLines + ' lines'
-            : 'lines matching "' + state.logQuery + '"';
+            : 'lines matching "' + state.logQuery + '"')
+            + (state.logHost ? ' on ' + state.logHost : '');
 
         // --- one chip per host that answered -------------------------------
         var answered = (state.hosts || []).filter(function (h) {
-            return h.reporting && (parseInt(h.logAnsweredAt, 10) || 0) > 0;
+            if (!h.reporting || !((parseInt(h.logAnsweredAt, 10) || 0) > 0)) return false;
+            var t = state.logHost || '';
+            return !t || h.name === t;   // an untargeted host may hold a stale answer
         });
+        var target = state.logHost || '';
         var waiting = (state.hosts || []).filter(function (h) {
-            return h.reporting && !(parseInt(h.logAnsweredAt, 10) || 0);
+            if (!h.reporting) return false;
+            if (target && h.name !== target) return false;   // never asked
+            return !(parseInt(h.logAnsweredAt, 10) || 0);
         });
 
         var visible = answered.filter(function (h) { return !logState.hidden[h.name]; });

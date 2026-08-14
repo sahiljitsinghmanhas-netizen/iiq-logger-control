@@ -320,8 +320,10 @@ not touch any logger that is currently on.</p>
 <p>Two things you can ask for, both across every host:</p>
 <dl>
   <dt>Output last N lines</dt>
-  <dd>The raw end of each host's log, with no filter - for when a search finds nothing and you just
-  want to see what the host is actually writing. 20, 40 or 100 lines.</dd>
+  <dd>The raw end of the log, with no filter and <strong>no search term</strong> - for when a search
+  finds nothing and you just want to see what a host is actually writing. Choose 20, 40 or 100
+  lines, and either every host or <strong>one named host</strong>. Targeting one host asks only that
+  host, rather than making thirteen of them read their files so you can look at one.</dd>
   <dt>Search all hosts</dt>
   <dd>Lines matching some text - a logger name, an identity, an error.</dd>
 </dl>

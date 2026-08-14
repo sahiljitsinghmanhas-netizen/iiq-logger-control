@@ -592,10 +592,12 @@ public class LoggerControlResource extends BasePluginResource {
             } catch (NumberFormatException ignored) {
                 lines = 40;
             }
-            LoggerConfigStore.setLogQuery(ctx, text, mode, lines, user.getName());
+            String host = str(body, "host");
+            LoggerConfigStore.setLogQuery(ctx, text, mode, lines, host, user.getName());
             if ("tail".equals(mode)) {
-                AuditWriter.log(ctx, user.getName(), "read logs on every host",
-                        "last " + lines + " lines", null, "*", 0L, null);
+                AuditWriter.log(ctx, user.getName(), "read logs",
+                        "last " + lines + " lines", null,
+                        (host == null || host.trim().isEmpty()) ? "*" : host.trim(), 0L, null);
             } else if (text != null && !text.trim().isEmpty()) {
                 AuditWriter.log(ctx, user.getName(), "searched logs", text.trim(),
                         null, "*", 0L, null);
@@ -725,12 +727,14 @@ public class LoggerControlResource extends BasePluginResource {
             out.put("logActive", LoggerConfigStore.logRequestActive(ctx));
             out.put("logMode", LoggerConfigStore.logMode(ctx));
             out.put("logLines", LoggerConfigStore.logLines(ctx));
+            out.put("logHost", LoggerConfigStore.logHost(ctx));
         } catch (Throwable t) {
             out.put("logQuery", "");
             out.put("logQueryAt", "0");
             out.put("logActive", false);
             out.put("logMode", "search");
             out.put("logLines", 40);
+            out.put("logHost", "");
         }
         return out;
     }

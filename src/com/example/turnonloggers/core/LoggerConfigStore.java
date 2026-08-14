@@ -92,6 +92,8 @@ public final class LoggerConfigStore {
     /** "search" for matching lines, "tail" for the last N lines. */
     public static final String A_LOG_MODE     = "logQueryMode";
     public static final String A_LOG_LINES    = "logQueryLines";
+    /** Which host should answer: a name, or blank for all of them. */
+    public static final String A_LOG_HOST     = "logQueryHost";
 
     public static final String ALL_HOSTS = "*";
 
@@ -318,6 +320,20 @@ public final class LoggerConfigStore {
         return (m == null || m.isEmpty()) ? "search" : m;
     }
 
+    public static String logHost(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return "";
+        String h = cfg.getString(A_LOG_HOST);
+        return h == null ? "" : h.trim();
+    }
+
+    /** True if this host should answer the current request. */
+    public static boolean logTargets(SailPointContext ctx, String host) throws GeneralException {
+        String want = logHost(ctx);
+        if (want == null || want.isEmpty() || ALL_HOSTS.equals(want)) return true;
+        return want.equalsIgnoreCase(host);
+    }
+
     public static int logLines(SailPointContext ctx) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         return cfg == null ? 40 : asInt(cfg.getString(A_LOG_LINES), 40);
@@ -325,7 +341,7 @@ public final class LoggerConfigStore {
 
     /** Ask every host to look in its own log - for text, or just for the last N lines. */
     public static long setLogQuery(SailPointContext ctx, String text, String mode, int lines,
-                                   String user) throws GeneralException {
+                                   String host, String user) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) {
             cfg = new Custom();
@@ -339,6 +355,7 @@ public final class LoggerConfigStore {
         cfg.put(A_LOG_QUERY, text == null ? "" : text.trim());
         cfg.put(A_LOG_MODE, tailing ? "tail" : "search");
         cfg.put(A_LOG_LINES, String.valueOf(lines <= 0 ? 40 : lines));
+        cfg.put(A_LOG_HOST, host == null ? "" : host.trim());
         cfg.put(A_LOG_QUERY_AT, active ? String.valueOf(now) : "0");
         // Not a revision bump: a search changes nothing about what is logged,
         // so it must not make every host look like it is behind on config.
