@@ -39,6 +39,9 @@ public final class LoggerSync {
         public List<String> reverted = new ArrayList<>();
         public List<String> errors = new ArrayList<>();
         public long lastClear;
+        public List<String> logMatches = new ArrayList<>();
+        public long logAnsweredAt;
+        public String logPath = "";
     }
 
     public static synchronized SyncResult run(SailPointContext ctx, String trigger) {
@@ -135,6 +138,21 @@ public final class LoggerSync {
                     + " reverted=" + ar.reverted + " errors=" + ar.errors);
         }
 
+        // Answer the cluster-wide log search, if one is running. No host can
+        // read another's disk, so each one looks in its own file and publishes
+        // what it found; the page merges them.
+        try {
+            String q = LoggerConfigStore.logQuery(ctx);
+            if (q != null && !q.isEmpty()) {
+                r.logMatches = Log4jAgent.available() ? LogTail.search(q) : new ArrayList<String>();
+                r.logAnsweredAt = System.currentTimeMillis();
+                List<String> files = HostFacts.logFilePaths();
+                r.logPath = files.isEmpty() ? "" : files.get(0);
+            }
+        } catch (Throwable t) {
+            LOG.warn("[TurnOnLoggers] log search failed on " + r.host + ": " + t);
+        }
+
         writeStatusQuietly(ctx, r, trigger);
         return r;
     }
@@ -150,7 +168,8 @@ public final class LoggerSync {
 
     private static void writeStatusQuietly(SailPointContext ctx, SyncResult r, String trigger) {
         try {
-            LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors, r.lastClear);
+            LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors,
+                    r.lastClear, r.logMatches, r.logAnsweredAt, r.logPath);
         } catch (Throwable t) {
             // Status is diagnostics. Failing to publish it must never undo a
             // successful apply.

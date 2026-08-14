@@ -529,6 +529,19 @@
             tr.appendChild(c6);
 
             var c7 = el('td');
+            if (state.logTailEnabled !== false) {
+                // Straight from "this logger is on" to "show me what it said",
+                // which is the next question every single time.
+                var find = el('button', 'tol-btn tol-btn-small', 'Find in logs');
+                find.title = 'Search every host for lines mentioning this logger';
+                find.onclick = (function (name) {
+                    return function () {
+                        mutate(api('POST', '/logquery', { text: name }),
+                            'Searching every host for ' + name + '.');
+                    };
+                })(e.logger);
+                c7.appendChild(find);
+            }
             if (e.permanent) {
                 // Owned by the settings page, so there is nothing safe to
                 // delete here - editing the setting is the way to turn it off.
@@ -1124,7 +1137,93 @@
         out.id = 'tol-log-output';
         box.appendChild(out);
         window.setTimeout(paintLog, 0);
+
+        box.appendChild(clusterSearch());
         return box;
+    }
+
+    /**
+     * Searching every host at once.
+     *
+     * Nothing is fetched from another host here - no host can read another's
+     * disk. The text is recorded, and each host looks in its own file on its
+     * next sync and publishes what it found. The host serving the page answers
+     * straight away; the rest arrive within one interval, and each result says
+     * how long ago that host answered.
+     */
+    function clusterSearch() {
+        var wrap = el('div', 'tol-cluster');
+        wrap.appendChild(el('h3', 'tol-subhead', 'Search every host'));
+        wrap.appendChild(el('div', 'tol-hint',
+            'Looks for text in every host\u2019s own log - a logger name, an identity, an error. '
+            + 'This host answers immediately; the others answer on their next sync, so give it a '
+            + 'minute. Each host reports up to 40 matching lines from the end of its file.'));
+
+        var bar = el('div', 'tol-logbar');
+        var q = document.createElement('input');
+        q.type = 'text';
+        q.id = 'tol-cluster-q';
+        q.className = 'tol-input tol-log-select';
+        q.setAttribute('placeholder', 'e.g. sailpoint.connector.LDAPConnector, or an identity name');
+        q.value = state.logQuery || '';
+        bar.appendChild(q);
+
+        var go = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
+        go.onclick = function () {
+            var text = document.getElementById('tol-cluster-q').value;
+            if (!text || !text.trim()) { say('Type something to search for.', 'error'); return; }
+            mutate(api('POST', '/logquery', { text: text }),
+                'Searching every host. This one is done; the others answer on their next sync.');
+        };
+        bar.appendChild(go);
+
+        if (state.logQuery) {
+            var stop = el('button', 'tol-btn tol-btn-small', 'Stop');
+            stop.title = 'Stop every host looking for this';
+            stop.onclick = function () {
+                mutate(api('POST', '/logquery', { text: '' }), 'Search stopped.');
+            };
+            bar.appendChild(stop);
+        }
+        wrap.appendChild(bar);
+
+        if (!state.logQuery) return wrap;
+
+        var any = false;
+        (state.hosts || []).forEach(function (h) {
+            var lines = h.logMatches || [];
+            var answered = parseInt(h.logAnsweredAt, 10) || 0;
+            if (!h.reporting) return;
+            any = true;
+
+            var head = el('div', 'tol-cluster-host');
+            head.appendChild(hostChips([h.name]));
+            var meta = el('span', 'tol-small');
+            if (!answered) {
+                meta.appendChild(document.createTextNode(' waiting for this host to answer...'));
+            } else {
+                meta.appendChild(document.createTextNode(
+                    ' ' + lines.length + ' matching line' + (lines.length === 1 ? '' : 's')
+                    + ', answered ' + fmtAgo(h.logAnsweredAt)
+                    + (h.logPath ? ' - ' + h.logPath : '')));
+            }
+            head.appendChild(meta);
+            wrap.appendChild(head);
+
+            if (answered) {
+                var pre = el('pre', 'tol-log tol-log-small');
+                if (!lines.length) {
+                    pre.appendChild(el('div', 'tol-small', 'Nothing matching in this host\u2019s log.'));
+                } else {
+                    lines.forEach(function (l) { pre.appendChild(document.createTextNode(l + '\n')); });
+                }
+                wrap.appendChild(pre);
+            }
+        });
+        if (!any) {
+            wrap.appendChild(el('div', 'tol-empty', 'No host has reported yet.'));
+        }
+        return wrap;
     }
 
     function paintLog() {

@@ -321,8 +321,23 @@ cannot be pointed anywhere else. That is also why a mixed Windows, Linux and mac
 nothing special: the path is whatever that host's configuration says, in that host's own syntax.</p>
 <p>Reads come from the end of the file with a seek, so a multi-gigabyte log costs the same as a
 small one, are capped by the <code>logTailKb</code> setting (and 512KB regardless), and every read
-is audited. Other hosts write their own files - the Hosts table lists their paths. Set
-<code>showLogFiles</code> to false to remove the panel entirely.</p>
+is audited. Set <code>showLogFiles</code> to false to remove the panel entirely.</p>
+
+<h3>Searching every host</h3>
+<figure>
+  <img src="img/12-cluster-search.png" alt="Search every host, showing matching lines from one host with how long ago it answered" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>One search, answered by every host about its own file.</figcaption>
+</figure>
+<p>No host can read another one's disk, so this does not fetch anything remotely. The text is
+recorded once, and <strong>every host looks in its own log on its next sync</strong> and publishes
+what it found. The host serving the page answers immediately; the rest arrive within one interval,
+and each result says how long ago that host answered.</p>
+<p>Each host reports up to 40 matching lines from the last 256KB of its file, with long lines
+truncated, because the result travels through the database rather than a stream. The search stops
+being answered after fifteen minutes, so hosts are not left scanning forever, and <strong>Stop</strong>
+ends it immediately.</p>
+<p><strong>Find in logs</strong> on any override runs this search for that logger's name - which is
+the next question every time you turn one on.</p>
 
 <h2 id="levels">Levels and expiry<a class="top" href="#">top</a></h2>
 <p>Overrides expire so logging cannot be left on by accident, which is the usual way a tool like

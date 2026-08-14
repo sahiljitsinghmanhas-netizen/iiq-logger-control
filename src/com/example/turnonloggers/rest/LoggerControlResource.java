@@ -545,6 +545,46 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Start or stop a cluster-wide log search.
+     *
+     * No host can read another one's disk, so this does not fetch anything: it
+     * records what to look for, and every host answers about its own file on
+     * its next sync, publishing matching lines into its own status object. The
+     * host serving this request answers immediately; the rest follow within one
+     * interval. The search stops being answered after fifteen minutes so hosts
+     * are not left scanning their logs forever.
+     */
+    @POST
+    @Path("logquery")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response logQuery(Map<String, Object> body) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            if (!PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true)) {
+                return error(Response.Status.FORBIDDEN,
+                        "Reading log files is switched off in the plugin settings.");
+            }
+            String text = str(body, "text");
+            LoggerConfigStore.setLogQuery(ctx, text, user.getName());
+            if (text != null && !text.trim().isEmpty()) {
+                AuditWriter.log(ctx, user.getName(), "searched logs", text.trim(),
+                        null, "*", 0L, null);
+            }
+            LoggerSync.run(ctx, "rest:logquery");
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] logQuery failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     // ==================================================================
     // state assembly
     // ==================================================================
@@ -656,6 +696,13 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("logTailEnabled", tail);
         out.put("logFiles", tail ? LogTail.files() : new ArrayList<Object>());
         out.put("logTailKb", PluginSettings.getInt(ctx, PluginSettings.S_LOGTAIL_KB, 64));
+        try {
+            out.put("logQuery", LoggerConfigStore.logQuery(ctx));
+            out.put("logQueryAt", String.valueOf(LoggerConfigStore.logQueryAt(ctx)));
+        } catch (Throwable t) {
+            out.put("logQuery", "");
+            out.put("logQueryAt", "0");
+        }
         return out;
     }
 
@@ -731,6 +778,10 @@ public class LoggerControlResource extends BasePluginResource {
             h.put("fileLoggers", st.get(LoggerConfigStore.S_FILE_LOGGERS));
             h.put("runtimeLoggers", st.get(LoggerConfigStore.S_RUNTIME_LOGGERS));
             h.put("liveLoggers", st.get(LoggerConfigStore.S_LIVE));
+            h.put("logMatches", st.get(LoggerConfigStore.S_LOG_MATCHES));
+            h.put("logAnsweredAt", String.valueOf(
+                    LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LOG_ANSWERED)), 0L)));
+            h.put("logPath", st.get(LoggerConfigStore.S_LOG_PATH));
             h.put("lastClear", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LAST_CLEAR)), 0L)));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));

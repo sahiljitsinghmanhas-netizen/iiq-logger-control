@@ -134,6 +134,19 @@ pointed anywhere else, and there are no OS-specific paths in it at all. Reads
 are taken from the end with a seek, capped by `logTailKb` (512KB hard ceiling),
 and audited. Set `showLogFiles` to `false` to remove the panel.
 
+### Searching every host
+
+![Search every host](docs/screenshots/12-cluster-search.png)
+
+A single search, answered by every host about its own file. Nothing is fetched
+remotely - no host can read another's disk. The text is recorded once, each
+host looks in its own log on its next sync and publishes what it found, and the
+page merges the results with how long ago each host answered.
+
+Bounded deliberately: up to 40 matching lines per host from the last 256KB,
+long lines truncated, and the search stops being answered after fifteen
+minutes. **Find in logs** on any override searches for that logger by name.
+
 ### Expiry
 
 Overrides expire so logging cannot be left on by accident.
@@ -212,6 +225,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `POST` | `/collections/{id}/apply` | Turn a whole collection on |
 | `DELETE` | `/collections/{id}` | Delete a collection |
 | `GET` | `/logtail?index=N&kb=K` | The end of one of this host's log files |
+| `POST` | `/logquery` | Start or stop a cluster-wide log search |
 | `POST` | `/cleanup` | Clear left-over loggers, or one named logger |
 | `DELETE` | `/hosts/{host}` | Forget a decommissioned host |
 

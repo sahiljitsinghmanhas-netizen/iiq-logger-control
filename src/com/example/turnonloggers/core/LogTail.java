@@ -35,6 +35,13 @@ public final class LogTail {
     /** Hard ceiling regardless of what the caller or the setting asks for. */
     public static final int MAX_KB = 512;
 
+    /** How much of the end of the file a cluster search looks through. */
+    public static final int SEARCH_KB = 256;
+    /** Matching lines kept per host. Enough to see a pattern, small enough to store. */
+    public static final int SEARCH_MAX_LINES = 40;
+    /** Long lines are truncated - a stack trace line can be enormous. */
+    public static final int SEARCH_MAX_CHARS = 400;
+
     private LogTail() {
     }
 
@@ -76,6 +83,37 @@ public final class LogTail {
      * @param index which of this host's log files, as reported by {@link #files()}
      * @param kb    how much of the end to read, clamped to {@link #MAX_KB}
      */
+    /**
+     * Lines from the end of this host's first log file containing {@code text}.
+     *
+     * Used by the cluster-wide search: every host runs this against its own
+     * file on its own sync tick and publishes the result, because no host can
+     * read another one's disk. Bounded hard - a fixed search window, a capped
+     * number of lines, and each line truncated - because the result is stored
+     * in a Custom object rather than streamed.
+     */
+    public static List<String> search(String text) {
+        List<String> out = new ArrayList<>();
+        if (text == null || text.trim().isEmpty()) return out;
+        String needle = text.trim().toLowerCase(java.util.Locale.ROOT);
+
+        Result r = tail(0, SEARCH_KB);
+        if (r.error != null) {
+            out.add("[" + HostFacts.hostName() + "] " + r.error);
+            return out;
+        }
+        for (String line : r.lines) {
+            if (line == null) continue;
+            if (line.toLowerCase(java.util.Locale.ROOT).indexOf(needle) < 0) continue;
+            String keep = line.length() > SEARCH_MAX_CHARS
+                    ? line.substring(0, SEARCH_MAX_CHARS) + " ..." : line;
+            out.add(keep);
+        }
+        // Keep the most recent, which is what anyone chasing a live problem wants.
+        while (out.size() > SEARCH_MAX_LINES) out.remove(0);
+        return out;
+    }
+
     public static Result tail(int index, int kb) {
         Result r = new Result();
         List<String> paths = HostFacts.logFilePaths();

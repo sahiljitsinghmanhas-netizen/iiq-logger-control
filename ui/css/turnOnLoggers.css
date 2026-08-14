@@ -694,3 +694,31 @@
 
 .tol-log .tol-small { color: #9aa5b1; }
 .tol-log .tol-err-text { color: #ff9b9b; }
+
+/* ---------- cluster-wide log search ---------- */
+
+.tol-cluster {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #e4e7eb;
+}
+
+.tol-subhead {
+    font-size: 13px;
+    font-weight: 600;
+    color: #102a43;
+    margin: 0 0 4px 0;
+}
+
+.tol-cluster-host {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 14px 0 4px 0;
+    flex-wrap: wrap;
+}
+
+.tol-log-small {
+    max-height: 260px;
+    font-size: 11px;
+}

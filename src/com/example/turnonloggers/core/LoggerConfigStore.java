@@ -73,6 +73,9 @@ public final class LoggerConfigStore {
     public static final String S_LAST_CLEAR = "lastClearAt";
     /** "false" when this host's log4j2 config could not be read, so sources are unknown. */
     public static final String S_FILE_PARSED = "fileParsed";
+    public static final String S_LOG_MATCHES = "logMatches";
+    public static final String S_LOG_ANSWERED = "logAnsweredAt";
+    public static final String S_LOG_PATH    = "logPath";
     /** Loggers this plugin created here - the only ones cleanup may remove. */
     public static final String S_CREATED = "created";
     /** Every logger live in this host's JVM, with level and source. */
@@ -82,6 +85,10 @@ public final class LoggerConfigStore {
     public static final String A_CLEAR_AT = "clearRuntimeAt";
     /** Optional: a single logger to remove, instead of sweeping our leftovers. */
     public static final String A_CLEAR_LOGGER = "clearRuntimeLogger";
+
+    /** A cluster-wide log search: every host answers about its own file. */
+    public static final String A_LOG_QUERY    = "logQuery";
+    public static final String A_LOG_QUERY_AT = "logQueryAt";
 
     public static final String ALL_HOSTS = "*";
 
@@ -277,6 +284,45 @@ public final class LoggerConfigStore {
         return asLong(st.getString(S_LAST_CLEAR), 0L);
     }
 
+    /** A search stops being answered after this, so hosts do not publish forever. */
+    public static final long LOG_QUERY_TTL_MS = 900000L;   // 15 minutes
+
+    public static String logQuery(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return "";
+        long at = asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
+        if (at <= 0 || (System.currentTimeMillis() - at) > LOG_QUERY_TTL_MS) return "";
+        String q = cfg.getString(A_LOG_QUERY);
+        return q == null ? "" : q;
+    }
+
+    public static long logQueryAt(SailPointContext ctx) throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        return cfg == null ? 0L : asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
+    }
+
+    /** Ask every host to look for this text in its own log. */
+    public static long setLogQuery(SailPointContext ctx, String text, String user)
+            throws GeneralException {
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) {
+            cfg = new Custom();
+            cfg.setName(CONFIG_NAME);
+            cfg.setAttributes(new Attributes<String, Object>());
+        }
+        if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
+        long now = System.currentTimeMillis();
+        cfg.put(A_LOG_QUERY, text == null ? "" : text.trim());
+        cfg.put(A_LOG_QUERY_AT, (text == null || text.trim().isEmpty()) ? "0" : String.valueOf(now));
+        // Not a revision bump: a search changes nothing about what is logged,
+        // so it must not make every host look like it is behind on config.
+        cfg.put(A_UPDATED, String.valueOf(now));
+        cfg.put(A_UPDATED_BY, user == null ? "" : user);
+        ctx.saveObject(cfg);
+        ctx.commitTransaction();
+        return now;
+    }
+
     public static long clearRequestedAt(SailPointContext ctx) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) return 0L;
@@ -319,7 +365,10 @@ public final class LoggerConfigStore {
                                    String trigger,
                                    Map<String, String> applied,
                                    List<String> errors,
-                                   long lastClear) throws GeneralException {
+                                   long lastClear,
+                                   List<String> logMatches,
+                                   long logAnsweredAt,
+                                   String logPath) throws GeneralException {
         String name = statusName(host);
         Custom st = ctx.getObjectByName(Custom.class, name);
         if (st == null) {
@@ -362,6 +411,9 @@ public final class LoggerConfigStore {
         st.put(S_OWNED, new LinkedHashMap<String, String>(Log4jAgent.ownedSnapshot()));
         st.put(S_LAST_CLEAR, String.valueOf(lastClear));
         st.put(S_FILE_PARSED, String.valueOf(fileParsed));
+        st.put(S_LOG_MATCHES, new ArrayList<String>(logMatches));
+        st.put(S_LOG_ANSWERED, String.valueOf(logAnsweredAt));
+        st.put(S_LOG_PATH, logPath == null ? "" : logPath);
         ctx.saveObject(st);
         ctx.commitTransaction();
     }
