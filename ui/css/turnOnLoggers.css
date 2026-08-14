@@ -817,15 +817,26 @@
     color: #8d6708;
 }
 
-/* could not read its log, or is not reporting at all */
-.tol-lhost-error,
-.tol-lhost-down {
+/* Red means this host tried to do the thing and failed - it could not read
+   its log, or it published an error of its own. */
+.tol-lhost-error {
     border-color: #ef4e4e;
     background: #ffeeee;
     color: #ab091e;
 }
 .tol-lhost-error .tol-lhost-count { background: #ef4e4e; color: #fff; }
-.tol-lhost-down { border-style: dashed; opacity: .8; }
+
+/* Never heard from. Grey and dashed, not red: IIQ lists every Server it knows
+   about, including ones the sync service has not reached yet and ones retired
+   long ago. None of that is a fault, and colouring it red made a cluster in
+   the middle of a rollout look like a cluster on fire. Dashed keeps it
+   distinguishable from "answered, found nothing", which is also grey. */
+.tol-lhost-down {
+    border-color: #cbd2d9;
+    border-style: dashed;
+    background: #f5f7fa;
+    color: #7b8794;
+}
 
 /* The host serving the page, so it is obvious which one answered instantly. */
 .tol-lhost-self .tol-lhost-name { text-decoration: underline; text-underline-offset: 2px; }

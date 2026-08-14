@@ -636,7 +636,21 @@
      */
     function hostHealth(h) {
         if (!h.reporting) {
-            return { key: 'down', why: 'Not reporting - the sync service has not run here yet.' };
+            // Grey, not red. This is an absence of information, not a fault:
+            // IIQ lists every Server it knows about, including ones the sync
+            // service has not reached yet and ones that were decommissioned
+            // years ago, and none of that is something going wrong. Red is
+            // reserved for a host that has actually reported a problem -
+            // otherwise a cluster where the plugin is still rolling out looks
+            // like a cluster on fire.
+            return {
+                key: 'down',
+                why: h.inactive
+                    ? h.name + ' is marked inactive in IIQ and is not reporting.'
+                    : 'Nothing heard from this host. The plugin’s sync service has not run '
+                      + 'here - it may still be starting, or the plugin may not be active on this '
+                      + 'host. That is not the same as something being wrong.'
+            };
         }
         var errs = h.errors || [];
         if (errs.length) {
@@ -1446,7 +1460,12 @@
      */
     function logStatus(h) {
         if (!h.reporting) {
-            return { key: 'down', count: '', why: h.name + ' is not reporting, so it will not answer.' };
+            // Grey for the same reason as hostHealth: a host the plugin has
+            // never heard from cannot answer, but that is missing information
+            // rather than a failure. Red here stays for a host that tried to
+            // read its log and could not.
+            return { key: 'down', count: '', why: h.name + ' has never reported, so it cannot '
+                     + 'answer this. The plugin’s sync service has not run there.' };
         }
         if (!state.logActive) {
             return { key: 'idle', count: '', why: 'Nothing asked yet.' };
