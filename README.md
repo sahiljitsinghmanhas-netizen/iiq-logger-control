@@ -79,6 +79,38 @@ than most people need.
 
 ![Loggers live in the JVM](docs/screenshots/04-live-loggers.png)
 
+### Host chips
+
+*Loggers live in the JVM*, *Hosts* and *Logs* each draw a row of host chips. They
+behave the same everywhere and carry two independent things.
+
+**Colour is status** - how that host is doing with respect to what the section is
+about. In *Loggers live in the JVM* and *Hosts* that is the host's own health:
+
+| Chip | Meaning |
+|---|---|
+| green | in sync |
+| amber, spinner | catching up - an older revision, applies the current one on its next sync |
+| amber, no spinner | stale; reporting, but its last sync is old enough to distrust |
+| red | not reporting, or reporting an error of its own |
+
+In *Logs* there is a query to answer, so the colour is what that host found instead.
+
+**Picked is separate from colour**, and is drawn two ways because "not picked" means
+two different things:
+
+| Section | Starts as | Not picked |
+|---|---|---|
+| Loggers live in the JVM | the host serving the page, alone | faded |
+| Hosts | every host | faded and struck through |
+| Logs | every host | faded and struck through |
+
+Where everything starts picked, unpicking is a removal and looks like one. Where one
+host starts picked, the rest were never removed, so they only fade. Click any chip to
+toggle it; pick as many as you like.
+
+![Two hosts picked](docs/screenshots/15-live-two-hosts.png)
+
 ### Where a logger came from
 
 | Source | Meaning | Cleared automatically? |

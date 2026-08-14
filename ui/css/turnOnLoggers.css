@@ -487,25 +487,6 @@
     margin: 10px 0 2px 0;
 }
 
-.tol-hostchip {
-    display: inline-block;
-    background: #2186eb;
-    border: 1px solid #1d7ad6;
-    color: #fff;
-    border-radius: 3px;
-    padding: 2px 9px;
-    font-size: 11px;
-    font-weight: 600;
-    font-family: Consolas, "Courier New", monospace;
-    letter-spacing: .01em;
-}
-
-/* The host you are talking to, so it is obvious which one served the page. */
-.tol-hostchip-self {
-    background: #0b4f9c;
-    border-color: #08386f;
-}
-
 /* ---------- stranded-logger card ---------- */
 
 .tol-card-alert {
@@ -514,10 +495,6 @@
     background: #fffdf7;
 }
 
-.tol-card-alert .tol-hostchip {
-    background: #8d2b0b;
-    border-color: #6b1f08;
-}
 
 /* ---------- live-logger filters and source tags ---------- */
 
@@ -820,6 +797,14 @@
     color: #616e7c;
 }
 
+/* reporting, but its last sync is old enough to distrust. Amber like "still
+   reading", but no spinner - nothing is in flight, it has simply gone quiet. */
+.tol-lhost-stale {
+    border-color: #f0b429;
+    background: #fffaeb;
+    color: #8d6708;
+}
+
 /* could not read its log, or is not reporting at all */
 .tol-lhost-error,
 .tol-lhost-down {
@@ -833,13 +818,24 @@
 /* The host serving the page, so it is obvious which one answered instantly. */
 .tol-lhost-self .tol-lhost-name { text-decoration: underline; text-underline-offset: 2px; }
 
-/* --- selection: independent of colour --- */
+/* --- selection: independent of colour ---
+ *
+ * Two ways of not being picked, because "not picked" means two different
+ * things. Where everything starts picked, unpicking is a removal and is drawn
+ * as one. Where one thing starts picked, the others were never removed - they
+ * are merely not chosen - so they only fade. Striking those through would
+ * claim the reader had done something they had not.
+ */
 .tol-lhost-off { opacity: .45; }
 .tol-lhost-off .tol-lhost-name { text-decoration: line-through; }
 .tol-lhost-off.tol-lhost-self .tol-lhost-name {
     text-decoration: line-through underline;
 }
 .tol-lhost-off:hover { opacity: .7; }
+
+/* not chosen, never removed */
+.tol-lhost-dim { opacity: .5; }
+.tol-lhost-dim:hover { opacity: .8; }
 
 /* --- the waiting spinner --- */
 .tol-lhost-spin {

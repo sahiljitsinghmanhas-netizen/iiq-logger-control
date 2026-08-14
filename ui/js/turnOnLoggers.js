@@ -589,16 +589,120 @@
     }
 
     /** Shared host-label rendering, so a host looks the same in every table. */
+    /**
+     * Hosts in a stable order, the one serving this page first.
+     *
+     * Used everywhere chips are drawn, so "the first chip" means the same
+     * thing in every section - and it is the host you are actually sitting on,
+     * which is the one you usually want.
+     */
+    function sortedHosts() {
+        return (state.hosts || []).slice().sort(function (a, b) {
+            if (a.name === state.thisHost) return -1;
+            if (b.name === state.thisHost) return 1;
+            return a.name < b.name ? -1 : 1;
+        });
+    }
+
+    /**
+     * How a host is doing, independent of any log request.
+     *
+     * The Logs panel colours its chips by what the host found; everywhere else
+     * there is no query to answer, so the colour means the other thing a host
+     * can be doing badly - not reporting, lagging, or erroring. Same palette,
+     * same rule underneath: colour is this host's state with respect to
+     * whatever the section is about.
+     */
+    function hostHealth(h) {
+        if (!h.reporting) {
+            return { key: 'down', why: 'Not reporting - the sync service has not run here yet.' };
+        }
+        var errs = h.errors || [];
+        if (errs.length) {
+            return { key: 'error', why: errs.join(' ') };
+        }
+        if (h.stale) {
+            return { key: 'stale', why: 'Reporting, but its last sync was ' + fmtAgo(h.lastSync) + '.' };
+        }
+        if (!h.inSync) {
+            return { key: 'wait', why: 'Catching up - host revision ' + h.revision
+                                       + ' against ' + state.revision + '.' };
+        }
+        return { key: 'ok', why: 'In sync, last synced ' + fmtAgo(h.lastSync) + '.' };
+    }
+
+    /**
+     * One host chip.
+     *
+     * Colour is status. Whether it is picked is a separate axis, and how that
+     * reads depends on what "not picked" means in that section:
+     *
+     *   strike  everything starts picked, so unpicking is a removal and looks
+     *           like one - struck through and faded
+     *   dim     one thing starts picked, so the rest were never removed; they
+     *           are just not chosen, and only fade
+     *   static  not a control at all, a label above some output
+     */
+    function hostChip(h, opts) {
+        opts = opts || {};
+        var st = opts.status || hostHealth(h);
+        var mode = opts.mode || 'static';
+        var picked = opts.picked !== false;
+
+        var cls = 'tol-lhost tol-lhost-' + st.key;
+        if (h.name === state.thisHost) cls += ' tol-lhost-self';
+        if (mode === 'static') cls += ' tol-lhost-static';
+        else if (!picked) cls += (mode === 'strike' ? ' tol-lhost-off' : ' tol-lhost-dim');
+
+        var chip = el(mode === 'static' ? 'span' : 'button', cls);
+        if (mode !== 'static') {
+            chip.setAttribute('aria-pressed', picked ? 'true' : 'false');
+            chip.title = st.why + '\n\n' + (opts.hint || (picked
+                ? 'Click to drop ' + h.name + '.'
+                : 'Click to include ' + h.name + '.'));
+            chip.onclick = opts.onclick;
+        } else {
+            chip.title = st.why;
+        }
+
+        if (st.key === 'wait' && opts.spin !== false) chip.appendChild(el('span', 'tol-lhost-spin'));
+        chip.appendChild(el('span', 'tol-lhost-name', h.name));
+        if (opts.count !== undefined && opts.count !== null && opts.count !== '') {
+            chip.appendChild(el('span', 'tol-lhost-count', String(opts.count)));
+        }
+        return chip;
+    }
+
+    /** A row of chips, for the sections that pick hosts rather than answer queries. */
+    function hostPicker(hosts, isPicked, toggle, mode) {
+        var strip = el('div', 'tol-hoststrip');
+        hosts.forEach(function (h) {
+            strip.appendChild(hostChip(h, {
+                mode: mode,
+                picked: isPicked(h),
+                onclick: (function (name) {
+                    return function () { toggle(name); render(); };
+                })(h.name)
+            }));
+        });
+        return strip;
+    }
+
+    /** Static label chips, for a table that belongs to one or more hosts. */
     function hostChips(names) {
         var wrap = el('span', 'tol-hostchips');
+        var byName = {};
+        (state.hosts || []).forEach(function (h) { byName[h.name] = h; });
         names.forEach(function (n) {
-            var c = el('span', 'tol-hostchip', n);
-            if (n === state.thisHost) c.className = 'tol-hostchip tol-hostchip-self';
-            wrap.appendChild(c);
+            wrap.appendChild(hostChip(byName[n] || { name: n, reporting: false }, { mode: 'static' }));
         });
         return wrap;
     }
     var liveFilter = 'all';
+    // null until the first render, which seeds it with the host serving the page.
+    var livePick = null;
+    // Hosts clicked out of the Hosts table. Everything starts in it.
+    var hostHide = {};
 
     /**
      * The UI-managed override behind a live logger row, if there is exactly
@@ -657,8 +761,9 @@
             'Every logger log4j2 has configured on each host, and where it came from. '
             + '"set at runtime" means something outside this plugin set it, typically a rule '
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
-            + 'Counts are distinct logger names; the tables list them per host, so the same '
-            + 'logger on several hosts appears once per host.'));
+            + 'Pick the hosts you want below - this starts on the host serving the page, because '
+            + 'a cluster mostly reports the same picture everywhere and reading it starts with '
+            + 'one host. Both the counts and the tables follow what you pick.'));
         var legend = el('div', 'tol-hint');
         legend.appendChild(el('strong', '', 'Suppress'));
         legend.appendChild(document.createTextNode(
@@ -708,12 +813,38 @@
             box.appendChild(warn);
         }
 
+        // Which hosts to show. This section starts with one host rather than
+        // all of them: a thirteen-host cluster mostly reports the same picture
+        // thirteen times, and reading it starts with one host and widens only
+        // when you are comparing.
+        var all = sortedHosts();
+        if (!all.length) {
+            box.appendChild(el('div', 'tol-empty', 'No hosts reported yet.'));
+            return box;
+        }
+        if (livePick === null) livePick = {};
+        if (!Object.keys(livePick).length) livePick[all[0].name] = true;
+
+        box.appendChild(hostPicker(all,
+            function (h) { return !!livePick[h.name]; },
+            function (n) {
+                if (livePick[n]) delete livePick[n]; else livePick[n] = true;
+            },
+            'dim'));
+
+        var picked = all.filter(function (h) { return livePick[h.name]; });
+        if (!picked.length) {
+            box.appendChild(el('div', 'tol-empty',
+                'No host picked. Click a host above to see the loggers running on it.'));
+            return box;
+        }
+
         // Distinct logger names, not one per host. The same logger on ten hosts
         // is one logger; counting rows made "Set at runtime (3)" mean two
         // loggers, which reads as a discrepancy against the tables below.
         var seen = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
         var hostsWith = { all: {}, file: {}, plugin: {}, leftover: {}, runtime: {}, unknown: {} };
-        (state.hosts || []).forEach(function (h) {
+        picked.forEach(function (h) {
             (h.liveLoggers || []).forEach(function (r) {
                 seen.all[r.logger] = 1;
                 hostsWith.all[h.name] = 1;
@@ -746,10 +877,11 @@
         });
         box.appendChild(bar);
 
-        // Hosts reporting an identical picture are grouped, so the one host
-        // that differs stands out instead of being buried under repeats.
+        // Among the picked hosts, ones reporting an identical picture share a
+        // table, so the one host that differs stands out instead of being
+        // buried under repeats.
         var groups = [];
-        (state.hosts || []).forEach(function (h) {
+        picked.forEach(function (h) {
             var rows = (h.liveLoggers || []).filter(function (r) {
                 return liveFilter === 'all' || r.source === liveFilter;
             });
@@ -763,9 +895,26 @@
 
         if (!groups.length) {
             box.appendChild(el('div', 'tol-empty',
-                'Nothing to show for this filter. Hosts report on their next sync tick.'));
+                'Nothing to show for this filter on the hosts you picked. Hosts report on their '
+                + 'next sync tick.'));
             return box;
         }
+
+        // A host you picked that contributes no rows used to just disappear,
+        // which reads as the click not working. Say why instead.
+        var covered = {};
+        groups.forEach(function (g) { g.hosts.forEach(function (n) { covered[n] = true; }); });
+        picked.forEach(function (h) {
+            if (covered[h.name]) return;
+            var note = el('div', 'tol-logmeta');
+            note.appendChild(hostChip(h, { mode: 'static' }));
+            note.appendChild(el('span', 'tol-small', h.reporting
+                ? (liveFilter === 'all'
+                    ? 'has not reported its loggers yet - it will on its next sync'
+                    : 'has no loggers from this source')
+                : 'is not reporting, so it has nothing to show'));
+            box.appendChild(note);
+        });
 
         groups.forEach(function (g) {
             box.appendChild(hostChips(g.hosts));
@@ -945,11 +1094,29 @@
         box.appendChild(el('h2', 'tol-card-title', 'Hosts'));
         box.appendChild(el('div', 'tol-hint',
             'Every IIQ JVM reports its own OS, its log4j2 config file and where it writes logs. ' +
-            'That is the host-specific part - the level change itself works the same everywhere.'));
+            'That is the host-specific part - the level change itself works the same everywhere. ' +
+            'Every host is in the table to begin with; click one to drop it, click it again to ' +
+            'bring it back.'));
 
-        var hosts = state.hosts || [];
-        if (!hosts.length) {
+        var all = sortedHosts();
+        if (!all.length) {
             box.appendChild(el('div', 'tol-empty', 'No hosts reported yet.'));
+            return box;
+        }
+
+        // Everything starts in the table here, so unpicking a host is a
+        // removal and is drawn as one.
+        box.appendChild(hostPicker(all,
+            function (h) { return !hostHide[h.name]; },
+            function (n) {
+                if (hostHide[n]) delete hostHide[n]; else hostHide[n] = true;
+            },
+            'strike'));
+
+        var hosts = all.filter(function (h) { return !hostHide[h.name]; });
+        if (!hosts.length) {
+            box.appendChild(el('div', 'tol-empty',
+                'Every host has been clicked out of the table. Click one above to bring it back.'));
             return box;
         }
 
@@ -980,7 +1147,9 @@
                 c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'not reporting'));
                 c3.appendChild(el('div', 'tol-small', 'sync service has not run here yet'));
             } else if (h.stale) {
-                c3.appendChild(el('span', 'tol-badge tol-badge-off', 'stale'));
+                // Amber, matching this host's chip. It was pink, which read as
+                // an error next to an amber chip saying the opposite.
+                c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'stale'));
             } else if (h.inSync) {
                 c3.appendChild(el('span', 'tol-badge tol-badge-ok', 'in sync'));
             } else {
@@ -1270,8 +1439,7 @@
         box.appendChild(bar2);
 
         // --- one chip per host, always ---------------------------------------
-        var hosts = (state.hosts || []).slice();
-        hosts.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+        var hosts = sortedHosts();
         if (!hosts.length) {
             box.appendChild(el('div', 'tol-empty', 'No host has reported in yet.'));
             return box;
@@ -1281,26 +1449,21 @@
         hosts.forEach(function (h) {
             var st = logStatus(h);
             var off = !!logState.off[h.name];
-            var chip = el('button', 'tol-lhost tol-lhost-' + st.key
-                + (off ? ' tol-lhost-off' : '')
-                + (h.name === state.thisHost ? ' tol-lhost-self' : ''));
-            chip.setAttribute('aria-pressed', off ? 'false' : 'true');
-            chip.title = st.why + '\n\n' + (off
-                ? 'Click to put ' + h.name + ' back in the output.'
-                : 'Click to drop ' + h.name + ' from the output.');
-
-            if (st.key === 'wait') chip.appendChild(el('span', 'tol-lhost-spin'));
-            chip.appendChild(el('span', 'tol-lhost-name', h.name));
-            if (st.count) chip.appendChild(el('span', 'tol-lhost-count', st.count));
-
-            chip.onclick = (function (name) {
-                return function () {
-                    if (logState.off[name]) delete logState.off[name];
-                    else logState.off[name] = true;
-                    render();
-                };
-            })(h.name);
-            strip.appendChild(chip);
+            // The same chip the other sections draw. Only the colour means
+            // something different here - what this host found, rather than how
+            // the host itself is doing.
+            strip.appendChild(hostChip(h, {
+                status: st, mode: 'strike', picked: !off, count: st.count,
+                hint: off ? 'Click to put ' + h.name + ' back in the output.'
+                          : 'Click to drop ' + h.name + ' from the output.',
+                onclick: (function (name) {
+                    return function () {
+                        if (logState.off[name]) delete logState.off[name];
+                        else logState.off[name] = true;
+                        render();
+                    };
+                })(h.name)
+            }));
         });
         box.appendChild(strip);
 
@@ -1327,9 +1490,7 @@
             any = true;
 
             var head = el('div', 'tol-logmeta');
-            head.appendChild(el('span', 'tol-lhost tol-lhost-' + st.key
-                + ' tol-lhost-static' + (h.name === state.thisHost ? ' tol-lhost-self' : ''),
-                h.name));
+            head.appendChild(hostChip(h, { status: st, mode: 'static' }));
             // Deliberately not st.why for the failure cases. That text is the
             // chip's tooltip and belongs in one place: printing it here as well
             // put the same sentence twice on screen, once in grey and once in

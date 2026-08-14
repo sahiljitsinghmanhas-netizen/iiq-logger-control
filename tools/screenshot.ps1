@@ -217,6 +217,18 @@ try {
     Save-Shot $ws $OutDir "02-turn-on-form.png"    "#tol-sec-form" $Width
     Save-Shot $ws $OutDir "03-overrides.png"       "#tol-sec-overrides" $Width
     Save-Shot $ws $OutDir "04-live-loggers.png"    "#tol-sec-live" $Width
+
+    # Picking a second host is the whole point of that strip, and it is
+    # invisible in a shot of the default state.
+    Invoke-Cdp $ws "Runtime.evaluate" @{ expression = @'
+(function () {
+    var c = document.querySelectorAll('#tol-sec-live .tol-hoststrip .tol-lhost');
+    if (c.length > 1) c[1].click();
+    return c.length;
+})()
+'@ } | Out-Null
+    Start-Sleep -Milliseconds 600
+    Save-Shot $ws $OutDir "15-live-two-hosts.png" "#tol-sec-live" $Width
     Save-Shot $ws $OutDir "05-hosts.png"           "#tol-sec-hosts" $Width
     Save-Shot $ws $OutDir "06-header.png"          "#turn-on-loggers-root .tol-header" $Width
     Save-Shot $ws $OutDir "10-collections.png"     "#tol-sec-collections" $Width
