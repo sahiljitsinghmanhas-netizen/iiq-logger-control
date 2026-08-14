@@ -739,12 +739,32 @@
     }
 
     /** Static label chips, for a table that belongs to one or more hosts. */
-    function hostChips(names) {
+    /**
+     * @param withSync  Show how long ago each host last synced, on the chip
+     *                  itself. Off by default: Host Status already has its own
+     *                  Last sync column, and repeating it there would be
+     *                  clutter rather than information. All Logger Status has
+     *                  no such column - a group's rows are shared across
+     *                  several hosts, so a per-row timestamp would either be
+     *                  wrong (implying one sync time for logger rows that
+     *                  belong to many hosts) or blank on every row (implying
+     *                  nothing). The banner, where the hosts are actually
+     *                  named, is the only place a timestamp is honest - and
+     *                  seeing it advance on every poll is what shows this page
+     *                  is live rather than a snapshot.
+     */
+    function hostChips(names, withSync) {
         var wrap = el('span', 'tol-hostchips');
         var byName = {};
         (state.hosts || []).forEach(function (h) { byName[h.name] = h; });
         names.forEach(function (n) {
-            wrap.appendChild(hostChip(byName[n] || { name: n, reporting: false }, { mode: 'static' }));
+            var h = byName[n] || { name: n, reporting: false };
+            // The static chip's title already states this for a healthy or
+            // stale host (hostHealth() includes fmtAgo in "why"); the count
+            // badge makes the same number visible without a hover.
+            var opts = { mode: 'static' };
+            if (withSync && h.reporting) opts.count = fmtAgo(h.lastSync);
+            wrap.appendChild(hostChip(h, opts));
         });
         return wrap;
     }
@@ -838,7 +858,9 @@
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
             + 'Pick the hosts you want below - this starts on the host serving the page, because '
             + 'a cluster mostly reports the same picture everywhere and reading it starts with '
-            + 'one host. Both the counts and the tables follow what you pick.'));
+            + 'one host. Both the counts and the tables follow what you pick. The number on each '
+            + 'host chip is how long ago that host last synced - watch it change to see that this '
+            + 'page is polling, not a snapshot.'));
         var legend = el('div', 'tol-hint');
         legend.appendChild(el('strong', '', 'Suppress'));
         legend.appendChild(document.createTextNode(
@@ -846,10 +868,11 @@
             + 'Un-suppress lifts it. '));
         legend.appendChild(el('strong', '', 'Clear'));
         legend.appendChild(document.createTextNode(
-            ' deletes it from the running configuration once and then lets go, so whatever created '
-            + 'it can create it again. Loggers declared in log4j2.properties have no Clear: the file '
-            + 'would simply put them back on its next reload, so Suppress is the only thing that '
-            + 'holds for them.'));
+            ' deletes it from the running configuration once and then lets go. For a logger a rule '
+            + 'keeps setting, that rule can set it again. For one declared in log4j2.properties, it '
+            + 'stays cleared until someone edits and saves that file or the host restarts - either of '
+            + 'which rebuilds the configuration from the file regardless. Suppress holds either kind '
+            + 'off permanently instead.'));
         box.appendChild(legend);
 
         // A Clear is a cluster-wide request, not a local delete. Show it in
@@ -999,7 +1022,7 @@
             var banner = el('tr', 'tol-grouprow');
             var bcell = el('td');
             bcell.setAttribute('colspan', '5');
-            bcell.appendChild(hostChips(g.hosts));
+            bcell.appendChild(hostChips(g.hosts, true));
             banner.appendChild(bcell);
             tb.appendChild(banner);
             g.rows.forEach(function (r) {
@@ -1104,19 +1127,19 @@
                 // Shown disabled rather than omitted for file-declared loggers:
                 // an absent button leaves people wondering whether it is missing
                 // or forbidden, and there is a real reason worth stating.
-                if (!protectedLogger && (r.source === 'file' || r.source === 'unknown')) {
+                // Shown disabled rather than omitted, for the same reason as
+                // above: an absent button leaves people wondering whether it is
+                // missing or forbidden.
+                if (!protectedLogger && r.source === 'unknown') {
                     var noClear = el('button', 'tol-btn tol-btn-small', 'Clear');
                     noClear.disabled = true;
-                    noClear.title = r.source === 'file'
-                        ? 'Cannot be cleared: this logger is declared in the host log4j2.properties, '
-                          + 'and log4j2 rebuilds its configuration from that file on every change and '
-                          + 'restart - so it would come straight back. Use Suppress to hold it at OFF '
-                          + 'instead.'
-                        : 'Cannot be cleared: the log4j2 configuration on this host could not be read, '
-                          + 'so it is not known whether the file declares this logger.';
+                    noClear.title = 'Cannot be cleared: the log4j2 configuration on this host could '
+                        + 'not be read, so it is not known what would happen if this were removed. '
+                        + 'Use Suppress instead.';
                     c5.appendChild(noClear);
                 }
-                if (!protectedLogger && (r.source === 'runtime' || r.source === 'leftover')) {
+                if (!protectedLogger
+                        && (r.source === 'runtime' || r.source === 'leftover' || r.source === 'file')) {
                     var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Clear');
                     rm.title = 'Delete ' + r.logger + ' from the running configuration on every host. '
                         + 'One-shot: nothing is enforced afterwards, so whatever created it can create '
@@ -1128,6 +1151,12 @@
                                   + ' rule calling Logger.getLogger(...).setLevel(...). Clear is'
                                   + ' one-shot: it stops the logging now, but whatever set it will'
                                   + ' set it again next time it runs. Use Suppress to keep it off.'
+                                : src === 'file'
+                                ? ' It is declared in this host’s log4j2.properties. Clear is'
+                                  + ' one-shot: it stops the logging now and stays off unless someone'
+                                  + ' edits and saves that file, or the host restarts - either of which'
+                                  + ' rebuilds the running configuration from the file and brings it back.'
+                                  + ' Use Suppress if you need it to stay off across a restart.'
                                 : ' This plugin created it and lost track of it, so clearing it'
                                   + ' switches it off for good.';
                             if (!window.confirm('Clear ' + name + ' on every host?' + extra)) return;

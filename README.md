@@ -147,9 +147,12 @@ neither in the file nor this plugin's, and it is never removed automatically.
 choice for a logger a rule keeps switching back on. Clear is for tidying an
 entry that should not exist and that nothing will recreate.
 
-Loggers declared in `log4j2.properties` have no Clear: log4j2 rebuilds its
-configuration from that file on every change and restart, so the logger would
-come straight back. Suppress is the only thing that holds for them.
+**A logger declared in `log4j2.properties` can be cleared too** - it stays
+cleared until someone edits and saves that file, or the host restarts, either
+of which rebuilds the whole configuration from the file regardless of what
+Clear did. Suppress is for when you need it held off across a restart rather
+than just now; the automatic "Clear all left over" sweep never touches a
+file-declared logger, only Clear on a named row does.
 
 ![Plugin Logger Status](docs/screenshots/03-overrides.png)
 

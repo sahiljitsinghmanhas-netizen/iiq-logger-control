@@ -65,7 +65,7 @@
     <li><a href="#sources">Where a logger came from</a></li>
     <li><a href="#buttons">The buttons</a></li>
     <li><a href="#suppress-clear">Suppress versus Clear</a></li>
-    <li><a href="#nofileclear">Why file loggers cannot be cleared</a></li>
+    <li><a href="#fileclear">Clearing a file-declared logger</a></li>
     <li><a href="#collections">Saved Logger Collections</a></li>
     <li><a href="#logfile">Reading the log</a></li>
     <li><a href="#history">History</a></li>
@@ -346,13 +346,24 @@ so it reads without relying on colour alone.</figcaption>
 and the plugin puts it back to <code>OFF</code> within a minute. Clear the same logger and it is
 quiet only until that rule next runs.</p>
 
-<h2 id="nofileclear">Why loggers from log4j2.properties cannot be cleared<a class="top" href="#">top</a></h2>
-<p>Their Clear button is shown struck through and disabled on purpose.</p>
-<p>Deleting one would achieve nothing: log4j2 rebuilds its entire configuration from that file
-whenever the file changes and on every restart, so the logger would come straight back. It is also
-the host's declared configuration - the plugin quietly deleting it would be fighting the file behind
-your back. Overriding it to <code>OFF</code> with Suppress is the honest option, and it stays
-visible and reversible.</p>
+<h2 id="fileclear">Clearing a file-declared logger<a class="top" href="#">top</a></h2>
+<p>Clear is available on a <code>log4j2.properties</code>-sourced row too, not just a
+<em>runtime</em> or <em>left over</em> one. It used to be disabled there, on the reasoning that the
+file would simply put the logger back - which turned out to be wrong about <strong>when</strong>.
+log4j2 only rebuilds its configuration from the file when the file's own timestamp changes
+(<code>monitorInterval</code> watches for an edit-and-save, not the passage of time) or when the
+host restarts. Neither happens on its own, so a file-declared logger cleared this way stays cleared
+exactly as long as a rule-set one does - it is the same one-shot action either way, not a special
+case.</p>
+<p>What is still true: it <strong>is</strong> the host's declared configuration, so if someone edits
+<code>log4j2.properties</code> or the JVM restarts, it comes back exactly as declared, with nothing
+this plugin can do about it. If you need it held at <code>OFF</code> across a restart rather than
+just until one happens, use Suppress instead - that is enforced every sync, a Clear is not enforced
+at all after it runs.</p>
+<p>The automatic <strong>Clear all left over</strong> sweep is unaffected by this: it still only
+ever removes loggers this plugin itself created and lost track of, never anything declared in the
+file. This applies only to Clear on one named row, which is a person looking at that row and asking
+for it - a different amount of trust than an automatic sweep running with nobody watching.</p>
 
 <h2 id="collections">Saved Logger Collections<a class="top" href="#">top</a></h2>
 <figure>

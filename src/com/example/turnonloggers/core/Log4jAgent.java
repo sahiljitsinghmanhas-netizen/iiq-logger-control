@@ -441,22 +441,30 @@ public final class Log4jAgent {
     }
 
     /**
-     * Remove one specific logger that is live but not declared in the file.
+     * Remove one specific logger that is live, by name.
      *
-     * Separate from clearRuntimeLeftovers because this is a deliberate,
-     * named request from an administrator, not an automatic sweep - so it will
-     * remove a logger something else set (a rule, custom Java), which the
-     * automatic path must never do. It still refuses to touch root, anything
-     * the file declares, or anything currently managed.
+     * Separate from clearRuntimeLeftovers because this is a deliberate, named
+     * request from an administrator, not an automatic sweep. clearRuntimeLeftovers
+     * only ever removes loggers this plugin created, because it runs on its own
+     * with nobody looking at what it is about to do; this runs because a person
+     * looked at one specific row and asked for it, which is a different amount
+     * of trust. So it will remove a logger something else set (a rule, custom
+     * Java) or one the file declares - it still refuses to touch root, or
+     * anything currently held by an override, since those have their own
+     * lifecycle.
+     *
+     * A file-declared logger removed this way is not gone for good: log4j2's
+     * monitorInterval only rebuilds the running configuration when the file on
+     * disk actually changes, so it stays cleared until someone edits and saves
+     * log4j2.properties, or the JVM restarts, either of which rebuilds
+     * everything from the file regardless of what this method did. That is the
+     * same one-shot shape as clearing a rule-set logger, not a special case.
      *
      * @return true if it was removed
      */
     public static synchronized boolean removeRuntimeLogger(String rawName) {
         String name = normalize(rawName);
         if (name == null || isRoot(name)) return false;
-
-        Set<String> declared = fileDeclaredLoggers();
-        if (declared != null && declared.contains(name)) return false;  // the file wants it
         if (OWNED.containsKey(name)) return false;                      // managed here
 
         try {
