@@ -739,34 +739,43 @@
     }
 
     /** Static label chips, for a table that belongs to one or more hosts. */
-    /**
-     * @param withSync  Show how long ago each host last synced, on the chip
-     *                  itself. Off by default: Host Status already has its own
-     *                  Last sync column, and repeating it there would be
-     *                  clutter rather than information. All Logger Status has
-     *                  no such column - a group's rows are shared across
-     *                  several hosts, so a per-row timestamp would either be
-     *                  wrong (implying one sync time for logger rows that
-     *                  belong to many hosts) or blank on every row (implying
-     *                  nothing). The banner, where the hosts are actually
-     *                  named, is the only place a timestamp is honest - and
-     *                  seeing it advance on every poll is what shows this page
-     *                  is live rather than a snapshot.
-     */
-    function hostChips(names, withSync) {
+    function hostChips(names) {
         var wrap = el('span', 'tol-hostchips');
         var byName = {};
         (state.hosts || []).forEach(function (h) { byName[h.name] = h; });
         names.forEach(function (n) {
-            var h = byName[n] || { name: n, reporting: false };
-            // The static chip's title already states this for a healthy or
-            // stale host (hostHealth() includes fmtAgo in "why"); the count
-            // badge makes the same number visible without a hover.
-            var opts = { mode: 'static' };
-            if (withSync && h.reporting) opts.count = fmtAgo(h.lastSync);
-            wrap.appendChild(hostChip(h, opts));
+            wrap.appendChild(hostChip(byName[n] || { name: n, reporting: false }, { mode: 'static' }));
         });
         return wrap;
+    }
+
+    /**
+     * How current the rows under a group banner are.
+     *
+     * A group can cover several hosts, which is the whole reason this was on
+     * the banner chip before rather than in a column. It reports the oldest of
+     * them: a shared table is only as current as its least recently synced
+     * host, and claiming the freshest would overstate it. The tooltip breaks it
+     * down per host so the single number is never the only thing on offer.
+     */
+    function groupSync(names) {
+        var byName = {};
+        (state.hosts || []).forEach(function (h) { byName[h.name] = h; });
+        var seen = [];
+        names.forEach(function (n) {
+            var h = byName[n];
+            if (h && h.reporting) seen.push({ name: n, at: parseInt(h.lastSync, 10) || 0 });
+        });
+        if (!seen.length) return { text: '-', title: 'Not reporting, so nothing to be current as of.' };
+        seen.sort(function (a, b) { return a.at - b.at; });
+        if (seen.length === 1) {
+            return { text: fmtAgo(seen[0].at), title: seen[0].name + ' last synced ' + fmtAgo(seen[0].at) + '.' };
+        }
+        return {
+            text: fmtAgo(seen[0].at),
+            title: 'Oldest of the ' + seen.length + ' hosts sharing this table:\n'
+                 + seen.map(function (t) { return '  ' + t.name + ' - ' + fmtAgo(t.at); }).join('\n')
+        };
     }
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
@@ -858,9 +867,9 @@
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
             + 'Pick the hosts you want below - this starts on the host serving the page, because '
             + 'a cluster mostly reports the same picture everywhere and reading it starts with '
-            + 'one host. Both the counts and the tables follow what you pick. The number on each '
-            + 'host chip is how long ago that host last synced - watch it change to see that this '
-            + 'page is polling, not a snapshot.'));
+            + 'one host. Both the counts and the tables follow what you pick. Last sync says how '
+            + 'long ago the host reported each row - watch it change to see that this page is '
+            + 'polling, not a snapshot.'));
         var legend = el('div', 'tol-hint');
         legend.appendChild(el('strong', '', 'Suppress'));
         legend.appendChild(document.createTextNode(
@@ -1015,16 +1024,17 @@
         // one geometry from all the rows and stays fluid.
         var wrap = el('div', 'tol-tablewrap');
         var t = el('table', 'tol-table');
-        t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', '']));
+        t.appendChild(headRow(['Logger', 'Level', 'Source', 'File says', 'Last sync', '']));
 
         groups.forEach(function (g) {
             var tb = el('tbody');
             var banner = el('tr', 'tol-grouprow');
             var bcell = el('td');
-            bcell.setAttribute('colspan', '5');
-            bcell.appendChild(hostChips(g.hosts, true));
+            bcell.setAttribute('colspan', '6');
+            bcell.appendChild(hostChips(g.hosts));
             banner.appendChild(bcell);
             tb.appendChild(banner);
+            var sync = groupSync(g.hosts);
             g.rows.forEach(function (r) {
                 var tr = el('tr');
 
@@ -1052,6 +1062,14 @@
                     c4.appendChild(document.createTextNode('-'));
                 }
                 tr.appendChild(c4);
+
+                // Repeated on every row rather than shown once per group: this
+                // is the column Host Status has, and a value that appears on
+                // one row in twelve is not a column, it is a footnote.
+                var cSync = el('td', 'tol-small');
+                cSync.appendChild(document.createTextNode(sync.text));
+                cSync.title = sync.title;
+                tr.appendChild(cSync);
 
                 var c5 = el('td', 'tol-actions');
 
