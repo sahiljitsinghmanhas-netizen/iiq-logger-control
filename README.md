@@ -109,6 +109,8 @@ Loggers declared in `log4j2.properties` have no Clear: log4j2 rebuilds its
 configuration from that file on every change and restart, so the logger would
 come straight back. Suppress is the only thing that holds for them.
 
+![Overrides in effect](docs/screenshots/03-overrides.png)
+
 ### Every override needs a note
 
 Turning a logger on requires a note - a ticket number or a sentence. It is
