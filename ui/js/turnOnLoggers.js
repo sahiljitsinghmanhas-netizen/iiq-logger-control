@@ -930,8 +930,15 @@
             box.appendChild(el('div', 'tol-empty', 'No hosts reported yet.'));
             return box;
         }
-        if (livePick === null) livePick = {};
-        if (!Object.keys(livePick).length) livePick[all[0].name] = true;
+        // Seeded once, on the first render, and never again. Inferring "not
+        // seeded yet" from "no hosts picked" meant None could not work: it
+        // emptied the set, the next render saw an empty set, and helpfully put
+        // the first host back. Picking nothing is a thing a reader is allowed
+        // to have chosen, and is different from never having chosen.
+        if (livePick === null) {
+            livePick = {};
+            livePick[all[0].name] = true;
+        }
 
         box.appendChild(hostPicker(all,
             function (h) { return !!livePick[h.name]; },
