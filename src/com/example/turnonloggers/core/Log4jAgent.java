@@ -180,6 +180,17 @@ public final class Log4jAgent {
 
         ctx.updateLoggers();
 
+        // 3. Drop claims on loggers that are no longer there.
+        //
+        // Reverting releases its own claim, but that only helps from now on.
+        // Hosts that reverted an override before this existed still carry the
+        // name, and a logger can also disappear without going through us at all
+        // - log4j2 rebuilding from an edited file takes every logger we added
+        // with it. A name in CREATED that is not a live logger is a claim on
+        // something that does not exist, and leaving it there is what makes a
+        // rule's logger look like our litter later.
+        pruneCreated(ctx.getConfiguration());
+
         // Report what log4j2 actually resolves to now, not what we asked for.
         // This is the bit the UI shows as proof the change landed on the host.
         Configuration after = ctx.getConfiguration();
@@ -634,6 +645,35 @@ public final class Log4jAgent {
         }
     }
 
+    /**
+     * Forget any logger we claim to have created that is not currently live.
+     *
+     * Runs on every apply, so a host heals itself on its next sync rather than
+     * needing anyone to notice. Deliberately only touches the ledger - it never
+     * removes a logger, so a mistake here costs a mislabelled source at worst,
+     * never someone's logging.
+     */
+    private static void pruneCreated(Configuration cfg) {
+        if (CREATED.isEmpty()) return;
+        Map<String, LoggerConfig> live;
+        try {
+            live = cfg.getLoggers();
+        } catch (Throwable t) {
+            return;   // cannot tell; keep the ledger as it is
+        }
+        if (live == null) return;
+        List<String> dropped = new ArrayList<>();
+        for (String name : new ArrayList<>(CREATED)) {
+            if (!live.containsKey(name)) {
+                CREATED.remove(name);
+                dropped.add(display(name));
+            }
+        }
+        if (!dropped.isEmpty()) {
+            LOG.info("[TurnOnLoggers] released stale created-logger claims: " + dropped);
+        }
+    }
+
     private static void restore(Configuration cfg, String name) {
         Snapshot s = OWNED.remove(name);
         if (s == null) return;
@@ -653,6 +693,11 @@ public final class Log4jAgent {
             // We created this LoggerConfig; take it away again so the logger
             // goes back to inheriting from its ancestor.
             cfg.removeLogger(name);
+            // And stop claiming it. Without this the name stayed in CREATED for
+            // the life of the host, so if a rule later set the same logger it
+            // was reported as this plugin's litter - and "Clear all left over"
+            // would have offered to delete a logger a rule was actively using.
+            CREATED.remove(name);
         }
     }
 

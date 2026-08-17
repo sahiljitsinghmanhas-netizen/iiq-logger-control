@@ -264,11 +264,19 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
-    /** Panic button: drop every override everywhere. */
+    /**
+     * Drop overrides. Everything by default; only the expired ones with
+     * {@code ?expiredOnly=true}.
+     *
+     * A query parameter rather than a second path, because "entries/expired"
+     * and "entries/{id}" are the same shape to a router and the difference
+     * would rest on JAX-RS preferring the literal - a subtlety nobody should
+     * have to know about to be sure the panic button still works.
+     */
     @DELETE
     @Path("entries")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response clearAll() {
+    public Response clearAll(@QueryParam("expiredOnly") @DefaultValue("false") boolean expiredOnly) {
         try {
             Identity user = requireUser();
             if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
@@ -276,7 +284,29 @@ public class LoggerControlResource extends BasePluginResource {
             if (denied != null) return error(Response.Status.FORBIDDEN, denied);
 
             SailPointContext ctx = getContext();
-            int rev = LoggerConfigStore.saveEntries(ctx, new ArrayList<Map<String, String>>(), user.getName());
+
+            if (expiredOnly) {
+                long now = System.currentTimeMillis();
+                List<Map<String, String>> all = LoggerConfigStore.loadEntries(ctx);
+                List<Map<String, String>> keep = new ArrayList<>();
+                int removed = 0;
+                for (Map<String, String> e : all) {
+                    if (LoggerConfigStore.isExpired(e, now)) removed++;
+                    else keep.add(e);
+                }
+                if (removed == 0) {
+                    // Nothing to do is not an error, and re-saving would bump
+                    // the revision and send every host chasing a no-op.
+                    return json(Response.Status.OK, buildState(user));
+                }
+                LoggerConfigStore.saveEntries(ctx, keep, user.getName());
+                AuditWriter.log(ctx, user.getName(), "removed expired overrides",
+                        "(" + removed + " expired)", null, "*", 0L, null);
+                LoggerSync.run(ctx, "rest:clearExpired");
+                return json(Response.Status.OK, buildState(user));
+            }
+
+            LoggerConfigStore.saveEntries(ctx, new ArrayList<Map<String, String>>(), user.getName());
             AuditWriter.log(ctx, user.getName(), "turned everything off",
                     "(all overrides)", null, "*", 0L, null);
             LoggerSync.run(ctx, "rest:clear");
@@ -841,6 +871,15 @@ public class LoggerControlResource extends BasePluginResource {
                            Map<String, Map<String, Object>> statuses) {
         List<String> confirmed = new ArrayList<>();
         List<String> pending = new ArrayList<>();
+        // An expired override is not waiting for anything. It was applied and
+        // has since been withdrawn, so every host would fall into "pending"
+        // purely because the confirm test cannot pass once it is inactive -
+        // which read as "this never landed", the opposite of what happened.
+        if (!active) {
+            row.put("confirmedOn", confirmed);
+            row.put("pendingOn", pending);
+            return;
+        }
         for (Map.Entry<String, Map<String, Object>> se : statuses.entrySet()) {
             if (!LoggerConfigStore.hostMatches(hostsSpec, se.getKey())) continue;
             Object appliedObj = se.getValue().get(LoggerConfigStore.S_APPLIED);
@@ -849,7 +888,7 @@ public class LoggerControlResource extends BasePluginResource {
                 Object v = ((Map<?, ?>) appliedObj).get(loggerDisplay);
                 actual = v == null ? null : String.valueOf(v);
             }
-            if (active && actual != null && actual.equalsIgnoreCase(level)) {
+            if (actual != null && actual.equalsIgnoreCase(level)) {
                 confirmed.add(se.getKey());
             } else {
                 pending.add(se.getKey());

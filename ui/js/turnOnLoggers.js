@@ -498,6 +498,31 @@
             };
             head.appendChild(save);
         }
+
+        // Only offered when there is something to remove. An expired override
+        // is harmless - nothing is applied from it - but it stays in the table
+        // until someone clears it, and on a busy system they pile up.
+        var expiredCount = (state.entries || []).filter(function (e) {
+            return e.expired && !e.permanent && e.id;
+        }).length;
+        if (expiredCount) {
+            var rmExp = el('button', 'tol-btn tol-btn-small',
+                'Remove expired (' + expiredCount + ')');
+            rmExp.title = 'Delete the ' + expiredCount + ' override'
+                + (expiredCount === 1 ? '' : 's') + ' that have already expired. '
+                + 'They are not applied to anything - this only tidies the table. '
+                + 'Live overrides are left alone.';
+            rmExp.onclick = function () {
+                if (!window.confirm('Remove ' + expiredCount + ' expired override'
+                    + (expiredCount === 1 ? '' : 's') + '?\n\nThey have already stopped applying, '
+                    + 'so nothing on any host changes. Live overrides are untouched.')) return;
+                mutate(api('DELETE', '/entries?expiredOnly=true'),
+                    expiredCount + ' expired override'
+                    + (expiredCount === 1 ? '' : 's') + ' removed.');
+            };
+            head.appendChild(rmExp);
+        }
+
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
             'Everything this plugin has turned on, from both this page and the plugin settings. ' +
@@ -557,7 +582,12 @@
                 c5.appendChild(el('span', 'tol-badge tol-badge-warn', 'pending: ' + pend.join(', ')));
             }
             if (!conf.length && !pend.length) {
-                c5.appendChild(el('span', 'tol-small', 'no host has reported yet'));
+                // An expired row is not waiting on anybody, so saying "no host
+                // has reported yet" would be the same lie the pending list used
+                // to tell - it ran everywhere and has since been withdrawn.
+                c5.appendChild(el('span', 'tol-small', e.expired
+                    ? 'no longer applied'
+                    : 'no host has reported yet'));
             }
             tr.appendChild(c5);
 

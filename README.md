@@ -147,7 +147,7 @@ one place — so each button's tooltip states both.
 |---|---|---|
 | `log4j2.properties` | Declared in that host's file | never |
 | `this plugin` | An override managed here | on removal or expiry |
-| `left over` | Created by this plugin, then orphaned by a reinstall | yes |
+| `left over` | Created by this plugin, still live, and no longer managed by it | yes |
 | `set at runtime` | A rule or custom code set it | **never** |
 
 That last row matters. A rule doing
