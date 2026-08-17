@@ -934,20 +934,41 @@
         head.appendChild(el('h2', 'tol-card-title', 'All Logger Status'));
 
         var anyLeftover = false;
+        var ambiguousLeft = {};
         (state.hosts || []).forEach(function (h) {
             (h.liveLoggers || []).forEach(function (r) {
-                if (r.source === 'leftover') anyLeftover = true;
+                if (r.source !== 'leftover') return;
+                anyLeftover = true;
+                if (String(r.ambiguous) === 'true') ambiguousLeft[r.logger] = 1;
             });
         });
         if (anyLeftover) {
+            var ambNames = Object.keys(ambiguousLeft);
             var clr = el('button', 'tol-btn tol-btn-danger', 'Clear all left over');
             clr.onclick = function () {
+                // This sweep removes what each host recorded as its own. Where
+                // that record cannot be told apart from a rule's doing, say so
+                // before acting rather than after: it is the one action on this
+                // page that could take away logging somebody else is relying on.
+                var warn = ambNames.length
+                    ? '\n\nWARNING: ' + ambNames.length + ' of these could equally have been set '
+                      + 'by a rule. They are marked "left over / set at runtime":\n'
+                      + ambNames.map(function (n) { return '  ' + n; }).join('\n')
+                      + '\n\nClearing is one-shot, so if a rule is setting one it will come back the '
+                      + 'next time that rule runs. Suppress holds a logger off instead.'
+                    : '';
                 if (!window.confirm('Remove the loggers this plugin left behind, on every host?'
                     + '\n\nOnly loggers this plugin created are removed. Anything in '
-                    + 'log4j2.properties, and anything a rule or custom code set, is left alone.')) return;
+                    + 'log4j2.properties, and anything a rule or custom code set, is left alone.'
+                    + warn)) return;
                 mutate(api('POST', '/cleanup'),
                     'Cleanup requested. This host is done; others follow on their next sync.');
             };
+            if (ambNames.length) {
+                clr.title = ambNames.length + ' of the loggers this would remove might have been set '
+                    + 'by a rule rather than left behind by this plugin. They are listed before you '
+                    + 'confirm.';
+            }
             head.appendChild(clr);
         }
         box.appendChild(head);
@@ -1157,7 +1178,21 @@
                 tr.appendChild(c2);
 
                 var c3 = el('td', 'tol-small');
-                c3.appendChild(el('span', 'tol-src tol-src-' + r.source, SRC[r.source] || r.source));
+                // Where the plugin cannot honestly pick between its own litter
+                // and a rule's doing, it says so rather than choosing.
+                var amb = String(r.ambiguous) === 'true';
+                var tag = el('span', 'tol-src tol-src-' + r.source + (amb ? ' tol-src-ambiguous' : ''),
+                    amb ? 'left over / set at runtime' : (SRC[r.source] || r.source));
+                if (amb) {
+                    tag.title = 'Either. This plugin created ' + r.logger + ' on this host and still '
+                        + 'has a record of it, which normally means left over - but the same logger '
+                        + 'is being set at runtime elsewhere in the cluster, and a rule can set it '
+                        + 'on any host at any time. Nothing in the running configuration tells the '
+                        + 'two apart, so the label does not pretend to.\n\n'
+                        + 'Clear removes it either way, and if a rule set it the rule will set it '
+                        + 'again next time it runs. Use Suppress if it has to stay off.';
+                }
+                c3.appendChild(tag);
                 tr.appendChild(c3);
 
                 // What the file declares, and whether the JVM disagrees.

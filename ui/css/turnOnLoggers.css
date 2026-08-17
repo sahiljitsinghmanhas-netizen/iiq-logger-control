@@ -257,6 +257,12 @@
 
 /* The collection picker column. Narrow and quiet - it is a modifier on the
    Save button, not a primary action of the table. */
+/* An honest "could be either". Dashed because it is a hedge, not a verdict. */
+.tol-src-ambiguous {
+    border-style: dashed !important;
+    font-style: italic;
+}
+
 .tol-pickcell { width: 28px; padding-right: 0 !important; }
 .tol-pick { cursor: pointer; }
 

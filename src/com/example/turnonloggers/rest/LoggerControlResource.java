@@ -958,7 +958,70 @@ public class LoggerControlResource extends BasePluginResource {
             me.put("facts", HostFacts.collect());
         }
 
+        markAmbiguousLeftovers(hosts.values());
         return new ArrayList<>(hosts.values());
+    }
+
+    /**
+     * Flag "left over" rows that could equally be a rule's doing.
+     *
+     * The source of a logger is decided per host, from that host's own record
+     * of what it created. That is right as far as it goes, but a rule can set a
+     * logger on any host at any time, and it does not have to be the same host
+     * it used last time. So a logger that this plugin created on host A, and
+     * that is also being set at runtime somewhere else in the cluster, cannot
+     * honestly be called litter on the strength of a per-host claim alone: the
+     * thing on A might be ours, or it might be the rule, and nothing in the
+     * running configuration distinguishes them.
+     *
+     * The cluster-wide view is the only place that ambiguity is visible, which
+     * is why this lives here rather than in Log4jAgent. Nothing about the
+     * classification changes - the row is still sourced "leftover", so filters,
+     * counts and the clear logic all behave exactly as before. It only gains a
+     * flag saying the label is not certain, which the page shows as
+     * "left over / set at runtime".
+     */
+    @SuppressWarnings("unchecked")
+    private void markAmbiguousLeftovers(Collection<Map<String, Object>> hostRows) {
+        // Which logger names is something outside this plugin setting, anywhere?
+        Set<String> runtimeSomewhere = new java.util.HashSet<>();
+        for (Map<String, Object> h : hostRows) {
+            Object live = h.get("liveLoggers");
+            if (!(live instanceof List)) continue;
+            for (Object o : (List<Object>) live) {
+                if (!(o instanceof Map)) continue;
+                Map<String, Object> r = (Map<String, Object>) o;
+                if ("runtime".equals(String.valueOf(r.get("source")))) {
+                    runtimeSomewhere.add(String.valueOf(r.get("logger")));
+                }
+            }
+        }
+        if (runtimeSomewhere.isEmpty()) return;
+
+        for (Map<String, Object> h : hostRows) {
+            Object live = h.get("liveLoggers");
+            if (!(live instanceof List)) continue;
+            List<Object> rows = (List<Object>) live;
+            List<Object> copy = new ArrayList<>(rows.size());
+            boolean changed = false;
+            for (Object o : rows) {
+                if (!(o instanceof Map)) { copy.add(o); continue; }
+                Map<String, Object> r = (Map<String, Object>) o;
+                if ("leftover".equals(String.valueOf(r.get("source")))
+                        && runtimeSomewhere.contains(String.valueOf(r.get("logger")))) {
+                    // Copied rather than edited: these maps came straight off a
+                    // cached Custom object, and writing through them would dirty
+                    // something this request has no business changing.
+                    Map<String, Object> flagged = new LinkedHashMap<>(r);
+                    flagged.put("ambiguous", "true");
+                    copy.add(flagged);
+                    changed = true;
+                } else {
+                    copy.add(o);
+                }
+            }
+            if (changed) h.put("liveLoggers", copy);
+        }
     }
 
     private Map<String, Object> hostRow(Map<String, Map<String, Object>> hosts, String name) {

@@ -260,8 +260,25 @@ configuration file rather than inferred.</figcaption>
   <tr><td><code>log4j2.properties</code></td><td>Declared in that host's own configuration file.</td><td>never</td></tr>
   <tr><td><code>this plugin</code></td><td>An override currently managed here.</td><td>on removal or expiry</td></tr>
   <tr><td><code>left over</code></td><td>This plugin created it and lost track of it, which used to happen when the plugin was reinstalled while a logger was on.</td><td>yes, by <em>Clear all left over</em></td></tr>
+  <tr><td><code>left over / set at runtime</code></td><td>Either one - the plugin has a record of creating it on this host, but the same logger is being set at runtime somewhere else in the cluster, and a rule can set it on any host at any time. See below.</td><td>yes, but read the warning</td></tr>
   <tr><td><code>set at runtime</code></td><td>Something outside this plugin set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
 </table>
+
+<h3 id="ambiguous">When the source cannot be known</h3>
+<p>Source is decided <strong>per host</strong>, from that host's own record of what this plugin
+created. A rule, though, can set a logger on <strong>any</strong> host at any time, and not
+necessarily the same one it used last time.</p>
+<p>So if this plugin has a record of creating a logger on one host, and that same logger is being
+set at runtime somewhere else in the cluster, <code>left over</code> would be a guess. The thing in
+front of you might be this plugin's litter, or it might be the rule having fired somewhere new.
+Nothing in the running configuration distinguishes them, so the label does not pretend to - it says
+<code>left over / set at runtime</code> and the tooltip explains why.</p>
+<p>A leftover that nothing else in the cluster is setting stays a plain <code>left over</code>,
+because there it genuinely is certain.</p>
+<p><strong>Clear all left over</strong> lists any ambiguous loggers by name before you confirm.
+That is the one action on this page that could take away logging something else is relying on.
+Clearing is one-shot either way: if a rule is setting it, it comes back the next time that rule
+runs, and <em>Suppress</em> is what holds it off.</p>
 
 <h2 id="buttons">The buttons<a class="top" href="#">top</a></h2>
 <figure>

@@ -131,6 +131,27 @@ at any width, and scrolls inside its own box rather than pushing the page sidewa
 
 ![Two hosts picked](docs/screenshots/15-live-two-hosts.png)
 
+### When the source cannot be known
+
+A logger is classified per host, from that host's own record of what this plugin
+created. A rule, though, can set a logger on **any** host at any time, and not
+necessarily the same one it used last time.
+
+So if this plugin has a record of creating a logger on host A, and that same
+logger is being set at runtime somewhere else in the cluster, `left over` is a
+guess. The thing on A might be this plugin's litter, or it might be the rule
+having fired somewhere new. Nothing in the running configuration distinguishes
+them.
+
+Those rows are labelled **`left over / set at runtime`** rather than picking a
+side. A leftover that nothing else in the cluster is setting stays a plain
+`left over`, because there it really is certain.
+
+**Clear all left over** lists any ambiguous loggers by name before you confirm,
+since that is the one action that could take away logging something else is
+relying on. Clearing is one-shot either way: if a rule is setting it, it returns
+the next time that rule runs, and Suppress is what holds it off.
+
 ### What the filter counts mean
 
 The number on each source filter is **distinct logger names** across the hosts
@@ -148,6 +169,7 @@ one place — so each button's tooltip states both.
 | `log4j2.properties` | Declared in that host's file | never |
 | `this plugin` | An override managed here | on removal or expiry |
 | `left over` | Created by this plugin, still live, and no longer managed by it | yes |
+| `left over / set at runtime` | Either - see below | yes |
 | `set at runtime` | A rule or custom code set it | **never** |
 
 That last row matters. A rule doing
