@@ -1,0 +1,23 @@
+# Screenshots and archives must never be treated as text.
+#
+# This repository is developed on Windows with core.autocrlf=true. Git's binary
+# auto-detection has held so far, but a PNG that gets line-ending translation
+# applied is silently corrupted, and the damage only shows up as a broken image
+# on GitHub - long after the commit that caused it.
+*.png binary
+*.jpg binary
+*.zip binary
+*.jar binary
+
+# Shell scripts and the plugin's own text assets keep LF, so a clone on Linux
+# gets something runnable rather than something with carriage returns in the
+# shebang line.
+*.sh text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.xml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.java text eol=lf
+*.bat text eol=crlf

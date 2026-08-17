@@ -445,9 +445,6 @@ see and act on. Losing the records costs you the label, not the control.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - how the plugin works, why
   it is shaped the way it is, and which parts look redundant but are not. Read
   this before changing `Log4jAgent`.
-- **[docs/BUILDING-IIQ-PLUGINS.md](docs/BUILDING-IIQ-PLUGINS.md)** - the
-  IdentityIQ plugin-framework gotchas this project ran into, most of which are
-  not in SailPoint's documentation.
 - The in-product help page is at
   `/identityiq/plugin/TurnOnLoggers/ui/help.html`, or the **?** button on the
   page.
