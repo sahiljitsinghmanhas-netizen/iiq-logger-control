@@ -255,6 +255,11 @@
 }
 .tol-grouprow:first-child td { padding-top: 6px; }
 
+/* The collection picker column. Narrow and quiet - it is a modifier on the
+   Save button, not a primary action of the table. */
+.tol-pickcell { width: 28px; padding-right: 0 !important; }
+.tol-pick { cursor: pointer; }
+
 .tol-table tr.tol-expired td {
     opacity: .55;
 }

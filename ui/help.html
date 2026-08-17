@@ -202,8 +202,7 @@ through, the same in every section. What differs is only where each section star
     <tr><td>Log Viewer</td><td>every host</td></tr>
   </tbody>
 </table>
-<p>Click any chip to toggle it. You can pick as many as you like, and <strong>All</strong> / <strong>None</strong> at the end of the strip save clicking twelve of them individually. They only appear when there is more than one host. <em>Loggers live in the
-JVM</em> starts on one host because a cluster mostly reports the same picture everywhere, so
+<p>Click any chip to toggle it. You can pick as many as you like, and <strong>All</strong> / <strong>None</strong> at the end of the strip save clicking twelve of them individually. They only appear when there is more than one host. <em>All Logger Status</em> starts on one host because a cluster mostly reports the same picture everywhere, so
 reading it starts with one host and widens when you are comparing.</p>
 <p>Picking several hosts there draws <strong>one table</strong> with a banner between each
 host's rows, rather than a table each. Separate tables sized their columns to their own
@@ -374,8 +373,12 @@ for it - a different amount of trust than an automatic sweep running with nobody
 <p>A collection is a named set of loggers and levels, <strong>shared with everyone</strong> who uses
 the plugin - not a private favourites list. The point is that whoever worked out which five loggers
 matter for an LDAP bind failure can leave that where the next person finds it.</p>
-<p>Turn the loggers on, then press <strong>Save as collection</strong> on <em>Overrides in
-effect</em>. Applying one asks how long it should stay on and turns the whole set on across every
+<p>Turn the loggers on, tick the ones you want in <em>Plugin Logger Status</em>, then press
+<strong>Save as collection</strong>. Every row has a checkbox and the button counts what is ticked,
+so a collection is the set you chose rather than whatever happened to be on at the time. Expired
+rows start unticked, since a collection is a set you want to be able to turn on again and an expired
+row is not on.</p>
+<p>Applying a collection asks how long it should stay on and turns the whole set on across every
 host; each override it creates is noted <code>from collection: &lt;name&gt;</code>, so the table and
 the audit trail both say where it came from. Deleting a collection removes it for everyone and does
 not touch any logger that is currently on.</p>
@@ -398,8 +401,7 @@ not touch any logger that is currently on.</p>
   <dd>Lines matching some text - a logger name, an identity, an error.</dd>
 </dl>
 <p><strong>Stop</strong> ends either one.</p>
-<p>There is also a <strong>Find in logs</strong> button on every row of <em>Loggers live in the
-JVM</em>. Turning a logger on and then reading what it wrote are the same errand, so the row that
+<p>There is also a <strong>Find in logs</strong> button on every row of <em>All Logger Status</em>. Turning a logger on and then reading what it wrote are the same errand, so the row that
 shows the logger running will start the search for you. It searches for the last four components of
 the logger name, because IIQ's stock pattern prints loggers as <code>%c{4}</code> and the full name
 would match nothing.</p>

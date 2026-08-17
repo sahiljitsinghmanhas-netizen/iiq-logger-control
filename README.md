@@ -204,8 +204,7 @@ Two things, both across every host:
   what a host is writing. Leaving the search box blank does the same thing.
 - **Search all hosts** - lines matching some text.
 
-**Stop** ends either. **Find in logs**, on every row of *Loggers live in the
-JVM*, starts a search for that logger without retyping the name.
+**Stop** ends either. **Find in logs**, on every row of *All Logger Status*, starts a search for that logger without retyping the name.
 
 ![The Log Viewer](docs/screenshots/12-logs.png)
 
@@ -405,6 +404,29 @@ to defaults. Logger overrides live in the `Custom` object and survive.
 | Level changed, nothing in the log | The record still has to reach an appender. On a stock IIQ the file appender is commented out and everything goes to stdout. |
 | A logger is noisy and nobody set it | Read the Source column. *differs from file* means something changed it at runtime. |
 | The page does not load after an upgrade | Cached JavaScript. Ctrl+F5. |
+
+## A logger can always be turned off again
+
+The failure worth designing against is a logger that keeps being applied but can
+no longer be reached from the UI - on all night, filling a disk, with no way to
+stop it short of uninstalling the plugin.
+
+It cannot happen, and that is tested rather than asserted. The worst case was
+reproduced deliberately: turn a logger on, uninstall the plugin, delete both of
+its `Custom` objects so no record of the logger survives anywhere, then
+reinstall. The logger is still live in the JVM and the plugin has never heard of
+it. It then:
+
+- **stays visible** in *All Logger Status*, honestly labelled `set at runtime`,
+  because that section reads log4j2's live configuration rather than the
+  plugin's records
+- can be **suppressed** - the plugin takes ownership and holds it at `OFF`
+- can be **cleared** - removed from the running configuration outright
+
+The reason is that nothing here is inferred from the plugin's own bookkeeping.
+Every row in *All Logger Status* comes from asking log4j2 what it currently has
+configured, so a logger the plugin has forgotten is still a logger the page can
+see and act on. Losing the records costs you the label, not the control.
 
 ## Limitations
 

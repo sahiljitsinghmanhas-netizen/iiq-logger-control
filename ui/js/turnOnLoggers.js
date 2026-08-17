@@ -486,15 +486,30 @@
         var head = el('div', 'tol-card-head');
         head.appendChild(el('h2', 'tol-card-title', 'Plugin Logger Status'));
         if ((state.entries || []).length) {
-            var save = el('button', 'tol-btn tol-btn-small', 'Save as collection');
-            save.title = 'Save these loggers under a name so anyone can turn the same set on again';
+            var picked = (state.entries || []).filter(collectChecked);
+            var save = el('button', 'tol-btn tol-btn-small',
+                'Save as collection (' + picked.length + ')');
+            save.disabled = picked.length === 0;
+            save.title = picked.length
+                ? 'Save the ' + picked.length + ' ticked logger'
+                  + (picked.length === 1 ? '' : 's') + ' under a name, so anyone can turn the same '
+                  + 'set on again. Untick a row to leave it out.'
+                : 'Tick at least one logger to save. Expired rows start unticked.';
             save.onclick = function () {
-                var name = window.prompt('Name this collection - everyone using the plugin will see it.\n\n'
-                    + 'For example: LDAP connector debugging');
+                var chosen = (state.entries || []).filter(collectChecked)
+                    .map(function (e) { return { logger: e.logger, level: e.level }; });
+                if (!chosen.length) return;
+                var name = window.prompt('Name this collection - everyone using the plugin will see it.'
+                    + '\n\nSaving ' + chosen.length + ' logger'
+                    + (chosen.length === 1 ? '' : 's') + ':\n'
+                    + chosen.map(function (c) { return '  ' + c.logger + ' = ' + c.level; }).join('\n')
+                    + '\n\nFor example: LDAP connector debugging');
                 if (!name) return;
                 var desc = window.prompt('A one-line description (optional) - what is it for?') || '';
-                mutate(api('POST', '/collections', { name: name, description: desc }),
-                    'Saved as "' + name + '".');
+                mutate(api('POST', '/collections',
+                    { name: name, description: desc, loggers: chosen }),
+                    'Saved ' + chosen.length + ' logger'
+                    + (chosen.length === 1 ? '' : 's') + ' as "' + name + '".');
             };
             head.appendChild(save);
         }
@@ -540,11 +555,28 @@
         }
 
         var t = el('table', 'tol-table');
-        t.appendChild(headRow(['Logger', 'Level', 'Hosts', 'Expires', 'Live on', 'Set by', '']));
+        t.appendChild(headRow(['', 'Logger', 'Level', 'Hosts', 'Expires', 'Live on', 'Set by', '']));
         var tb = el('tbody');
 
         entries.forEach(function (e) {
             var tr = el('tr', e.expired ? 'tol-expired' : '');
+
+            // Which rows a saved collection takes. Without this the only option
+            // was "save everything currently listed", which on a real system
+            // means sweeping up whatever else happened to be on - and expired
+            // rows with it.
+            var c0 = el('td', 'tol-pickcell');
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.className = 'tol-pick';
+            box.checked = collectChecked(e);
+            box.title = 'Include ' + e.logger + ' when saving a collection';
+            box.setAttribute('aria-label', 'Include ' + e.logger + ' in a saved collection');
+            box.onchange = (function (key) {
+                return function (ev) { collectPick[key] = ev.target.checked; render(); };
+            })(collectKey(e));
+            c0.appendChild(box);
+            tr.appendChild(c0);
 
             var c1 = el('td');
             c1.appendChild(el('code', 'tol-logger-name', e.logger));
@@ -821,6 +853,20 @@
                  + seen.map(function (t) { return '  ' + t.name + ' - ' + fmtAgo(t.at); }).join('\n')
         };
     }
+    // Which overrides go into the next saved collection. Only deviations from
+    // the default are stored, so a row added after you have started choosing
+    // still behaves sensibly instead of being silently left out.
+    var collectPick = {};
+
+    function collectKey(e) { return e.id || ('settings:' + e.logger); }
+
+    function collectChecked(e) {
+        var k = collectKey(e);
+        // Expired rows start unticked: a collection is a set of loggers you
+        // want to be able to turn on again, and an expired row is not on.
+        return collectPick[k] === undefined ? !e.expired : !!collectPick[k];
+    }
+
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
     var livePick = null;   // reassigned wholesale by All/None

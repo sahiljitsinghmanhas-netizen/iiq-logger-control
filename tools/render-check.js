@@ -85,6 +85,15 @@ Elem.prototype.getAttribute = function (k) { return this.attrs[k]; };
 Elem.prototype.addEventListener = function () {};
 Elem.prototype.querySelector = function (s) { return String(s).indexOf('header') > -1 ? new Elem('header') : null; };
 Elem.prototype.querySelectorAll = function () { return []; };
+Elem.prototype.text = function () {
+    var out = '';
+    for (var i = 0; i < this.children.length; i++) {
+        var c = this.children[i];
+        if (c && c.tagName === undefined) out += String(c.nodeValue);
+        else if (c && c.text) out += c.text() + ' ';
+    }
+    return out;
+};
 Elem.prototype.textLen = function () {
     var n = 0;
     for (var i = 0; i < this.children.length; i++) {
@@ -144,8 +153,10 @@ function run(scenario) {
     }
     if (hasRoot) {
         if (rootEl.children.length < 2 || rootEl.textLen() < 500) {
+            var shown = rootEl.text().replace(/\s+/g, ' ').trim();
             failures.push(scenario.name + ': page did not render (children='
-                + rootEl.children.length + ', text=' + rootEl.textLen() + ')');
+                + rootEl.children.length + ', text=' + rootEl.textLen() + ')'
+                + (shown ? '  |  page said: ' + shown.slice(0, 300) : ''));
         } else {
             print('  ' + scenario.name + ': rendered ' + rootEl.children.length
                 + ' sections, ' + rootEl.textLen() + ' chars');
