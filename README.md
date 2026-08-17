@@ -350,6 +350,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `PUT` | `/entries/{id}` | Change level, TTL or hosts |
 | `DELETE` | `/entries/{id}` | Remove one override |
 | `DELETE` | `/entries` | Remove all overrides |
+| `DELETE` | `/entries?expiredOnly=true` | Remove only the expired ones |
 | `POST` | `/sync` | Reconcile the host serving the request |
 | `POST` | `/collections` | Save the current overrides, or a given list, under a name |
 | `POST` | `/collections/{id}/apply` | Turn a whole collection on |
@@ -357,6 +358,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `GET` | `/logtail?index=N&kb=K` | The end of one of this host's log files |
 | `POST` | `/logquery` | Start or stop a cluster-wide log search |
 | `POST` | `/cleanup` | Clear left-over loggers, or one named logger |
+| `GET` | `/history?limit=N&kind=change\|all` | Changes read back from the audit trail |
 | `DELETE` | `/hosts/{host}` | Forget a decommissioned host |
 
 ```bash
