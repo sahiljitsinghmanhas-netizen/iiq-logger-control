@@ -101,6 +101,15 @@
     align-items: center;
 }
 
+/* Buttons in a card header live in here, not as siblings of the title. With
+   space-between, a title plus two loose buttons is three children and the
+   middle one ends up stranded in the centre of the card. */
+.tol-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* ---------- form ---------- */
 
 .tol-form {

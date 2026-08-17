@@ -485,6 +485,10 @@
         var box = el('section', 'tol-card');
         var head = el('div', 'tol-card-head');
         head.appendChild(el('h2', 'tol-card-title', 'Plugin Logger Status'));
+        // The header is a space-between flex row. With a title and two buttons
+        // as three children it pushed one button into the middle of the card;
+        // grouping them makes it title-on-the-left, actions-on-the-right.
+        var actions = el('div', 'tol-card-actions');
         if ((state.entries || []).length) {
             var picked = (state.entries || []).filter(collectChecked);
             var save = el('button', 'tol-btn tol-btn-small',
@@ -511,7 +515,7 @@
                     'Saved ' + chosen.length + ' logger'
                     + (chosen.length === 1 ? '' : 's') + ' as "' + name + '".');
             };
-            head.appendChild(save);
+            actions.appendChild(save);
         }
 
         // Only offered when there is something to remove. An expired override
@@ -535,9 +539,10 @@
                     expiredCount + ' expired override'
                     + (expiredCount === 1 ? '' : 's') + ' removed.');
             };
-            head.appendChild(rmExp);
+            actions.appendChild(rmExp);
         }
 
+        head.appendChild(actions);
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
             'Everything this plugin has turned on, from both this page and the plugin settings. ' +
