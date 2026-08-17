@@ -462,14 +462,11 @@ see and act on. Losing the records costs you the label, not the control.
 - **Overrides live in the IIQ database**, so a database refresh carries them
   between environments.
 
-## Documentation
+## Help
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - how the plugin works, why
-  it is shaped the way it is, and which parts look redundant but are not. Read
-  this before changing `Log4jAgent`.
-- The in-product help page is at
-  `/identityiq/plugin/TurnOnLoggers/ui/help.html`, or the **?** button on the
-  page.
+The in-product help page explains every section, button and label. It is at
+`/identityiq/plugin/TurnOnLoggers/ui/help.html`, or the **?** button on the
+page itself.
 
 ## Building from source
 
@@ -491,10 +488,6 @@ plugin always matches the README.
 The plugin settings form and IIQ's audit search are client-side apps that do
 not populate from a directly-navigated URL, so those two screens are described
 in words rather than captured.
-
-## Author
-
-Sahiljit Singh Manhas
 
 ## License
 
