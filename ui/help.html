@@ -152,8 +152,10 @@ overrides; the third is the truth of what log4j2 has configured, whoever put it 
 
   <dt>Plugin Logger Status</dt>
   <dd>Everything this plugin is currently holding, from this page and from the
-  <code>Permanent loggers</code> plugin setting. Every row is an override, and the only thing you
-  can do to one is remove it.</dd>
+  <code>Permanent loggers</code> plugin setting. Every row is an override. You can remove one, tick
+  it to include in a saved collection, or jump straight to what it wrote with <em>Find in logs</em>.
+  Rows that have expired stay listed, greyed, until someone clears them - see
+  <a href="#expired">Expired overrides</a>.</dd>
 
   <dt>All Logger Status</dt>
   <dd>Every logger log4j2 actually has configured on each host, whatever put it there, with its
@@ -260,7 +262,7 @@ configuration file rather than inferred.</figcaption>
   <tr><td><code>log4j2.properties</code></td><td>Declared in that host's own configuration file.</td><td>never</td></tr>
   <tr><td><code>this plugin</code></td><td>An override currently managed here.</td><td>on removal or expiry</td></tr>
   <tr><td><code>left over</code></td><td>This plugin created it and lost track of it, which used to happen when the plugin was reinstalled while a logger was on.</td><td>yes, by <em>Clear all left over</em></td></tr>
-  <tr><td><code>left over / set at runtime</code></td><td>Either one - the plugin has a record of creating it on this host, but the same logger is being set at runtime somewhere else in the cluster, and a rule can set it on any host at any time. See below.</td><td>yes, but read the warning</td></tr>
+  <tr><td><code>left over</code> <em>and</em> <code>set at runtime</code>, shown as two chips</td><td>Either one - the plugin has a record of creating it on this host, but the same logger is being set at runtime somewhere else in the cluster, and a rule can set it on any host at any time. See below.</td><td>yes, but read the warning</td></tr>
   <tr><td><code>set at runtime</code></td><td>Something outside this plugin set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
 </table>
 
@@ -335,6 +337,17 @@ so it reads without relying on colour alone.</figcaption>
   <dt>Remove override</dt>
   <dd>Deletes one of this plugin's overrides. The logger returns to its
   <code>log4j2.properties</code> level, or to whatever a rule sets, next time that rule runs.</dd>
+
+  <dt>Save as collection</dt>
+  <dd>Saves the <strong>ticked</strong> rows of <em>Plugin Logger Status</em> under a name, so the
+  same set can be turned on again later. The count on the button is how many are ticked. Expired
+  rows start unticked, because a collection is a set you want to be able to turn on again and an
+  expired row is not on.</dd>
+
+  <dt>Remove expired</dt>
+  <dd>Deletes only the overrides that have already expired. They are applied to nothing, so this
+  changes no logging anywhere - it tidies the table. Live overrides are untouched, and the button
+  only appears when there is something for it to remove.</dd>
 
   <dt>Remove all overrides</dt>
   <dd>Removes every override this plugin holds, on every host. Nothing in
@@ -490,7 +503,8 @@ the next question every time you turn one on.</p>
 </figure>
 <p>Collapsed until you press <strong>Show</strong>, because it is a look-back rather than
 something you need in front of you while working. It is not fetched until you open it, and not
-re-fetched by the page's own refresh.</p>
+re-fetched by the page's own refresh - <strong>Refresh history</strong> re-reads the trail on
+demand, and keeps your place while it does.</p>
 <p>The <strong>Rev</strong> column is the configuration revision that change produced. That is
 what makes the counter in the page header mean something: <em>revision 131</em> on its own only
 tells hosts whether they are up to date, but matched against a row here it tells you what
@@ -521,6 +535,16 @@ this causes an incident.</p>
   <dd>Blocked unless <code>Allow root logger</code> is enabled in the plugin settings. Setting root
   to <code>DEBUG</code> turns on every logger in the JVM at once.</dd>
 </dl>
+
+<h3 id="expired">Expired overrides</h3>
+<p>An expired override stops applying the moment it expires - the level goes back to whatever the
+host's <code>log4j2.properties</code> says, or the logger is removed if this plugin was the one
+that created it. Nothing about it is still in effect.</p>
+<p>The row stays in the table, greyed, with <em>Live on</em> reading <strong>no longer
+applied</strong>. It is deliberately not a list of hosts: an expired override is not waiting on
+anybody, and showing hosts there read as "this never landed" when the truth is the opposite.</p>
+<p>They are left listed rather than deleted so there is a record of what was on recently.
+<strong>Remove expired</strong> in the section header clears them when you want the table tidy.</p>
 
 <h2 id="hosts">Host Status and propagation<a class="top" href="#">top</a></h2>
 <figure>
