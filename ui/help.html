@@ -271,8 +271,8 @@ necessarily the same one it used last time.</p>
 <p>So if this plugin has a record of creating a logger on one host, and that same logger is being
 set at runtime somewhere else in the cluster, <code>left over</code> would be a guess. The thing in
 front of you might be this plugin's litter, or it might be the rule having fired somewhere new.
-Nothing in the running configuration distinguishes them, so the label does not pretend to - it says
-<code>left over / set at runtime</code> and the tooltip explains why.</p>
+Nothing in the running configuration distinguishes them, so the label does not pretend to - it shows <strong>both
+tags side by side</strong>, and the tooltip explains why.</p>
 <p>A leftover that nothing else in the cluster is setting stays a plain <code>left over</code>,
 because there it genuinely is certain.</p>
 <p><strong>Clear all left over</strong> lists any ambiguous loggers by name before you confirm.

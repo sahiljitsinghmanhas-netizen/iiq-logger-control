@@ -143,8 +143,8 @@ guess. The thing on A might be this plugin's litter, or it might be the rule
 having fired somewhere new. Nothing in the running configuration distinguishes
 them.
 
-Those rows are labelled **`left over / set at runtime`** rather than picking a
-side. A leftover that nothing else in the cluster is setting stays a plain
+Those rows show **both tags** - the red `left over` chip and the amber
+`set at runtime` chip, side by side - rather than picking a side. A leftover that nothing else in the cluster is setting stays a plain
 `left over`, because there it really is certain.
 
 **Clear all left over** lists any ambiguous loggers by name before you confirm,

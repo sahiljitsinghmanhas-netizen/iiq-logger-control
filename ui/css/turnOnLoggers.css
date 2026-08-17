@@ -257,10 +257,13 @@
 
 /* The collection picker column. Narrow and quiet - it is a modifier on the
    Save button, not a primary action of the table. */
-/* An honest "could be either". Dashed because it is a hedge, not a verdict. */
-.tol-src-ambiguous {
-    border-style: dashed !important;
-    font-style: italic;
+/* Two source chips side by side, for a row that could honestly be either.
+   The separator is quiet - the chips carry the meaning. */
+.tol-src-or {
+    display: inline-block;
+    margin: 0 4px;
+    color: #9aa5b1;
+    font-weight: 600;
 }
 
 .tol-pickcell { width: 28px; padding-right: 0 !important; }

@@ -1179,20 +1179,25 @@
 
                 var c3 = el('td', 'tol-small');
                 // Where the plugin cannot honestly pick between its own litter
-                // and a rule's doing, it says so rather than choosing.
+                // and a rule's doing, it shows both tags rather than inventing a
+                // third one. Two familiar chips say "it is one of these" without
+                // the reader having to learn a new label.
                 var amb = String(r.ambiguous) === 'true';
-                var tag = el('span', 'tol-src tol-src-' + r.source + (amb ? ' tol-src-ambiguous' : ''),
-                    amb ? 'left over / set at runtime' : (SRC[r.source] || r.source));
                 if (amb) {
-                    tag.title = 'Either. This plugin created ' + r.logger + ' on this host and still '
-                        + 'has a record of it, which normally means left over - but the same logger '
-                        + 'is being set at runtime elsewhere in the cluster, and a rule can set it '
-                        + 'on any host at any time. Nothing in the running configuration tells the '
-                        + 'two apart, so the label does not pretend to.\n\n'
-                        + 'Clear removes it either way, and if a rule set it the rule will set it '
-                        + 'again next time it runs. Use Suppress if it has to stay off.';
+                    c3.appendChild(el('span', 'tol-src tol-src-leftover', SRC.leftover));
+                    c3.appendChild(el('span', 'tol-src-or', '/'));
+                    c3.appendChild(el('span', 'tol-src tol-src-runtime', SRC.runtime));
+                    c3.title = 'Either one. This plugin has a record of creating ' + r.logger
+                        + ' on this host, which normally means left over - but the same logger is '
+                        + 'being set at runtime elsewhere in the cluster, and a rule can set it on '
+                        + 'any host at any time. Nothing in the running configuration tells the two '
+                        + 'apart, so this does not pretend to.\n\n'
+                        + 'Clear removes it either way. If a rule is setting it, the rule will set '
+                        + 'it again next time it runs - use Suppress to hold it off.';
+                } else {
+                    c3.appendChild(el('span', 'tol-src tol-src-' + r.source,
+                        SRC[r.source] || r.source));
                 }
-                c3.appendChild(tag);
                 tr.appendChild(c3);
 
                 // What the file declares, and whether the JVM disagrees.
