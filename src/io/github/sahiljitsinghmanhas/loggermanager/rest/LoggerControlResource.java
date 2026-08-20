@@ -1,13 +1,14 @@
-package com.example.turnonloggers.rest;
+package io.github.sahiljitsinghmanhas.loggermanager.rest;
 
-import com.example.turnonloggers.core.AuditWriter;
-import com.example.turnonloggers.core.CollectionStore;
-import com.example.turnonloggers.core.LogTail;
-import com.example.turnonloggers.core.HostFacts;
-import com.example.turnonloggers.core.Log4jAgent;
-import com.example.turnonloggers.core.LoggerConfigStore;
-import com.example.turnonloggers.core.LoggerSync;
-import com.example.turnonloggers.core.PluginSettings;
+import io.github.sahiljitsinghmanhas.loggermanager.core.AuditWriter;
+import io.github.sahiljitsinghmanhas.loggermanager.core.CollectionStore;
+import io.github.sahiljitsinghmanhas.loggermanager.core.LogTail;
+import io.github.sahiljitsinghmanhas.loggermanager.core.HostFacts;
+import io.github.sahiljitsinghmanhas.loggermanager.core.Log4jAgent;
+import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerConfigStore;
+import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerSync;
+import io.github.sahiljitsinghmanhas.loggermanager.core.PluginSettings;
+import io.github.sahiljitsinghmanhas.loggermanager.service.LoggerSyncService;
 import org.apache.log4j.Logger;
 import sailpoint.api.SailPointContext;
 import sailpoint.object.AuditEvent;
@@ -734,6 +735,13 @@ public class LoggerControlResource extends BasePluginResource {
 
     private Map<String, Object> buildState(Identity user) throws Exception {
         SailPointContext ctx = getContext();
+
+        // If a release has moved the service executor, the ServiceDefinition
+        // still names the old class and no host reconciles. This is the only
+        // code path guaranteed to run in that state, because opening the page
+        // does not depend on the service working.
+        LoggerSyncService.ensureExecutor(ctx);
+
         long now = System.currentTimeMillis();
         String thisHost = HostFacts.hostName();
 
@@ -1239,6 +1247,6 @@ public class LoggerControlResource extends BasePluginResource {
             cat("org.hibernate.SQL", "Persistence - raw SQL"),
             cat("sailpoint.api.Meter", "Performance metering"),
             cat("sailpoint.plugin", "Plugin framework"),
-            cat("com.example.turnonloggers", "This plugin itself")
+            cat("io.github.sahiljitsinghmanhas.loggermanager", "This plugin itself")
     );
 }

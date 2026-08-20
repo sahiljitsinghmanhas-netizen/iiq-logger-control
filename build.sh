@@ -63,7 +63,7 @@ mkdir -p "$HERE/ui/img"
 cp -f "$HERE"/docs/screenshots/*.png "$HERE/ui/img/"
 
 echo "Packaging $JAR_NAME..."
-(cd "$CLASSES_DIR" && "$JAR_EXE" cf "$LIB_DIR/$JAR_NAME" com)
+(cd "$CLASSES_DIR" && "$JAR_EXE" cf "$LIB_DIR/$JAR_NAME" io)
 
 # jar, not zip -r: keeps forward-slash entry paths, which is what IIQ's
 # PluginsCache looks up.

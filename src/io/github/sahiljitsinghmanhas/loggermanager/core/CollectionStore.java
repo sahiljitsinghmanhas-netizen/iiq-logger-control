@@ -1,4 +1,4 @@
-package com.example.turnonloggers.core;
+package io.github.sahiljitsinghmanhas.loggermanager.core;
 
 import sailpoint.api.SailPointContext;
 import sailpoint.object.Attributes;

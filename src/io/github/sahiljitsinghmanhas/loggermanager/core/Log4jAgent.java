@@ -1,4 +1,4 @@
-package com.example.turnonloggers.core;
+package io.github.sahiljitsinghmanhas.loggermanager.core;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;

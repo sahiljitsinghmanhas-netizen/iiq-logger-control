@@ -29,7 +29,7 @@
   -->
   <ServiceDefinition name="TurnOnLoggersSync"
                      interval="60"
-                     executor="com.example.turnonloggers.service.LoggerSyncService"
+                     executor="io.github.sahiljitsinghmanhas.loggermanager.service.LoggerSyncService"
                      hosts="global">
     <Description>Applies the Logger Control plugin's logger level overrides to this host's log4j2 runtime, and reports back what this host actually has running.</Description>
     <Attributes>

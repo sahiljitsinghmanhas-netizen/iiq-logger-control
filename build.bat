@@ -84,7 +84,7 @@ if errorlevel 1 (
 REM ---- Jar --------------------------------------------------------------
 echo Packaging %JAR_NAME%...
 pushd "%CLASSES_DIR%"
-"%JAR_EXE%" cf "%LIB_DIR%\%JAR_NAME%" com
+"%JAR_EXE%" cf "%LIB_DIR%\%JAR_NAME%" io
 popd
 if errorlevel 1 (
     echo ERROR: jar packaging failed.

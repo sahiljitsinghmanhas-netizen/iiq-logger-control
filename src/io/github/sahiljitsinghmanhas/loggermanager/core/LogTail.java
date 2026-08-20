@@ -1,4 +1,4 @@
-package com.example.turnonloggers.core;
+package io.github.sahiljitsinghmanhas.loggermanager.core;
 
 import java.io.File;
 import java.io.RandomAccessFile;

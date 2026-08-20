@@ -405,6 +405,15 @@ debug page.
 
 ## Upgrading and rolling back
 
+**Upgrading to 2.39.0 or later from an earlier release:** the Java package moved
+from `com.example.turnonloggers` to `io.github.sahiljitsinghmanhas.loggermanager`.
+The `ServiceDefinition` names its executor as a string and is imported by hand,
+so it still points at the old class after a plugin upgrade. The plugin corrects
+it the first time anyone opens the page - no manual step - but until something
+opens the page, hosts will fail to start the sync service on their next restart.
+Open the page once after upgrading and you are done.
+
+
 Upload the newer zip - no uninstall, and settings are preserved. Press
 **Ctrl+F5** afterwards: IIQ's plugin asset URLs do not change between installs,
 so browsers serve the old JavaScript.
@@ -490,6 +499,13 @@ plugin always matches the README.
 The plugin settings form and IIQ's audit search are client-side apps that do
 not populate from a directly-navigated URL, so those two screens are described
 in words rather than captured.
+
+## Author
+
+Built and maintained by **Sahiljit Singh Manhas**
+([@sahiljitsinghmanhas-netizen](https://github.com/sahiljitsinghmanhas-netizen)).
+
+Issues and pull requests are welcome.
 
 ## License
 
