@@ -78,6 +78,18 @@ public final class LoggerConfigStore {
     public static final String S_LOG_PATH    = "logPath";
     /** Why this host could not answer, blank when it answered fine. */
     public static final String S_LOG_ERROR   = "logError";
+
+    /**
+     * Why this host's last sync tick did not finish, blank when it did.
+     *
+     * Deliberately separate from S_ERRORS, which records problems applying an
+     * individual logger during a tick that otherwise completed. This one means
+     * the tick itself died, so nothing else in the record was refreshed and
+     * everything in it is as old as S_LAST_SYNC says.
+     */
+    public static final String S_TICK_ERROR  = "tickError";
+    /** When that failure happened. Not lastSync - the sync did not happen. */
+    public static final String S_TICK_ERROR_AT = "tickErrorAt";
     /** Loggers this plugin created here - the only ones cleanup may remove. */
     public static final String S_CREATED = "created";
     /** Every logger live in this host's JVM, with level and source. */
@@ -252,6 +264,35 @@ public final class LoggerConfigStore {
     // ------------------------------------------------------------------
     // per-host status (observed state)
     // ------------------------------------------------------------------
+
+    /**
+     * Record that a sync tick failed, without pretending it succeeded.
+     *
+     * Deliberately does NOT touch lastSync. A failing host must keep going
+     * stale - that is the signal that its record is old - and stamping the
+     * clock here would hide exactly the fault this is reporting. All this adds
+     * is the reason, so a stale host stops being a mystery.
+     *
+     * Writes as little as possible and swallows its own failure. It runs on
+     * the path where something has already gone wrong, quite possibly the
+     * database itself, and a diagnostic that can throw is worse than no
+     * diagnostic.
+     */
+    public static void writeTickError(SailPointContext ctx, String host, String message) {
+        try {
+            Custom st = ctx.getObjectByName(Custom.class, statusName(host));
+            if (st == null) return;   // never synced here; nothing to annotate
+            if (st.getAttributes() == null) st.setAttributes(new Attributes<String, Object>());
+            String m = message == null ? "" : message;
+            if (m.length() > 500) m = m.substring(0, 500);
+            st.put(S_TICK_ERROR, m);
+            st.put(S_TICK_ERROR_AT, String.valueOf(System.currentTimeMillis()));
+            ctx.saveObject(st);
+            ctx.commitTransaction();
+        } catch (Throwable ignored) {
+            // Nothing useful left to do - the log already has the real failure.
+        }
+    }
 
     public static String statusName(String host) {
         return STATUS_PREFIX + host;
@@ -429,6 +470,9 @@ public final class LoggerConfigStore {
         st.put(S_REVISION, String.valueOf(revision));
         st.put(S_LAST_SYNC, String.valueOf(System.currentTimeMillis()));
         st.put(S_TRIGGER, trigger == null ? "" : trigger);
+        // This tick got here, so whatever the last one failed at is history.
+        st.put(S_TICK_ERROR, "");
+        st.put(S_TICK_ERROR_AT, "0");
         st.put(S_APPLIED, new LinkedHashMap<String, String>(applied));
         st.put(S_ERRORS, new ArrayList<String>(errors));
         st.put(S_FACTS, new LinkedHashMap<String, String>(HostFacts.collect()));

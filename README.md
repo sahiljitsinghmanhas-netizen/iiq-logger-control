@@ -73,11 +73,50 @@ IIQ_LIB=/opt/identityiq/WEB-INF/lib ./build.sh   # Linux / macOS
 
 Open the page at `/identityiq/plugins/pluginPage.jsf?pn=TurnOnLoggers`, or
 **gear icon → Plugins → Logger Manager → Configure**, which carries a link to
-it. Plugin full pages get no menu entry of their own in IIQ, so bookmark it.
+it. IdentityIQ gives plugin full pages no menu entry of their own, so the
+plugin adds one itself — see [The header icon](#the-header-icon) below.
 
 Grant access by pointing `requiredCapability` at a capability of your own. The
 default is `SystemAdministrator`, which works out of the box but is broader
 than most people need.
+
+## The header icon
+
+The plugin puts one icon in IdentityIQ's top-right navigation that opens the
+page, so reaching it is not a trip through **gear icon → Plugins** every time.
+
+Two independent gates decide who is shown it, because an icon everyone can see
+and only some people can use is worse than no icon at all.
+
+**IdentityIQ decides first.** The icon's script is declared with
+`rightRequired="ViewLoggerManagerIcon"`, which IdentityIQ evaluates
+server-side: users who do not hold that right are never sent the script at all.
+It is not hidden with CSS, and there is nothing to find in the page source.
+
+**The plugin decides second.** For users who are sent it, the script asks
+`GET /nav`, which answers `true` only if `showNavIcon` is on *and* the caller
+also passes the `requiredCapability` check. A right is not a capability, so
+this closes the gap where somebody holds one but not the other and would
+otherwise be handed a link straight to a 403. The answer is cached per browser
+session, so it costs one small request per session rather than one per page.
+
+Members of `SystemAdministrator` are shown the icon without any setup, because
+IdentityIQ treats that capability as holding every right. **For anyone else,
+add the `ViewLoggerManagerIcon` right to whichever capability your logging
+administrators already hold.** The right itself needs no importing: it ships in
+`import/install/`, which IdentityIQ imports when the plugin is installed - so
+the object exists, granted to nobody, from the moment you install. (If your
+`iiq.properties` sets `plugins.importObjects=false`, that import does not
+happen and the file has to be imported by hand.)
+
+Until the right is granted, nobody outside `SystemAdministrator` sees an icon -
+which is the right way round for this to fail: a plugin should not start
+advertising itself in every user's header the moment it is installed.
+
+![The Logger Manager mark in the IdentityIQ header](docs/screenshots/19-header-icon.png)
+
+To remove the icon for everyone without touching who holds the right, turn
+`showNavIcon` off.
 
 ## Using it
 
@@ -310,6 +349,7 @@ the next read; no restart.
 | `untouchableLoggers` | `root,sailpoint` | Loggers the plugin refuses to change. |
 | `permanentLoggers` | *(blank)* | Loggers enabled from the settings page, with no expiry. |
 | `showLogFiles` | `true` | Whether the page can show the end of this host's log files. |
+| `showNavIcon` | `true` | Whether to draw the header icon. Gated by the `ViewLoggerManagerIcon` right as well. |
 | `logTailKb` | `64` | How much of the end to read. Capped at 512 regardless. |
 | `hostsFromServersOnly` | `true` | Whether IdentityIQ's `Server` list is the only source of truth for which hosts exist. |
 
@@ -392,6 +432,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/state` | Everything the page renders |
+| `GET` | `/nav` | Whether to draw the header icon for the caller. Always 200 |
 | `POST` | `/entries` | Add or replace an override |
 | `PUT` | `/entries/{id}` | Change level, TTL or hosts |
 | `DELETE` | `/entries/{id}` | Remove one override |
@@ -502,7 +543,7 @@ its JVM is actually down — the one case where a logger really could still be o
 somewhere you can no longer see. Nothing there will confirm an override, so
 those hosts sit on `pending` indefinitely; that is the signal, not a bug.
 
-Clearing removes only this plugin's own record of what those hosts last
+Deleting removes only this plugin's own record of what those hosts last
 reported. It does not touch IdentityIQ, and it cannot affect anything that is
 running, since by definition none of them are in IIQ's `Server` list. The action
 is audited like any other change.
@@ -516,8 +557,9 @@ than showing an empty table.
 
 **Upgrading to 2.39.0 or later from an earlier release:** the Java package moved
 from `com.example.turnonloggers` to `io.github.sahiljitsinghmanhas.loggermanager`.
-The `ServiceDefinition` names its executor as a string and is imported by hand,
-so it still points at the old class after a plugin upgrade. The plugin corrects
+The `ServiceDefinition` names its executor as a string, and IdentityIQ imports
+`import/install/` on install but not on upgrade, so after an upgrade it still
+points at the old class. The plugin corrects
 it the first time anyone opens the page - no manual step - but until something
 opens the page, hosts will fail to start the sync service on their next restart.
 Open the page once after upgrading and you are done.
@@ -538,6 +580,29 @@ Rolling back therefore means uninstalling first, which resets plugin settings
 to defaults. Logger overrides live in the `Custom` object and survive.
 
 ## Troubleshooting
+
+### One host is permanently stale, and its heartbeat is fine
+
+Almost always this host is not running the sync service, rather than failing at
+it. `hosts="global"` on the `ServiceDefinition` is an offer, not a guarantee:
+**gear icon → Global Settings → Host Configuration** lets a deployment say, per
+host, either the only services it runs or the ones it must not, and a host with
+an include list that does not name `TurnOnLoggersSync` will never run it.
+Deployments that separate UI hosts from task hosts do this routinely.
+
+The giveaways are exact:
+
+- the host's IIQ heartbeat is current, because that is a different service
+- doing anything from the page — even reading the log — brings it back into
+  sync for one interval, because that runs on the request thread rather than on
+  a tick, and then it decays again
+- no error appears anywhere, because nothing is failing
+
+The plugin detects this and labels such a host **service not enabled here**
+instead of *stale*. To fix it, add `TurnOnLoggersSync` to that host's included
+services (or remove it from its excluded ones). Until you do, overrides will
+not reach that host on their own.
+
 
 | Symptom | Cause |
 |---|---|
@@ -573,10 +638,12 @@ see and act on. Losing the records costs you the label, not the control.
 ## Limitations
 
 - **Appenders are not managed**, only levels.
-- **Uninstalling leaves the ServiceDefinition behind**, because IIQ has no
-  uninstall-time import hook. Remove it with `iiq console` →
-  `delete ServiceDefinition TurnOnLoggersSync`, or every host logs a
-  `ClassNotFoundException` once per Servicer cycle.
+- **Uninstalling leaves the objects from `import/install/` behind**, because
+  IIQ imports them on install but has no uninstall-time counterpart. Remove
+  them with `iiq console` → `delete ServiceDefinition TurnOnLoggersSync` and
+  `delete SPRight ViewLoggerManagerIcon`. Leaving the `ServiceDefinition` makes
+  every host log a `ClassNotFoundException` once per Servicer cycle; leaving
+  the `SPRight` is harmless but untidy.
 - **Only the properties format** of log4j2 configuration is parsed. For XML or
   YAML the source of each logger cannot be determined, and the page says so.
 - **Overrides live in the IIQ database**, so a database refresh carries them

@@ -813,6 +813,19 @@
     color: #7b8794;
 }
 
+/* IdentityIQ has been told not to run the sync service on this host, in Host
+   Configuration. Grey like "down" rather than amber like "stale", because
+   nothing is failing and no amount of waiting changes it - the host is doing
+   exactly what it was configured to do. Solid rather than dashed: this is a
+   settled fact, not an absence of news. NOT named .tol-lhost-off - that
+   already means "not picked" and is a different axis entirely. */
+.tol-lhost-disabled {
+    border-color: #9aa5b1;
+    background: #f5f7fa;
+    color: #616e7c;
+}
+.tol-lhost-disabled .tol-lhost-count { background: #9aa5b1; color: #fff; }
+
 /* The host serving the page, so it is obvious which one answered instantly. */
 .tol-lhost-self .tol-lhost-name { text-decoration: underline; text-underline-offset: 2px; }
 

@@ -95,6 +95,45 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Whether to draw this plugin's icon in IdentityIQ's header for the caller.
+     *
+     * Called by ui/js/snippets/header.js on the first page of a browser
+     * session. IdentityIQ has already decided the caller holds the SPRight
+     * named by the snippet's rightRequired, or this file would never have been
+     * sent; this confirms the two things a right cannot say - that the icon is
+     * switched on, and that the caller also passes the plugin's own capability
+     * check, so nobody is handed a link to a 403.
+     *
+     * Always 200. A denial here is a routine answer about the caller's own
+     * access, not an error, and this runs on ordinary product pages where an
+     * error status would surface in consoles and logs for no reason. For the
+     * same reason it checks the capability directly rather than through
+     * capabilityDenial(), which warns on every denial - that would put a line
+     * in sailpoint.log for every such user.
+     */
+    @GET
+    @Path("nav")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response nav() {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("show", Boolean.FALSE);
+        try {
+            Identity user = requireUser();
+            if (user == null) return json(Response.Status.OK, out);
+            if (!PluginSettings.getBool(getContext(), PluginSettings.S_NAV_ICON, true)) {
+                return json(Response.Status.OK, out);
+            }
+            String required = PluginSettings.getString(getContext(),
+                    PluginSettings.S_REQUIRED_CAP, "SystemAdministrator");
+            out.put("show", Boolean.valueOf(hasCapability(user, required)));
+            return json(Response.Status.OK, out);
+        } catch (Throwable t) {
+            LOG.warn("[TurnOnLoggers] nav check failed: " + t);
+            return json(Response.Status.OK, out);
+        }
+    }
+
     // ==================================================================
     // write
     // ==================================================================
@@ -1025,6 +1064,7 @@ public class LoggerControlResource extends BasePluginResource {
                 h.put("inactive", s.isInactive());
                 h.put("heartbeat", s.getHeartbeat() == null
                         ? "" : String.valueOf(s.getHeartbeat().getTime()));
+                h.put("serviceOff", !runsSyncService(s));
             }
         }
 
@@ -1050,6 +1090,9 @@ public class LoggerControlResource extends BasePluginResource {
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LOG_ANSWERED)), 0L)));
             h.put("logPath", st.get(LoggerConfigStore.S_LOG_PATH));
             h.put("logError", st.get(LoggerConfigStore.S_LOG_ERROR));
+            h.put("tickError", st.get(LoggerConfigStore.S_TICK_ERROR));
+            h.put("tickErrorAt", String.valueOf(
+                    LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_TICK_ERROR_AT)), 0L)));
             h.put("lastClear", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LAST_CLEAR)), 0L)));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));
@@ -1304,6 +1347,70 @@ public class LoggerControlResource extends BasePluginResource {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether IdentityIQ will actually run this plugin's sync service on a host.
+     *
+     * A ServiceDefinition with hosts="global" is an offer, not a guarantee.
+     * Host Configuration (gear icon -> Global Settings -> Host Configuration)
+     * lets a deployment name, per Server, either the only services that host
+     * runs or the ones it must not - IIQ stores those as the "includedServices"
+     * and "excludedServices" attributes. Deployments that separate UI hosts
+     * from task hosts use this routinely, and a UI host with an include list
+     * will not run this service however global the definition is.
+     *
+     * The symptom, before this was detected, was indistinguishable from a
+     * fault: that host never ticks, so it drifts past the stale threshold and
+     * sits there - while its IIQ heartbeat stays green, because that is a
+     * different service, and while anything done from the page brings it back
+     * for one interval, because that runs on the request thread rather than on
+     * a tick. The host looks broken and nothing anywhere says why.
+     *
+     * An include list that does not name the service excludes it just as
+     * firmly as naming it in the exclude list. Both are checked.
+     */
+    private boolean runsSyncService(Server s) {
+        try {
+            Object incl = s.get(Server.ATT_INCL_SERVICES);
+            Object excl = s.get(Server.ATT_EXCL_SERVICES);
+            if (namesService(excl)) return false;
+            List<String> in = asNameList(incl);
+            if (!in.isEmpty()) return namesService(incl);
+            return true;
+        } catch (Throwable t) {
+            // Never let a host-config quirk stop the page rendering; assume it
+            // runs, which is the pre-existing behaviour.
+            LOG.warn("[TurnOnLoggers] could not read host service config for "
+                    + (s == null ? "?" : s.getName()) + ": " + t);
+            return true;
+        }
+    }
+
+    private boolean namesService(Object v) {
+        for (String n : asNameList(v)) {
+            if (LoggerSyncService.NAME.equalsIgnoreCase(n)) return true;
+        }
+        return false;
+    }
+
+    /** The attribute is a List on some versions and a CSV String on others. */
+    @SuppressWarnings("unchecked")
+    private List<String> asNameList(Object v) {
+        List<String> out = new ArrayList<String>();
+        if (v == null) return out;
+        if (v instanceof List) {
+            for (Object o : (List<Object>) v) {
+                if (o != null && String.valueOf(o).trim().length() > 0) {
+                    out.add(String.valueOf(o).trim());
+                }
+            }
+        } else {
+            for (String part : String.valueOf(v).split(",")) {
+                if (part.trim().length() > 0) out.add(part.trim());
+            }
+        }
+        return out;
     }
 
     private static boolean equalsIgnoreCase(String a, String b) {

@@ -757,7 +757,27 @@
         if (errs.length) {
             return { key: 'error', why: errs.join(' ') };
         }
+        if (h.serviceOff) {
+            // Not a fault, and not stale in any useful sense: IdentityIQ has
+            // been told not to run this service here, so this host will never
+            // tick no matter how long you wait. Saying "stale" sends people
+            // hunting a failure that does not exist.
+            return {
+                key: 'disabled',
+                why: 'IdentityIQ is configured not to run the sync service on ' + h.name
+                     + ' - see gear icon, Global Settings, Host Configuration. Overrides will '
+                     + 'not reach this host on their own. Anything done from this page still '
+                     + 'applies here, which is why it briefly reads as in sync afterwards.'
+            };
+        }
         if (h.stale) {
+            // A host whose ticks are dying and a host that is merely slow both
+            // just stop updating. If the failing host managed to say why, say
+            // it here rather than leaving the reader to guess.
+            if (h.tickError) {
+                return { key: 'error', why: 'Its last sync was ' + fmtAgo(h.lastSync)
+                                            + ', and its sync service is failing: ' + h.tickError };
+            }
             return { key: 'stale', why: 'Reporting, but its last sync was ' + fmtAgo(h.lastSync) + '.' };
         }
         if (!h.inSync) {
@@ -1526,6 +1546,10 @@
             if (!h.reporting) {
                 c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'not reporting'));
                 c3.appendChild(el('div', 'tol-small', 'sync service has not run here yet'));
+            } else if (h.serviceOff) {
+                c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'service not enabled here'));
+                c3.appendChild(el('div', 'tol-small',
+                    'Host Configuration excludes ' + 'TurnOnLoggersSync' + ' on this host'));
             } else if (h.stale) {
                 // Amber, matching this host's chip. It was pink, which read as
                 // an error next to an amber chip saying the opposite.
@@ -1538,6 +1562,12 @@
             }
             var errs = h.errors || [];
             errs.forEach(function (m) { c3.appendChild(el('div', 'tol-err-text', m)); });
+            // Distinct from errs: those are per-logger problems from a tick
+            // that finished. This one means the tick itself died, so nothing
+            // else on this row was refreshed.
+            if (h.tickError) {
+                c3.appendChild(el('div', 'tol-err-text', 'sync service failing: ' + h.tickError));
+            }
             tr.appendChild(c3);
 
             tr.appendChild(el('td', 'tol-small', h.reporting ? fmtAgo(h.lastSync) : '-'));

@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE sailpoint PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<sailpoint>
+
+  <!--
+    Decides who is sent the header icon.
+
+    The plugin declares its header snippet with
+    rightRequired="ViewLoggerManagerIcon". IdentityIQ evaluates that
+    server-side and does not emit the script tag at all for users who do not
+    hold this right, so the icon is not hidden with CSS or removed after the
+    fact - the code that would draw it is never sent.
+
+    IdentityIQ imports everything in import/install/ when the plugin is
+    installed, so this object exists as soon as the plugin does - granted to
+    nobody. Add it to whichever Capability your logging administrators already
+    hold. Until you do, only SystemAdministrator sees an icon, because
+    IdentityIQ treats that capability as holding every right. That is
+    deliberate: a plugin that starts advertising itself in every user's header
+    the moment it is installed is worse behaved than one that waits to be
+    asked.
+
+    This right controls the icon and nothing else. What a user may actually do
+    on the Logger Manager page is governed by the plugin's "Required
+    capability" setting, which is a separate check on a separate axis. Granting
+    this right does not grant access to the page - and the icon is drawn only
+    for users who pass both, so holding one without the other shows nothing
+    rather than a link to a refusal.
+
+    Safe to import repeatedly: SPRight objects are keyed by name and
+    independent of one another, unlike AuditConfig, which is a singleton and
+    must never be shipped in a plugin.
+  -->
+  <SPRight name="ViewLoggerManagerIcon" displayName="View Logger Manager Icon">
+    <Description>
+      Show the Logger Manager icon in the IdentityIQ header. Grants no access
+      to the page itself - that is controlled by the plugin's Required
+      capability setting.
+    </Description>
+  </SPRight>
+
+</sailpoint>

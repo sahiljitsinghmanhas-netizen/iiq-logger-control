@@ -73,6 +73,7 @@
     <li><a href="#hosts">Host Status and propagation</a></li>
     <li><a href="#audit">Audit</a></li>
     <li><a href="#untouchable">Protecting loggers</a></li>
+    <li><a href="#navicon">The header icon</a></li>
     <li><a href="#settings">Plugin settings</a></li>
     <li><a href="#trouble">If something looks wrong</a></li>
     <li><a href="#limits">Limitations</a></li>
@@ -608,8 +609,8 @@ are reported in a single line above it, with a button on the right to delete the
 cannot quietly pile up in a database that no screen can reach.</p>
 
 <figure>
-  <img src="img/17-orphans.png" alt="A notice reading: 1 status record left behind by a host IdentityIQ no longer lists: iiq-app-09, with a Clear 1 record button on the right" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
-  <figcaption>Clearing removes only this plugin's own record of what those hosts last reported. It
+  <img src="img/17-orphans.png" alt="A notice reading: 1 status record left behind by a host IdentityIQ no longer lists: iiq-app-09, with a Delete orphaned host button on the right" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Deleting removes only this plugin's own record of what those hosts last reported. It
   does not touch IdentityIQ, and it cannot affect anything that is running, since by definition
   none of them are in IIQ's Server list. The action is audited like any other change.</figcaption>
 </figure>
@@ -755,6 +756,37 @@ first, so that is the message you see. To actually raise root you have to turn i
 <strong>and</strong> take <code>root</code> out of the untouchable list. Turning the switch on by
 itself changes nothing except which refusal you get, so that second refusal says so.</p>
 
+<h2 id="navicon">The header icon<a class="top" href="#">top</a></h2>
+
+<p>There is one Logger Manager icon in IdentityIQ's top-right navigation, beside the gear and the
+help button, and it opens this page. IdentityIQ gives plugin pages no menu entry of their own, so
+without it the only way in is gear icon &rarr; Plugins &rarr; Logger Manager.</p>
+
+<p>Two separate things decide whether you are shown it, and both have to agree.</p>
+
+<dl>
+  <dt>The <code>ViewLoggerManagerIcon</code> right</dt>
+  <dd>IdentityIQ checks this before it sends the icon's script to the browser at all. Someone
+  without the right is not sent it, so there is nothing hidden in their page to find. The right is
+  created when the plugin is installed and is granted to nobody, so at first only members of
+  <strong>SystemAdministrator</strong> see an icon - IdentityIQ treats that capability as holding
+  every right. To give it to anyone else, add <code>ViewLoggerManagerIcon</code> to a capability
+  they hold.</dd>
+
+  <dt>The plugin's own capability check</dt>
+  <dd>For people who are sent the script, it asks the plugin whether to draw anything, and the
+  answer is yes only if <em>Show the icon in the IdentityIQ header</em> is on and the same person
+  also passes the <a href="#settings">Required capability</a> check. A right is not a capability,
+  so somebody could hold one without the other; this is what stops them being shown a link to a
+  page that would refuse them.</dd>
+</dl>
+
+<p>The answer is remembered for the rest of the browser session, so this costs one small request
+per session rather than one on every page you open.</p>
+
+<p>If you would rather have no icon anywhere, turn the setting off. That removes it for everyone
+without disturbing who holds the right.</p>
+
 <h2 id="settings">Plugin settings<a class="top" href="#">top</a></h2>
 
 <figure>
@@ -791,6 +823,12 @@ itself changes nothing except which refusal you get, so that second refusal says
   <dt>Log tail KB</dt><dd>How much of the end of a file a single read looks at, 64 KB by default.
   Capped at 512 KB whatever this is set to, since the result travels through the database.</dd>
 
+  <dt>Show the icon in the IdentityIQ header</dt><dd>On by default. Whether to draw the Logger
+  Manager icon in IdentityIQ's navigation. This is only the second of two gates - the first is the
+  <code>ViewLoggerManagerIcon</code> right, which decides whether the icon's script is sent at all,
+  and which this setting cannot override in either direction. See
+  <a href="#navicon">The header icon</a>.</dd>
+
   <dt>Take the host list from IIQ only</dt><dd>On by default. The Host Status table shows exactly
   the hosts IdentityIQ lists as <code>Server</code> objects, so retiring a host in IIQ retires it
   here too, and any status record left behind is offered for cleanup above the table. Turn it off
@@ -800,6 +838,16 @@ itself changes nothing except which refusal you get, so that second refusal says
 
 <h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>
 <dl>
+  <dt>A host is permanently stale but its heartbeat is fine</dt>
+  <dd>It is almost certainly not running the sync service rather than failing at it.
+  <strong>gear icon &rarr; Global Settings &rarr; Host Configuration</strong> can name, per host,
+  the only services that host runs - and a host whose list omits <code>TurnOnLoggersSync</code>
+  never ticks, however global the service definition is. The tell is that anything you do from
+  this page brings it back into sync for one interval and then it decays again, because that work
+  happens on the request thread rather than on a tick. Such a host is labelled
+  <em>service not enabled here</em> rather than stale. Add the service to that host's included
+  services to fix it.</dd>
+
   <dt>A host says "not reporting"</dt>
   <dd>Its sync service has not run. Check that host's <code>sailpoint.log</code> for
   <code>Unable to install service</code>.</dd>

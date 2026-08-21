@@ -31,6 +31,7 @@ public final class PluginSettings {
     public static final String S_LOGTAIL       = "showLogFiles";
     public static final String S_LOGTAIL_KB    = "logTailKb";
     public static final String S_SERVERS_ONLY  = "hostsFromServersOnly";
+    public static final String S_NAV_ICON      = "showNavIcon";
 
     private PluginSettings() {
     }

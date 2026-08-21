@@ -1,0 +1,38 @@
+/*
+ * Logger Manager - header icon.
+ *
+ * Loaded only alongside ui/js/snippets/header.js, so it reaches only the
+ * people IdentityIQ decided may see the icon.
+ *
+ * The mark is the word "log4j" rather than a picture. Two reasons: the thing
+ * this plugin operates on has a name, and a name is unambiguous where a glyph
+ * is a guess - no icon in Font Awesome means "log levels", and every candidate
+ * (sliders, a file, a bug) reads as something else. The second reason is that
+ * Apache's actual Log4j logo is an Apache Software Foundation trademark, and
+ * shipping it inside an unaffiliated plugin invites a question nobody needs to
+ * answer. Setting the word in the product's own navigation type sidesteps
+ * both.
+ *
+ * Everything here inherits: the text takes currentColor, and hover and focus
+ * come from the surrounding <a>. A shop that re-skins IdentityIQ dark, light,
+ * or in its own brand colours gets a mark that follows, because no rule here
+ * names a colour.
+ */
+.tol-nav-word {
+    display: inline-block;
+    vertical-align: middle;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    /* 800 rather than bold, because the reference mark is heavy and the
+       navbar's own type is not. At 700 it reads as a menu label; at 800 it
+       reads as a mark. */
+    font-weight: 800;
+    line-height: 1;
+    /* Tightened, because heavy type at this size opens up and starts looking
+       like running text again. */
+    letter-spacing: -0.4px;
+    /* No border and no background: the word IS the mark. A box around it read
+       as a button that had lost its icon. */
+    position: relative;
+    top: -1px;
+}

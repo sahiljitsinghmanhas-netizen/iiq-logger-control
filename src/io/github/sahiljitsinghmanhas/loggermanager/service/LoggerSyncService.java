@@ -1,6 +1,7 @@
 package io.github.sahiljitsinghmanhas.loggermanager.service;
 
 import io.github.sahiljitsinghmanhas.loggermanager.core.HostFacts;
+import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerConfigStore;
 import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerSync;
 import org.apache.log4j.Logger;
 import sailpoint.api.SailPointContext;
@@ -94,6 +95,12 @@ public class LoggerSyncService extends Service {
         } catch (Throwable t) {
             LOG.warn("[TurnOnLoggers] sync tick failed on " + HostFacts.hostName() + ": "
                     + t.getClass().getSimpleName() + ": " + t.getMessage(), t);
+            // Publish it too. A host whose ticks are dying looks exactly like a
+            // host that is merely slow - both just stop updating - and the only
+            // difference used to be a line in that host's own log, which is the
+            // one place someone using this page cannot reach.
+            LoggerConfigStore.writeTickError(ctx, HostFacts.hostName(),
+                    t.getClass().getSimpleName() + ": " + t.getMessage());
         }
     }
 }

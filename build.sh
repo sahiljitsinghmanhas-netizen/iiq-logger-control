@@ -62,6 +62,8 @@ if [[ -x "$JJS" ]]; then
     "$JJS" "$HERE/tools/render-check.js" -- "$HERE/ui/js/turnOnLoggers.js" "$HERE/tools/state-fixture.json" "$HERE/tools/state-fixture-logs.json"         || { echo "ERROR: render check failed - the page would not load. Build aborted." >&2; exit 1; }
     "$JJS" "$HERE/tools/glob-check.js" -- "$HERE/ui/js/turnOnLoggers.js" \
         || { echo "ERROR: untouchable-logger matching failed on the page side." >&2; exit 1; }
+    "$JJS" "$HERE/tools/nav-check.js" -- "$HERE/ui/js/snippets/header.js" \
+        || { echo "ERROR: header-icon snippet failed its checks." >&2; exit 1; }
 else
     echo "WARNING: jjs not found, skipping render check." >&2
 fi

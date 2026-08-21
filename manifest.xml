@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.41.0"
+        version="2.42.0"
         minSystemVersion="8.3">
 
   <!--
@@ -49,6 +49,30 @@
               </Scripts>
               <StyleSheets>
                 <String>ui/css/turnOnLoggers.css</String>
+              </StyleSheets>
+            </Snippet>
+
+            <!--
+              The header icon, and the only reason this plugin declares a
+              second snippet: rightRequired is per-Snippet, and it cannot go on
+              the one above without taking the page's own script away from
+              anyone who lacks the right.
+
+              IdentityIQ evaluates rightRequired server-side and simply does not
+              emit the <script> tag for users who do not hold the SPRight, so
+              for everyone else this file is never sent. That is the first of
+              the two gates on who sees the icon; header.js documents the
+              second. The right ships in import/install/, so installing the
+              plugin creates it - granted to nobody. Until somebody grants it,
+              only SystemAdministrator sees the icon, which is the correct way
+              round for this to fail.
+            -->
+            <Snippet regexPattern=".*" rightRequired="ViewLoggerManagerIcon">
+              <Scripts>
+                <String>ui/js/snippets/header.js</String>
+              </Scripts>
+              <StyleSheets>
+                <String>ui/css/snippets/header.css</String>
               </StyleSheets>
             </Snippet>
           </List>
@@ -127,6 +151,12 @@
                      defaultValue="true"
                      label="Take the host list from IIQ only"
                      helpText="Whether IdentityIQ's own Server list is the only source of truth for which hosts exist. On by default: the Host Status table shows exactly the hosts IIQ knows about, so retiring a host in IIQ retires it here too. Each host also writes a status record of its own - what it applied, which log4j2 config it read, what is live in its JVM - and when a host is removed from IIQ that record is left behind. With this on, those orphaned records are kept out of the table and reported above it with a button to clear them, so nothing accumulates unnoticed. Turn it off and the orphaned hosts appear everywhere instead, marked ORPHANED on their chip and dropped by default from every section, so you can still read what they last reported and still aim an override at them - useful when a host was removed from IIQ but you are not certain its JVM is actually down. Nothing there will confirm an override, so those hosts sit on pending."/>
+
+            <Setting name="showNavIcon"
+                     dataType="boolean"
+                     defaultValue="true"
+                     label="Show the icon in the IdentityIQ header"
+                     helpText="Whether to draw a Logger Manager icon in IdentityIQ's top-right navigation, so the page can be opened from anywhere in the product instead of through gear icon -&gt; Plugins. This is the second of two gates and the only one you can reach from here: IdentityIQ itself will not send the icon's script to anyone who does not hold the ViewLoggerManagerIcon right, which ships in import/install/ and is therefore imported when the plugin is installed - but it is granted to nobody, so outside SystemAdministrator nobody sees an icon until you add that right to a capability. Beyond that right, the icon is drawn only for users who also pass the Required capability check above, so nobody is shown a link to a page that will refuse them. Turn this off to remove the icon for everyone without touching who holds the right."/>
 
             <Setting name="permanentLoggers"
                      dataType="string"

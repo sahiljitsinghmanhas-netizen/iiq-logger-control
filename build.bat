@@ -85,6 +85,11 @@ if exist "%JJS%" (
         echo ERROR: untouchable-logger matching failed on the page side.
         exit /b 1
     )
+    "%JJS%" "%~dp0tools\nav-check.js" -- "%~dp0ui\js\snippets\header.js"
+    if errorlevel 1 (
+        echo ERROR: header-icon snippet failed its checks.
+        exit /b 1
+    )
 ) else (
     echo WARNING: jjs not found, skipping render check.
 )
