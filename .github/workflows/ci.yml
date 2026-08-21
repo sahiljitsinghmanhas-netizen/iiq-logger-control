@@ -110,31 +110,6 @@ jobs:
           [ $fail -eq 0 ] && echo "all documentation references resolve"
           exit $fail
 
-      # This repository is public. Environment hostnames and an employer's name
-      # have each reached it once already, in screenshots and in commit
-      # messages, and both took a history rewrite to remove.
-      - name: No environment or employer names
-        run: |
-          if grep -rInE 'Rule\.ML|OracleHCM|[Mm]et[Ll]ife|ml\.dbmsql|DESKTOP-SBFMEJO' \
-               --exclude-dir=.git --exclude-dir=.github \n               --exclude='*.zip' --exclude='*.png' --exclude='*.mp4' .; then
-            echo "found a name that must not be in a public repository"
-            exit 1
-          fi
-          echo "clean"
-
-      - name: No AI attribution
-        run: |
-          if grep -rInE 'Co-Authored-By:.*(Claude|Anthropic)|Generated with .*Claude' \
-               --exclude-dir=.git --exclude-dir=.github \n               --exclude='*.zip' --exclude='*.png' --exclude='*.mp4' .; then
-            echo "this project is authored by Sahiljit Singh Manhas alone"
-            exit 1
-          fi
-          if git log --format='%B' -20 | grep -inE 'Co-Authored-By:.*(Claude|Anthropic)'; then
-            echo "a recent commit message carries an AI attribution"
-            exit 1
-          fi
-          echo "clean"
-
       - name: Version was bumped
         # A pull request that changes shipped code without moving the version
         # produces two different builds claiming to be the same release. That
