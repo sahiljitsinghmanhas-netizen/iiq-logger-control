@@ -682,6 +682,34 @@ The plugin settings form and IIQ's audit search are client-side apps that do
 not populate from a directly-navigated URL, so those two screens are described
 in words rather than captured.
 
+## Contributing
+
+Pull requests run a set of gates in GitHub Actions, and they have to pass before
+a change can be merged. Everything they check can be run locally first:
+
+```bash
+jjs tools/render-check.js -- ui/js/turnOnLoggers.js     tools/state-fixture.json tools/state-fixture-logs.json   # the page renders
+jjs tools/glob-check.js   -- ui/js/turnOnLoggers.js          # matcher, page side
+jjs tools/nav-check.js    -- ui/js/snippets/header.js        # header icon
+```
+
+`jjs` ships with JDK 11 and is gone from JDK 15 onwards, so the gates pin 11 —
+the same engine `build.bat` and `build.sh` use.
+
+CI also checks that the manifest and shipped objects are well-formed, that every
+image and help-page anchor referenced actually exists, that no environment
+hostnames or employer names are present, and — on any pull request touching
+`src/`, `ui/`, `manifest.xml` or `import/` — that `version` in `manifest.xml`
+moved.
+
+**One gate cannot run on a hosted runner.** Compiling the Java needs
+`identityiq.jar`, which is SailPoint's and is not redistributable, so the
+compile and `tools/GlobTest.java` run only where that jar exists: a self-hosted
+runner with the `IIQ_LIB` repository variable set, or a maintainer running
+`build.bat` / `build.sh` before a release. The job says so in its output rather
+than passing quietly. The *page* side of the same matcher is covered on every
+run, so a change that makes the two halves disagree is still caught.
+
 ## Author
 
 Built and maintained by **Sahiljit Singh Manhas**
