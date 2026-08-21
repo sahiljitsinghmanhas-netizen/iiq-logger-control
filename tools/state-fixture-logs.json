@@ -1,7 +1,7 @@
 {
- "thisHost": "DESKTOP-SBFMEJO",
+ "thisHost": "iiq-app-00",
  "thisHostFacts": {
-  "host": "DESKTOP-SBFMEJO",
+  "host": "iiq-app-00",
   "osFamily": "windows",
   "os": "Windows 10 10.0",
   "arch": "amd64",
@@ -54,14 +54,14 @@
    "source": "ui",
    "permanent": false,
    "confirmedOn": [
-    "DESKTOP-SBFMEJO"
+    "iiq-app-00"
    ],
    "pendingOn": []
   }
  ],
  "hosts": [
   {
-   "name": "DESKTOP-SBFMEJO",
+   "name": "iiq-app-00",
    "knownToIIQ": true,
    "reporting": true,
    "inSync": true,
@@ -80,7 +80,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -167,7 +167,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -237,7 +237,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -307,7 +307,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -377,7 +377,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -426,6 +426,91 @@
    "logPath": "/opt/tomcat/logs/sailpoint.log",
    "logError": "",
    "logMatches": []
+  },
+  {
+   "name": "iiq-app-09",
+   "knownToIIQ": false,
+   "reporting": true,
+   "inSync": false,
+   "stale": true,
+   "revision": 66,
+   "lastSync": "1786636579625",
+   "inactive": false,
+   "heartbeat": "1786636629594",
+   "trigger": "service",
+   "applied": null,
+   "errors": null,
+   "facts": {
+    "jvmVendor": "Eclipse Adoptium",
+    "logFiles": "C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log",
+    "java": "11.0.30 (OpenJDK 64-Bit Server VM)",
+    "os": "Windows 10 10.0",
+    "osFamily": "windows",
+    "fileSeparator": "\\",
+    "host": "iiq-app-00",
+    "arch": "amd64",
+    "userTimezone": "America/New_York",
+    "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
+    "containerHint": "false"
+   },
+   "fileLoggers": {
+    "sailpoint.api.logging.SyslogAppender": "ERROR",
+    "root": "WARN",
+    "org.apache.myfaces.renderkit.html.util.MyFacesResourceLoader": "ERROR",
+    "sailpoint": "WARN",
+    "org.apache.myfaces.renderkit.html.util.DefaultAddResource": "ERROR",
+    "org.hibernate.engine.StatefulPersistenceContext": "ERROR",
+    "org.apache.myfaces.renderkit.html.util.ReducedHTMLParser": "ERROR",
+    "sailpoint.object.SyslogEvent": "ERROR",
+    "org.hibernate.orm.deprecation": "ERROR",
+    "net.sf.ehcache": "ERROR",
+    "net.sf.jasperreports.engine.xml": "ERROR"
+   },
+   "runtimeLoggers": null,
+   "liveLoggers": [
+    {
+     "fileLevel": "WARN",
+     "level": "WARN",
+     "managed": "false",
+     "logger": "root",
+     "source": "file"
+    },
+    {
+     "fileLevel": "ERROR",
+     "level": "ERROR",
+     "managed": "false",
+     "logger": "sailpoint.api.logging.SyslogAppender",
+     "source": "file"
+    },
+    {
+     "logger": "rule.LeaverEventHandler",
+     "level": "DEBUG",
+     "managed": "false",
+     "source": "runtime",
+     "fileLevel": ""
+    },
+    {
+     "logger": "rule.DisableTerminatedAccounts",
+     "level": "DEBUG",
+     "managed": "false",
+     "source": "runtime",
+     "fileLevel": ""
+    },
+    {
+     "logger": "net.sf.ehcache",
+     "level": "OFF",
+     "managed": "true",
+     "source": "plugin",
+     "fileLevel": "ERROR"
+    }
+   ],
+   "fileParsed": true,
+   "isThisHost": false,
+   "logAnsweredAt": "0",
+   "logPath": "C:/Program Files/Apache Software Foundation/apache-tomcat-9.0.117/logs/sailpoint.log",
+   "logError": "",
+   "logMatches": [],
+   "orphaned": true
   }
  ],
  "localLoggers": [],
@@ -558,5 +643,9 @@
  "untouchableLoggers": [
   "root",
   "sailpoint"
- ]
+ ],
+ "orphanHosts": [
+  "iiq-app-09"
+ ],
+ "showOrphans": true
 }

@@ -901,3 +901,42 @@
 
 .tol-log-lines { width: 110px; flex: 0 0 auto; }
 
+
+/* The orphaned-record notice: text on the left, the destructive action pinned
+   to the far right so it never sits mid-sentence, and wrapping to two rows on a
+   narrow screen rather than squeezing the button. */
+.tol-banner-split {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tol-banner-split .tol-banner-text {
+    flex: 1 1 320px;
+}
+
+.tol-banner-split .tol-btn {
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+/* A host IdentityIQ no longer lists. Amber, not red: it is a fact about the
+   host's lifecycle, not a fault, and red is reserved for a host that reported
+   an actual error. Rides on the chip, so it travels into every section that
+   draws hosts rather than living in one banner. */
+.tol-lhost-orphan {
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    background: #fffbea;
+    border: 1px solid #f7d070;
+    color: #8d2b0b;
+}
+
+.tol-lhost-orphaned .tol-lhost-name {
+    font-style: italic;
+}

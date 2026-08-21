@@ -21,3 +21,4 @@
 *.md text eol=lf
 *.java text eol=lf
 *.bat text eol=crlf
+*.mp4 binary

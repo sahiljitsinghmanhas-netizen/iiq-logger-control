@@ -755,22 +755,36 @@
 
         var cls = 'tol-lhost tol-lhost-' + st.key;
         if (h.name === state.thisHost) cls += ' tol-lhost-self';
+        if (h.orphaned) cls += ' tol-lhost-orphaned';
         if (mode === 'static') cls += ' tol-lhost-static';
         else if (!picked) cls += ' tol-lhost-off';
+
+        var why = st.why;
+        if (h.orphaned) {
+            why = 'Orphaned: IdentityIQ no longer lists ' + h.name + ' as a Server, so it is '
+                + 'retired as far as IIQ is concerned. Its status record is still here, so you '
+                + 'can read what it last reported and still aim an override at it - but if '
+                + 'nothing is running there, nothing will ever confirm.\n\n' + why;
+        }
 
         var chip = el(mode === 'static' ? 'span' : 'button', cls);
         if (mode !== 'static') {
             chip.setAttribute('aria-pressed', picked ? 'true' : 'false');
-            chip.title = st.why + '\n\n' + (opts.hint || (picked
+            chip.title = why + '\n\n' + (opts.hint || (picked
                 ? 'Click to drop ' + h.name + '.'
                 : 'Click to include ' + h.name + '.'));
             chip.onclick = opts.onclick;
         } else {
-            chip.title = st.why;
+            chip.title = why;
         }
 
         if (st.key === 'wait' && opts.spin !== false) chip.appendChild(el('span', 'tol-lhost-spin'));
         chip.appendChild(el('span', 'tol-lhost-name', h.name));
+        // The badge rides on the chip rather than living in one banner, because
+        // the chip is the one thing every section draws. Labelling it here
+        // labels it in Host Status, All Logger Status and the Log Viewer at
+        // once, and there is nowhere a retired host can appear unmarked.
+        if (h.orphaned) chip.appendChild(el('span', 'tol-lhost-orphan', 'orphaned'));
         if (opts.count !== undefined && opts.count !== null && opts.count !== '') {
             chip.appendChild(el('span', 'tol-lhost-count', String(opts.count)));
         }
@@ -875,8 +889,12 @@
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
     var livePick = null;   // reassigned wholesale by All/None
-    // Hosts clicked out of Host Status. Everything starts in it.
-    var hostHide = {};
+    // Hosts clicked out of Host Status. Null until the first render, which
+    // seeds it: everything starts in the table except orphans, which start
+    // dropped. Same reason livePick is seeded rather than inferred - "nothing
+    // hidden" and "not seeded yet" are different states, and conflating them
+    // means None can never stick.
+    var hostHide = null;
 
     /**
      * The rows this section would draw for one source filter, grouped exactly
@@ -1377,15 +1395,57 @@
         var box = el('section', 'tol-card');
         box.appendChild(el('h2', 'tol-card-title', 'Host Status'));
         box.appendChild(el('div', 'tol-hint',
-            'Every IIQ JVM reports its own OS, its log4j2 config file and where it writes logs. ' +
-            'That is the host-specific part - the level change itself works the same everywhere. ' +
-            'Every host is in the table to begin with; click one to drop it, click it again to ' +
-            'bring it back.'));
+            'The hosts are IdentityIQ’s own Server list, so retiring a host in IIQ retires it ' +
+            'here too. Each one reports its own OS, its log4j2 config file and where it writes ' +
+            'logs - that is the host-specific part; the level change itself works the same ' +
+            'everywhere. Every host is in the table to begin with; click one to drop it, click it ' +
+            'again to bring it back.'));
+
+        // Status records belonging to hosts IIQ no longer lists. They are not
+        // hosts any more, so they are deliberately not rows in the table - but
+        // saying nothing would strand plugin data in a database no screen can
+        // reach. One line and a button is the whole feature.
+        var orphans = state.orphanHosts || [];
+        if (orphans.length) {
+            var one = orphans.length === 1;
+            var ob = el('div', 'tol-banner tol-warn tol-banner-split');
+            ob.appendChild(el('span', 'tol-banner-text', state.showOrphans
+                ? (one ? 'One host below is' : orphans.length + ' hosts below are')
+                  + ' orphaned - IdentityIQ no longer lists ' + (one ? 'it' : 'them')
+                  + ' as a Server: ' + orphans.join(', ')
+                  + '. ' + (one ? 'It is' : 'They are') + ' shown so you can still see what '
+                  + (one ? 'it' : 'they') + ' last reported and still aim an override there, '
+                  + 'and ' + (one ? 'it starts' : 'they start') + ' dropped out of every section.'
+                : orphans.length + ' status record' + (one ? '' : 's')
+                  + ' left behind by ' + (one ? 'a host' : 'hosts')
+                  + ' IdentityIQ no longer lists: ' + orphans.join(', ')
+                  + '. Nothing is running there; only this plugin’s own record remains.'));
+            var ob2 = el('button', 'tol-btn tol-btn-danger', 'Clear '
+                + orphans.length + ' record' + (one ? '' : 's'));
+            ob2.onclick = function () {
+                if (!window.confirm('Delete the status record'
+                    + (orphans.length === 1 ? '' : 's') + ' for '
+                    + orphans.join(', ') + '?'
+                    + '\n\nThis removes only this plugin’s own record of what those hosts '
+                    + 'last reported. It does not touch IdentityIQ, and it cannot affect a '
+                    + 'running host - none of them are in IIQ’s Server list.')) return;
+                mutate(api('DELETE', '/hosts?orphans=true'),
+                    'Cleared ' + orphans.length + ' orphaned host record'
+                    + (orphans.length === 1 ? '' : 's') + '.');
+            };
+            ob.appendChild(ob2);
+            box.appendChild(ob);
+        }
 
         var all = sortedHosts();
         if (!all.length) {
             box.appendChild(el('div', 'tol-empty', 'No hosts reported yet.'));
             return box;
+        }
+
+        if (hostHide === null) {
+            hostHide = {};
+            all.forEach(function (h) { if (h.orphaned) hostHide[h.name] = true; });
         }
 
         // Everything starts in the table here, so unpicking a host is a
@@ -1419,7 +1479,14 @@
             var c1 = el('td');
             c1.appendChild(hostChips([h.name]));
             if (h.isThisHost) c1.appendChild(el('div', 'tol-badge tol-badge-ok', 'serving this page'));
-            if (!h.knownToIIQ) c1.appendChild(el('div', 'tol-small', 'no Server record'));
+            if (h.orphaned) {
+                // The chip in this cell already carries an ORPHANED badge, so
+                // this line says what that means rather than repeating it.
+                c1.appendChild(el('div', 'tol-small',
+                    'retired in IIQ - no Server record'));
+            } else if (!h.knownToIIQ) {
+                c1.appendChild(el('div', 'tol-small', 'no Server record'));
+            }
             tr.appendChild(c1);
 
             var c2 = el('td', 'tol-small');
@@ -1568,7 +1635,10 @@
     // three hosts you care about once, then run tail, then a search, then
     // another search, and the narrowing holds across all of them. Rebuilding it
     // per query would make the chips useless for the thing they are for.
-    var logState = { lines: 40, text: '', off: {} };
+    // off is null until the first render, which drops orphans out of the
+    // search. A retired host cannot answer a log query, so leaving it selected
+    // would mean every search sat on a chip that never resolves.
+    var logState = { lines: 40, text: '', off: null };
 
     /**
      * What one host has to say about the request that is currently out.
@@ -1736,6 +1806,11 @@
         if (!hosts.length) {
             box.appendChild(el('div', 'tol-empty', 'No host has reported in yet.'));
             return box;
+        }
+
+        if (logState.off === null) {
+            logState.off = {};
+            hosts.forEach(function (h) { if (h.orphaned) logState.off[h.name] = true; });
         }
 
         var strip = el('div', 'tol-hoststrip');

@@ -4,6 +4,9 @@ An IdentityIQ plugin for turning log4j2 loggers on and off across every host in
 a deployment, from the IIQ UI. No shell access, no editing `log4j2.properties`,
 no restart.
 
+**[Watch a 60-second demo](docs/logger-manager-demo.mp4)** - turning a logger on
+across a cluster and reading the output back, without leaving the UI.
+
 Requires IdentityIQ **8.3 or later** (JDK 11, log4j2). Developed and tested on
 8.5 with Tomcat 9 and SQL Server; 8.3 and 8.4 meet the same requirements but
 have not been tested here.
@@ -104,7 +107,11 @@ about. In *All Logger Status* and *Host Status* that is the host's own health:
 | green | in sync |
 | amber, spinner | catching up - an older revision, applies the current one on its next sync |
 | amber, no spinner | stale; reporting, but its last sync is old enough to distrust |
-| red | not reporting, or reporting an error of its own |
+| grey | not reporting - IIQ lists the host but the sync service has not run there |
+| red | the host reported an error of its own |
+
+Grey rather than red for a silent host is deliberate: it is missing information,
+not a fault. See [Every host state](#every-host-state) for the full list.
 
 In *Log Viewer* there is a query to answer, so the colour is what that host found instead.
 
@@ -114,8 +121,8 @@ in every section. What differs is only where each section starts:
 | Section | Starts with |
 |---|---|
 | All Logger Status | the host serving the page, alone |
-| Host Status | every host |
-| Log Viewer | every host |
+| Host Status | every host, except any marked `ORPHANED` |
+| Log Viewer | every host, except any marked `ORPHANED` |
 
 Click any chip to toggle it; pick as many as you like. **All** / **None** at the
 end of the strip save clicking through twelve of them, and appear only when there
@@ -291,6 +298,8 @@ Overrides expire so logging cannot be left on by accident.
 **gear icon → Plugins → Logger Manager → Configure.** Changes take effect on
 the next read; no restart.
 
+![The plugin settings form](docs/screenshots/08-settings.png)
+
 | Setting | Default | Purpose |
 |---|---|---|
 | `enabled` | `true` | Master switch. Off reverts every host to its own file. |
@@ -302,6 +311,7 @@ the next read; no restart.
 | `permanentLoggers` | *(blank)* | Loggers enabled from the settings page, with no expiry. |
 | `showLogFiles` | `true` | Whether the page can show the end of this host's log files. |
 | `logTailKb` | `64` | How much of the end to read. Capped at 512 regardless. |
+| `hostsFromServersOnly` | `true` | Whether IdentityIQ's `Server` list is the only source of truth for which hosts exist. |
 
 `untouchableLoggers` greys out Suppress and Clear for those loggers and makes
 the API reject them. Matched **exactly, not by prefix** - protecting
@@ -359,7 +369,8 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `POST` | `/logquery` | Start or stop a cluster-wide log search |
 | `POST` | `/cleanup` | Clear left-over loggers, or one named logger |
 | `GET` | `/history?limit=N&kind=change\|all` | Changes read back from the audit trail |
-| `DELETE` | `/hosts/{host}` | Forget a decommissioned host |
+| `DELETE` | `/hosts/{host}` | Forget one host's status record |
+| `DELETE` | `/hosts?orphans=true` | Forget the status records of every host IIQ no longer lists |
 
 ```bash
 curl -u user:pass -H 'X-XSRF-TOKEN: t' -H 'Content-Type: application/json' \
@@ -402,6 +413,68 @@ here — *All Logger Status* is where those show up, tagged `set at runtime`.
 One writer per object, so there is no lock contention and no lost updates
 however large the cluster. Both are plain `Custom` objects, readable from the
 debug page.
+
+### Every host state
+
+![Host Status showing every state at once](docs/screenshots/05-hosts.png)
+
+| State | Colour | What it means | What to do |
+|---|---|---|---|
+| `in sync` | green | Reporting, at the current revision, synced within the last 2.5 minutes | Nothing |
+| `catching up` | amber, spinner | Reporting, but still on an older revision. Shows `host rev N vs M` | Wait one sync tick (~60s) |
+| `stale` | amber | Reporting, at the right revision, but has not checked in for over 2.5 minutes | Check that host's `Servicer` is running |
+| `not reporting` | grey | IIQ lists the host, but its sync service has never run here | Normal during rollout; otherwise check the plugin is active on that host |
+| *inactive* | grey | Marked inactive in IIQ and not reporting | Nothing, unless you expected it to be live |
+| error | red | The host itself reported a problem, e.g. `log4j2-core is not reachable` | Read the message; it came from that host |
+
+Grey is deliberately not red. IIQ lists every `Server` it has ever seen,
+including hosts decommissioned years ago, and a cluster mid-rollout would
+otherwise look like a cluster on fire. Red is reserved for a host that actually
+reported a fault.
+
+### Which hosts exist
+
+IdentityIQ's own `Server` list decides. Its heartbeat creates a `Server` the
+moment a JVM starts, and recreates one if you delete it while that JVM is still
+running, so retiring a host in IIQ retires it here too and there is no second
+list to keep in step.
+
+The status record is a separate thing: it holds what IIQ cannot tell you - what
+that host applied, which `log4j2.properties` it read, what is live in its
+`LoggerContext`. It belongs to this plugin and nothing garbage-collects it, so
+when a host leaves IIQ its record is left behind.
+
+What happens to those records is the one thing `hostsFromServersOnly` controls.
+
+**On (default) — they are records, not hosts.** They stay out of the Host Status
+table and are reported in one line above it, with a button on the right to
+delete them, so plugin data cannot quietly accumulate in a database no screen
+can reach.
+
+![The orphaned-record notice](docs/screenshots/17-orphans.png)
+
+**Off — they are hosts again, clearly marked.** Every place the plugin draws a
+host chip, an orphan carries an amber `ORPHANED` badge, and it starts dropped
+out of every section, so it is never in the way until you click it in. Once you
+do, it behaves like any other host: you can read what it last reported, see the
+loggers it had live, and aim an override at it.
+
+![An orphaned host clicked back into the table](docs/screenshots/18-orphan-host.png)
+
+That is the mode to use when a host was removed from IIQ but you are not certain
+its JVM is actually down — the one case where a logger really could still be on
+somewhere you can no longer see. Nothing there will confirm an override, so
+those hosts sit on `pending` indefinitely; that is the signal, not a bug.
+
+Clearing removes only this plugin's own record of what those hosts last
+reported. It does not touch IdentityIQ, and it cannot affect anything that is
+running, since by definition none of them are in IIQ's `Server` list. The action
+is audited like any other change.
+
+Set `hostsFromServersOnly` to `false` to go back to listing any host that has a
+status record, whether or not IIQ still knows about it. If IIQ cannot return a
+`Server` list at all, the plugin falls back to that behaviour on its own rather
+than showing an empty table.
 
 ## Upgrading and rolling back
 

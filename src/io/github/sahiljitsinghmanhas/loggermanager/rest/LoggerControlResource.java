@@ -401,6 +401,54 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Delete the status records left behind by hosts IdentityIQ no longer
+     * lists. Only reachable deliberately - orphans=true is required, so a
+     * DELETE that loses its query string cannot wipe every host's record.
+     *
+     * The host serving this request is never an orphan even if its Server row
+     * is momentarily missing, because it is demonstrably running: it answered.
+     */
+    @DELETE
+    @Path("hosts")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response forgetOrphans(@QueryParam("orphans") String orphans) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+            if (!"true".equalsIgnoreCase(orphans)) {
+                return error(Response.Status.BAD_REQUEST, "Pass orphans=true to confirm.");
+            }
+
+            SailPointContext ctx = getContext();
+            Set<String> known = new LinkedHashSet<>();
+            List<Server> servers = ctx.getObjects(Server.class);
+            if (servers == null) {
+                return error(Response.Status.CONFLICT,
+                        "IdentityIQ returned no Server list, so there is nothing to compare against.");
+            }
+            for (Server s : servers) known.add(s.getName());
+
+            String me = HostFacts.hostName();
+            List<String> gone = new ArrayList<>();
+            for (String host : LoggerConfigStore.allStatuses(ctx).keySet()) {
+                if (known.contains(host) || host.equalsIgnoreCase(me)) continue;
+                LoggerConfigStore.deleteStatus(ctx, host);
+                gone.add(host);
+            }
+            if (!gone.isEmpty()) {
+                AuditWriter.log(ctx, user.getName(), "cleared orphaned host records",
+                        String.join(", ", gone), null, String.join(", ", gone), 0L, null);
+            }
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] forgetOrphans failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     // ==================================================================
     // saved collections
     // ==================================================================
@@ -749,6 +797,36 @@ public class LoggerControlResource extends BasePluginResource {
         int revision = LoggerConfigStore.revision(ctx);
         Map<String, Map<String, Object>> statuses = LoggerConfigStore.allStatuses(ctx);
 
+        // Which hosts count as existing, decided once. The override rows have
+        // to agree with the host table: a status record that is not a host
+        // must not turn up as a host an override is "pending on", or the page
+        // reports waiting on something it refuses to show.
+        boolean serversOnly = PluginSettings.getBool(ctx, PluginSettings.S_SERVERS_ONLY, true);
+        List<Server> servers = null;
+        try {
+            servers = ctx.getObjects(Server.class);
+        } catch (Throwable t) {
+            LOG.warn("[TurnOnLoggers] could not list Server objects: " + t);
+        }
+        if (servers == null) serversOnly = false;
+
+        Set<String> known = new LinkedHashSet<>();
+        if (servers != null) for (Server s : servers) known.add(s.getName());
+
+        // A host that has a status record but is not in IIQ's Server list.
+        // Worked out the same way whichever mode we are in, because the label
+        // is useful even when the host is shown: "retired in IIQ" is exactly
+        // what someone needs to know before wondering why an override there is
+        // stuck on pending.
+        List<String> orphanNames = new ArrayList<>();
+        for (String h : statuses.keySet()) {
+            if (!known.contains(h) && !h.equalsIgnoreCase(thisHost)) orphanNames.add(h);
+        }
+
+        Set<String> visible = new LinkedHashSet<>(known);
+        visible.add(thisHost);
+        if (!serversOnly) visible.addAll(statuses.keySet());
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("thisHost", thisHost);
         out.put("thisHostFacts", HostFacts.collect());
@@ -797,7 +875,7 @@ public class LoggerControlResource extends BasePluginResource {
             addLiveOn(row,
                     Log4jAgent.display(Log4jAgent.normalize(e.get(LoggerConfigStore.E_LOGGER))),
                     String.valueOf(e.get(LoggerConfigStore.E_LEVEL)),
-                    e.get(LoggerConfigStore.E_HOSTS), !expired, statuses);
+                    e.get(LoggerConfigStore.E_HOSTS), !expired, statuses, visible);
             rows.add(row);
         }
 
@@ -817,13 +895,18 @@ public class LoggerControlResource extends BasePluginResource {
             row.put("remainingMs", "-1");
             row.put("source", "settings");
             row.put("permanent", true);
-            addLiveOn(row, p.get("logger"), p.get("level"), p.get("hosts"), true, statuses);
+            addLiveOn(row, p.get("logger"), p.get("level"), p.get("hosts"), true, statuses, visible);
             rows.add(row);
         }
         out.put("entries", rows);
 
         // --- hosts --------------------------------------------------------
-        out.put("hosts", buildHosts(ctx, statuses, revision, now, thisHost));
+        out.put("hosts", buildHosts(servers, statuses, revision, now, thisHost, visible, orphanNames));
+        out.put("orphanHosts", orphanNames);
+        // Whether those orphans are also in the host table, so the page knows
+        // whether it is offering cleanup for records nobody can see, or
+        // labelling rows that are right there.
+        out.put("showOrphans", !serversOnly);
 
         // --- live view of this host's log4j2 runtime ----------------------
         Set<String> interesting = new LinkedHashSet<>();
@@ -876,7 +959,8 @@ public class LoggerControlResource extends BasePluginResource {
                            String level,
                            String hostsSpec,
                            boolean active,
-                           Map<String, Map<String, Object>> statuses) {
+                           Map<String, Map<String, Object>> statuses,
+                           Set<String> visible) {
         List<String> confirmed = new ArrayList<>();
         List<String> pending = new ArrayList<>();
         // An expired override is not waiting for anything. It was applied and
@@ -889,6 +973,7 @@ public class LoggerControlResource extends BasePluginResource {
             return;
         }
         for (Map.Entry<String, Map<String, Object>> se : statuses.entrySet()) {
+            if (!visible.contains(se.getKey())) continue;
             if (!LoggerConfigStore.hostMatches(hostsSpec, se.getKey())) continue;
             Object appliedObj = se.getValue().get(LoggerConfigStore.S_APPLIED);
             String actual = null;
@@ -906,31 +991,39 @@ public class LoggerControlResource extends BasePluginResource {
         row.put("pendingOn", pending);
     }
 
-    private List<Map<String, Object>> buildHosts(SailPointContext ctx,
+    private List<Map<String, Object>> buildHosts(List<Server> servers,
                                                  Map<String, Map<String, Object>> statuses,
                                                  int revision,
                                                  long now,
-                                                 String thisHost) {
-        // Union of three sources so a host shows up whether or not it has
-        // heartbeated, and whether or not it has ever run the sync service.
+                                                 String thisHost,
+                                                 Set<String> visible,
+                                                 List<String> orphanNames) {
+        // IdentityIQ's Server list is the source of truth for which hosts
+        // exist: its heartbeat creates a Server the moment a JVM starts, and
+        // recreates one if you delete it while the JVM is still running. So a
+        // host that is genuinely retired is retired here too.
+        //
+        // Each host separately writes a status record - what it applied, which
+        // log4j2 config it read, what is live in its JVM - which is the part
+        // IIQ cannot tell us. Nothing garbage-collects those records, so when a
+        // host leaves IIQ its record is left behind. Whether such a record is
+        // still shown as a host is the caller's decision (hostsFromServersOnly);
+        // either way it is flagged, because "retired in IIQ" is exactly what
+        // someone needs to know before wondering why an override there is stuck.
         Map<String, Map<String, Object>> hosts = new LinkedHashMap<>();
 
-        try {
-            List<Server> servers = ctx.getObjects(Server.class);
-            if (servers != null) {
-                for (Server s : servers) {
-                    Map<String, Object> h = hostRow(hosts, s.getName());
-                    h.put("knownToIIQ", true);
-                    h.put("inactive", s.isInactive());
-                    h.put("heartbeat", s.getHeartbeat() == null
-                            ? "" : String.valueOf(s.getHeartbeat().getTime()));
-                }
+        if (servers != null) {
+            for (Server s : servers) {
+                Map<String, Object> h = hostRow(hosts, s.getName());
+                h.put("knownToIIQ", true);
+                h.put("inactive", s.isInactive());
+                h.put("heartbeat", s.getHeartbeat() == null
+                        ? "" : String.valueOf(s.getHeartbeat().getTime()));
             }
-        } catch (Throwable t) {
-            LOG.warn("[TurnOnLoggers] could not list Server objects: " + t);
         }
 
         for (Map.Entry<String, Map<String, Object>> e : statuses.entrySet()) {
+            if (!visible.contains(e.getKey())) continue;
             Map<String, Object> h = hostRow(hosts, e.getKey());
             Map<String, Object> st = e.getValue();
             long lastSync = LoggerConfigStore.asLong(
@@ -964,6 +1057,15 @@ public class LoggerControlResource extends BasePluginResource {
         if (!Boolean.TRUE.equals(me.get("reporting"))) {
             // Service has not ticked here yet - show what we know regardless.
             me.put("facts", HostFacts.collect());
+        }
+
+        // Flag the ones IIQ has forgotten. They are still fully operable - you
+        // can read what is live on them and aim an override at them - they just
+        // will not answer, so the label has to travel with the host everywhere
+        // it is drawn rather than sit in one banner.
+        for (String n : orphanNames) {
+            Map<String, Object> h = hosts.get(n);
+            if (h != null) h.put("orphaned", true);
         }
 
         markAmbiguousLeftovers(hosts.values());

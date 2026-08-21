@@ -160,6 +160,7 @@ function run(scenario) {
         } else {
             print('  ' + scenario.name + ': rendered ' + rootEl.children.length
                 + ' sections, ' + rootEl.textLen() + ' chars');
+            checkPlacement(scenario.name, rootEl, stateJson);
         }
     } else {
         if (mainEl.children.length < 1) {
@@ -167,6 +168,66 @@ function run(scenario) {
         } else {
             print('  ' + scenario.name + ': banner inserted');
         }
+    }
+}
+
+/**
+ * Assert that things render in the section they belong to.
+ *
+ * Counting sections is not enough. The orphaned-host notice was added by
+ * anchoring on "var all = sortedHosts()", which appears in three functions, so
+ * it landed in All Logger Status instead of Host Status - and every count-based
+ * check still passed, because it did render, just in the wrong card.
+ */
+function sectionText(rootEl, id) {
+    for (var i = 0; i < rootEl.children.length; i++) {
+        if (rootEl.children[i] && rootEl.children[i].id === id) {
+            return rootEl.children[i].text();
+        }
+    }
+    return null;
+}
+
+function checkPlacement(name, rootEl, json) {
+    var state;
+    try { state = JSON.parse(json); } catch (e) { return; }
+
+    var orphans = state.orphanHosts || [];
+    if (!orphans.length) return;
+
+    var needle = orphans[0];
+
+    // Host Status names it either way - as a row when they are shown, and in
+    // the cleanup notice when they are not.
+    var hostsText = sectionText(rootEl, 'tol-sec-hosts');
+    if (hostsText !== null && hostsText.indexOf(needle) < 0) {
+        failures.push(name + ': orphaned host "' + needle + '" is not named in Host Status');
+    }
+
+    if (state.showOrphans) {
+        // Shown: the point is that it is reachable everywhere a host is picked,
+        // so it must carry the label into those sections rather than appear
+        // there as an ordinary host.
+        ['tol-sec-live', 'tol-sec-logs'].forEach(function (id) {
+            var t = sectionText(rootEl, id);
+            if (t === null) return;
+            if (t.indexOf(needle) < 0) {
+                failures.push(name + ': orphaned host "' + needle + '" is missing from ' + id);
+            }
+        });
+        if (hostsText !== null && hostsText.indexOf('orphaned') < 0) {
+            failures.push(name + ': orphaned host "' + needle + '" is not labelled orphaned');
+        }
+    } else {
+        // Not shown: it is a record, not a host, so nothing but the notice in
+        // Host Status may mention it.
+        ['tol-sec-form', 'tol-sec-collections', 'tol-sec-overrides',
+         'tol-sec-live', 'tol-sec-logs', 'tol-sec-history'].forEach(function (id) {
+            var t = sectionText(rootEl, id);
+            if (t !== null && t.indexOf(needle) > -1) {
+                failures.push(name + ': orphaned host "' + needle + '" leaked into ' + id);
+            }
+        });
     }
 }
 

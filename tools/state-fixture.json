@@ -1,7 +1,7 @@
 {
- "thisHost": "DESKTOP-SBFMEJO",
+ "thisHost": "iiq-app-00",
  "thisHostFacts": {
-  "host": "DESKTOP-SBFMEJO",
+  "host": "iiq-app-00",
   "osFamily": "windows",
   "os": "Windows 10 10.0",
   "arch": "amd64",
@@ -54,14 +54,14 @@
    "source": "ui",
    "permanent": false,
    "confirmedOn": [
-    "DESKTOP-SBFMEJO"
+    "iiq-app-00"
    ],
    "pendingOn": []
   }
  ],
  "hosts": [
   {
-   "name": "DESKTOP-SBFMEJO",
+   "name": "iiq-app-00",
    "knownToIIQ": true,
    "reporting": true,
    "inSync": true,
@@ -80,7 +80,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -160,7 +160,7 @@
     "os": "Windows 10 10.0",
     "osFamily": "windows",
     "fileSeparator": "\\",
-    "host": "DESKTOP-SBFMEJO",
+    "host": "iiq-app-00",
     "arch": "amd64",
     "userTimezone": "America/New_York",
     "log4jConfig": "C:\\Program Files\\Apache Software Foundation\\apache-tomcat-9.0.117\\webapps\\identityiq\\WEB-INF\\classes\\log4j2.properties",
@@ -325,5 +325,9 @@
    "logger": "com.example.turnonloggers",
    "label": "This plugin itself"
   }
- ]
+ ],
+ "orphanHosts": [
+  "iiq-app-09"
+ ],
+ "showOrphans": false
 }

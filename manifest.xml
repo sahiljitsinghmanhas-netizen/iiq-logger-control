@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.39.1"
+        version="2.40.0"
         minSystemVersion="8.3">
 
   <!--
@@ -121,6 +121,12 @@
                      defaultValue="64"
                      label="Log tail size (KB)"
                      helpText="How much of the end of a log file to read at once. Capped at 512 regardless of this value. Larger is slower to render and rarely more useful - filter the text instead."/>
+
+            <Setting name="hostsFromServersOnly"
+                     dataType="boolean"
+                     defaultValue="true"
+                     label="Take the host list from IIQ only"
+                     helpText="Whether IdentityIQ's own Server list is the only source of truth for which hosts exist. On by default: the Host Status table shows exactly the hosts IIQ knows about, so retiring a host in IIQ retires it here too. Each host also writes a status record of its own - what it applied, which log4j2 config it read, what is live in its JVM - and when a host is removed from IIQ that record is left behind. With this on, those orphaned records are kept out of the table and reported above it with a button to clear them, so nothing accumulates unnoticed. Turn it off and the orphaned hosts appear everywhere instead, marked ORPHANED on their chip and dropped by default from every section, so you can still read what they last reported and still aim an override at them - useful when a host was removed from IIQ but you are not certain its JVM is actually down. Nothing there will confirm an override, so those hosts sit on pending."/>
 
             <Setting name="permanentLoggers"
                      dataType="string"

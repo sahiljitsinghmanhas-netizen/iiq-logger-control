@@ -30,6 +30,7 @@ public final class PluginSettings {
     public static final String S_UNTOUCHABLE   = "untouchableLoggers";
     public static final String S_LOGTAIL       = "showLogFiles";
     public static final String S_LOGTAIL_KB    = "logTailKb";
+    public static final String S_SERVERS_ONLY  = "hostsFromServersOnly";
 
     private PluginSettings() {
     }

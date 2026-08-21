@@ -188,7 +188,11 @@ about". In <em>All Logger Status</em> and <em>Host Status</em> that is the host'
   current one on its next sync.</dd>
   <dt>Amber, no spinner</dt><dd>Stale. It is reporting, but its last sync is old enough to
   distrust. Nothing is in flight; it has gone quiet.</dd>
-  <dt>Red</dt><dd>Not reporting at all, or reporting an error of its own. Hover for the reason.</dd>
+  <dt>Grey</dt><dd>Not reporting. IdentityIQ lists the host, but this plugin's sync service has
+  never run there. Grey rather than red because that is missing information, not a fault.</dd>
+  <dt>Red</dt><dd>The host reported an error of its own. Hover for the reason.</dd>
+  <dt>Amber ORPHANED badge</dt><dd>IdentityIQ no longer lists this host as a Server. It is only
+  shown at all when <em>Take the host list from IIQ only</em> is off, and it starts dropped.</dd>
 </dl>
 <p>In <em>Log Viewer</em> there is a query to answer, so the colour is what that host found instead -
 see <a href="#logchips">the host chips</a> under Reading the log.</p>
@@ -200,8 +204,8 @@ through, the same in every section. What differs is only where each section star
   <thead><tr><th>Section</th><th>Starts with</th></tr></thead>
   <tbody>
     <tr><td>All Logger Status</td><td>the host serving the page, on its own</td></tr>
-    <tr><td>Host Status</td><td>every host</td></tr>
-    <tr><td>Log Viewer</td><td>every host</td></tr>
+    <tr><td>Host Status</td><td>every host, except any marked ORPHANED</td></tr>
+    <tr><td>Log Viewer</td><td>every host, except any marked ORPHANED</td></tr>
   </tbody>
 </table>
 <p>Click any chip to toggle it. You can pick as many as you like, and <strong>All</strong> / <strong>None</strong> at the end of the strip save clicking twelve of them individually. They only appear when there is more than one host. <em>All Logger Status</em> starts on one host because a cluster mostly reports the same picture everywhere, so
@@ -554,6 +558,77 @@ anybody, and showing hosts there read as "this never landed" when the truth is t
   bring it back. See <a href="#chips">Host chips</a>.</figcaption>
 </figure>
 
+<h3>What each state means</h3>
+
+<table>
+  <thead><tr><th>State</th><th>Colour</th><th>Meaning</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td><code>in sync</code></td><td>green</td>
+        <td>Reporting, at the current revision, synced within the last 2.5 minutes.</td>
+        <td>Nothing.</td></tr>
+    <tr><td><code>catching up</code></td><td>amber, with a spinner</td>
+        <td>Reporting, but still on an older revision - it shows <em>host rev N vs M</em>.</td>
+        <td>Wait one sync tick, about 60 seconds.</td></tr>
+    <tr><td><code>stale</code></td><td>amber</td>
+        <td>At the right revision, but has not checked in for over 2.5 minutes.</td>
+        <td>Check that host's Servicer is running.</td></tr>
+    <tr><td><code>not reporting</code></td><td>grey</td>
+        <td>IdentityIQ lists the host, but this plugin's sync service has never run there.</td>
+        <td>Normal while the plugin is rolling out. Otherwise check it is active on that host.</td></tr>
+    <tr><td>marked inactive</td><td>grey</td>
+        <td>Inactive in IdentityIQ, and not reporting.</td>
+        <td>Nothing, unless you expected it to be live.</td></tr>
+    <tr><td>an error message</td><td>red</td>
+        <td>The host reported a fault of its own, such as log4j2-core not being reachable.</td>
+        <td>Read the message - it came from that host, not from this page.</td></tr>
+  </tbody>
+</table>
+
+<p>Grey is deliberately not red. IdentityIQ lists every <code>Server</code> it has ever seen,
+including hosts decommissioned years ago, so a cluster part-way through a rollout would otherwise
+look like a cluster on fire. Red is kept for a host that actually reported a fault.</p>
+
+<h3>Which hosts appear here</h3>
+
+<p>IdentityIQ's own <code>Server</code> list decides. Its heartbeat creates a <code>Server</code>
+the moment a JVM starts, and recreates one if you delete it while that JVM is still running - so
+retiring a host in IIQ retires it here too, and there is no second list to keep in step.</p>
+
+<p>Each host separately writes a status record holding what IIQ cannot tell you: what it applied,
+which <code>log4j2.properties</code> it read, and what is live in its <code>LoggerContext</code>.
+That record belongs to this plugin and nothing garbage-collects it, so when a host leaves IIQ its
+record is left behind.</p>
+
+<p>What happens to those records is the one thing the <em>Take the host list from IIQ only</em>
+setting controls.</p>
+
+<p><strong>On, the default - they are records, not hosts.</strong> They stay out of the table and
+are reported in a single line above it, with a button on the right to delete them, so plugin data
+cannot quietly pile up in a database that no screen can reach.</p>
+
+<figure>
+  <img src="img/17-orphans.png" alt="A notice reading: 1 status record left behind by a host IdentityIQ no longer lists: iiq-app-09, with a Clear 1 record button on the right" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Clearing removes only this plugin's own record of what those hosts last reported. It
+  does not touch IdentityIQ, and it cannot affect anything that is running, since by definition
+  none of them are in IIQ's Server list. The action is audited like any other change.</figcaption>
+</figure>
+
+<p><strong>Off - they are hosts again, clearly marked.</strong> Everywhere the plugin draws a host
+chip, an orphan carries an amber ORPHANED badge, and it starts dropped out of every section, so it
+is never in the way until you click it in. Once you do it behaves like any other host: you can read
+what it last reported, see which loggers it had live, and aim an override at it.</p>
+
+<figure>
+  <img src="img/18-orphan-host.png" alt="Host Status with the orphaned host clicked back into the table, its chip marked ORPHANED and the row labelled retired in IIQ - no Server record" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>Use this when a host was removed from IdentityIQ but you are not certain its JVM is
+  actually down - the one case where a logger really could still be on somewhere you can no longer
+  see. Nothing there will confirm an override, so those hosts sit on <em>pending</em> indefinitely.
+  That is the signal, not a fault.</figcaption>
+</figure>
+
+<p>If IdentityIQ cannot return a Server list at all, the plugin falls back to showing every host
+that has a status record rather than rendering an empty table.</p>
+
 <figure>
 <svg viewBox="0 0 640 250" width="100%" height="auto" role="img"
      aria-label="How a change propagates: the browser calls one host, which writes the desired state to the IIQ database; every host reconciles against it on a timer and applies levels to its own log4j2 runtime">
@@ -635,6 +710,12 @@ actions that matter.</p>
 
 <h2 id="settings">Plugin settings<a class="top" href="#">top</a></h2>
 
+<figure>
+  <img src="img/08-settings.png" alt="The plugin settings form, showing Enabled, Required capability, TTLs, Allow root logger, Untouchable loggers, Show log files, Log tail size, Take the host list from IIQ only, and Permanent loggers" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>gear icon &rarr; Plugins &rarr; Logger Manager &rarr; Configure. Changes take effect
+  on the next read - there is no cache to clear and no restart.</figcaption>
+</figure>
+
 <dl>
   <dt>Enabled</dt><dd>Master switch. Off means every host reverts to its own
   <code>log4j2.properties</code> on its next sync, without losing the stored configuration.</dd>
@@ -656,6 +737,13 @@ actions that matter.</p>
 
   <dt>Log tail KB</dt><dd>How much of the end of a file a single read looks at, 64 KB by default.
   Capped at 512 KB whatever this is set to, since the result travels through the database.</dd>
+
+  <dt>Take the host list from IIQ only</dt><dd>On by default. The Host Status table shows exactly
+  the hosts IdentityIQ lists as <code>Server</code> objects, so retiring a host in IIQ retires it
+  here too, and any status record left behind is offered for cleanup above the table. Turn it off
+  and those retired hosts come back as hosts - marked ORPHANED on their chip, dropped by default
+  from every section, and still fully operable. See
+  <a href="#hosts">Host Status and propagation</a>.</dd>
 </dl>
 
 <h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>
