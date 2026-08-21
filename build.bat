@@ -51,6 +51,22 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM ---- Untouchable-logger matching --------------------------------------
+REM The page greys the controls out and the API refuses the call, in two
+REM different languages. They have to agree on what a pattern means, so both
+REM are run against the same cases rather than read side by side.
+echo Checking untouchable-logger matching...
+"%JAVAC%" -nowarn -cp "%CLASSES_DIR%;%IIQ_LIB%\*" -d "%OUT_DIR%" "%~dp0tools\GlobTest.java"
+if errorlevel 1 (
+    echo ERROR: could not compile tools\GlobTest.java.
+    exit /b 1
+)
+"%JAVA_HOME%\bin\java.exe" -cp "%OUT_DIR%;%CLASSES_DIR%;%IIQ_LIB%\*" GlobTest
+if errorlevel 1 (
+    echo ERROR: untouchable-logger matching failed on the Java side.
+    exit /b 1
+)
+
 REM ---- Render check -----------------------------------------------------
 REM Executes the page script against a stub DOM. A parse-only check is not
 REM enough: 2.2.0-2.4.0 shipped a script that failed to parse at all, because
@@ -62,6 +78,11 @@ if exist "%JJS%" (
     "%JJS%" "%~dp0tools\render-check.js" -- "%~dp0ui\js\turnOnLoggers.js" "%~dp0tools\state-fixture.json" "%~dp0tools\state-fixture-logs.json"
     if errorlevel 1 (
         echo ERROR: render check failed - the page would not load. Build aborted.
+        exit /b 1
+    )
+    "%JJS%" "%~dp0tools\glob-check.js" -- "%~dp0ui\js\turnOnLoggers.js"
+    if errorlevel 1 (
+        echo ERROR: untouchable-logger matching failed on the page side.
         exit /b 1
     )
 ) else (

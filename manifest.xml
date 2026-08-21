@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.40.0"
+        version="2.41.0"
         minSystemVersion="8.3">
 
   <!--
@@ -102,13 +102,13 @@
                      dataType="boolean"
                      defaultValue="false"
                      label="Allow root logger"
-                     helpText="Whether the root logger may be targeted. Setting root to DEBUG or TRACE turns on every logger in the JVM at once, which on a busy host can fill a disk in minutes. Off by default; turn it on deliberately and briefly."/>
+                     helpText="Whether the root logger may be targeted by a new override. Setting root to DEBUG or TRACE turns on every logger in the JVM at once, which on a busy host can fill a disk in minutes. Off by default; turn it on deliberately and briefly. This is not the only guard: root also ships in Untouchable loggers, which is what stops it being Suppressed or Cleared from the table. To actually raise root you have to turn this on AND take root out of that list."/>
 
             <Setting name="untouchableLoggers"
                      dataType="string"
                      defaultValue="root,sailpoint"
                      label="Untouchable loggers"
-                     helpText="Loggers this plugin refuses to change, comma separated. Their Suppress and Clear controls are greyed out on the Logger Manager page, and the API rejects any attempt to override them, so a protected logger cannot be altered from here at all. Ships with root and sailpoint: root sets the level for every logger in the JVM at once, and sailpoint is the parent of the whole product, so raising or silencing either affects far more than whoever clicked expects. Matched exactly, not by prefix - protecting sailpoint does NOT protect sailpoint.api.Provisioner, otherwise the plugin could not do its job. Clear the field to protect nothing."/>
+                     helpText="Loggers this plugin refuses to change, comma separated. Their Suppress and Clear controls are greyed out on the Logger Manager page, and the API rejects any attempt to override them, so a protected logger cannot be altered from here at all. A bare name matches that name only - protecting sailpoint does NOT protect sailpoint.api.Provisioner, otherwise the plugin could not do its job. Use * to protect a whole tree deliberately: sailpoint.* covers everything beneath sailpoint but not sailpoint itself, *.Provisioner matches from the other end, and * protects everything. Ships with root and sailpoint: root sets the level for every logger in the JVM at once, and sailpoint is the parent of the whole product, so raising or silencing either affects far more than whoever clicked expects. Note root is guarded twice - Allow root logger decides whether it may be targeted at all, this list decides whether it may be changed or cleared, and both have to allow it. Clear the field to protect nothing."/>
 
             <Setting name="showLogFiles"
                      dataType="boolean"

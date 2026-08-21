@@ -62,9 +62,59 @@ public final class PluginSettings {
         return out;
     }
 
+    /**
+     * Whether a logger is protected, matching the patterns exactly or by glob.
+     *
+     * A bare name still means that name and nothing beneath it, which is why
+     * the shipped default of "sailpoint" does not protect
+     * sailpoint.api.Provisioner - protecting the whole tree by accident would
+     * leave the plugin unable to do its job. Writing "sailpoint.*" is how you
+     * ask for the tree, deliberately.
+     *
+     * '*' matches any run of characters, dots included, so "sailpoint.*"
+     * covers sailpoint.api.Provisioner and sailpoint.connector.LDAPConnector
+     * alike, and "*.Provisioner" covers it from the other end. "sailpoint.*"
+     * does not match "sailpoint" itself - that is what the bare name is for.
+     */
     public static boolean isUntouchable(SailPointContext ctx, String logger) {
-        if (logger == null) return false;
-        return untouchable(ctx).contains(logger.trim().toLowerCase(Locale.ROOT));
+        return untouchableMatch(ctx, logger) != null;
+    }
+
+    /**
+     * The pattern that protects this logger, or null.
+     *
+     * Returned rather than a boolean so the refusal can name the entry
+     * responsible. With wildcards allowed, "it is in the untouchable list" is
+     * not much help when the list says sailpoint.* and the logger you typed was
+     * sailpoint.api.Provisioner.
+     */
+    public static String untouchableMatch(SailPointContext ctx, String logger) {
+        if (logger == null) return null;
+        String name = logger.trim().toLowerCase(Locale.ROOT);
+        for (String pattern : untouchable(ctx)) {
+            if (matches(pattern, name)) return pattern;
+        }
+        return null;
+    }
+
+    /** Glob match on an already-lowercased pattern and name. '*' only. */
+    public static boolean matches(String pattern, String name) {
+        if (pattern == null || name == null) return false;
+        if (pattern.indexOf('*') < 0) return pattern.equals(name);
+
+        StringBuilder re = new StringBuilder();
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+            if (c == '*') re.append(".*");
+            else re.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+        }
+        try {
+            return name.matches(re.toString());
+        } catch (Throwable t) {
+            // A pattern that will not compile protects nothing rather than
+            // taking the page down with it.
+            return false;
+        }
     }
 
     public static String getString(SailPointContext ctx, String name, String dflt) {

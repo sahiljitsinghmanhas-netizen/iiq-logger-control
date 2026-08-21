@@ -72,6 +72,7 @@
     <li><a href="#levels">Levels and expiry</a></li>
     <li><a href="#hosts">Host Status and propagation</a></li>
     <li><a href="#audit">Audit</a></li>
+    <li><a href="#untouchable">Protecting loggers</a></li>
     <li><a href="#settings">Plugin settings</a></li>
     <li><a href="#trouble">If something looks wrong</a></li>
     <li><a href="#limits">Limitations</a></li>
@@ -192,7 +193,7 @@ about". In <em>All Logger Status</em> and <em>Host Status</em> that is the host'
   never run there. Grey rather than red because that is missing information, not a fault.</dd>
   <dt>Red</dt><dd>The host reported an error of its own. Hover for the reason.</dd>
   <dt>Amber ORPHANED badge</dt><dd>IdentityIQ no longer lists this host as a Server. It is only
-  shown at all when <em>Take the host list from IIQ only</em> is off, and it starts dropped.</dd>
+  shown at all when <em>Take the host list from IIQ only</em> is off.</dd>
 </dl>
 <p>In <em>Log Viewer</em> there is a query to answer, so the colour is what that host found instead -
 see <a href="#logchips">the host chips</a> under Reading the log.</p>
@@ -204,8 +205,8 @@ through, the same in every section. What differs is only where each section star
   <thead><tr><th>Section</th><th>Starts with</th></tr></thead>
   <tbody>
     <tr><td>All Logger Status</td><td>the host serving the page, on its own</td></tr>
-    <tr><td>Host Status</td><td>every host, except any marked ORPHANED</td></tr>
-    <tr><td>Log Viewer</td><td>every host, except any marked ORPHANED</td></tr>
+    <tr><td>Host Status</td><td>every host</td></tr>
+    <tr><td>Log Viewer</td><td>every host</td></tr>
   </tbody>
 </table>
 <p>Click any chip to toggle it. You can pick as many as you like, and <strong>All</strong> / <strong>None</strong> at the end of the strip save clicking twelve of them individually. They only appear when there is more than one host. <em>All Logger Status</em> starts on one host because a cluster mostly reports the same picture everywhere, so
@@ -614,9 +615,9 @@ cannot quietly pile up in a database that no screen can reach.</p>
 </figure>
 
 <p><strong>Off - they are hosts again, clearly marked.</strong> Everywhere the plugin draws a host
-chip, an orphan carries an amber ORPHANED badge, and it starts dropped out of every section, so it
-is never in the way until you click it in. Once you do it behaves like any other host: you can read
-what it last reported, see which loggers it had live, and aim an override at it.</p>
+chip, an orphan carries an amber ORPHANED badge. Otherwise it behaves like any other host: it is
+selected to begin with, you can read what it last reported, see which loggers it had live, and aim
+an override at it. Click its chip to drop it, the same as any other host.</p>
 
 <figure>
   <img src="img/18-orphan-host.png" alt="Host Status with the orphaned host clicked back into the table, its chip marked ORPHANED and the row labelled retired in IIQ - no Server record" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
@@ -708,6 +709,52 @@ header.</p>
 <p>The page's own background refresh is not audited: it polls every ten seconds and would bury the
 actions that matter.</p>
 
+<h2 id="untouchable">Protecting loggers<a class="top" href="#">top</a></h2>
+
+<p>The <em>Untouchable loggers</em> setting lists loggers this plugin refuses to change. Their
+Suppress and Clear controls are shown but disabled, and the API rejects them too, so a protected
+logger cannot be altered from here at all.</p>
+
+<p>A bare name matches that name and nothing beneath it. Protecting <code>sailpoint</code> does
+<strong>not</strong> protect <code>sailpoint.api.Provisioner</code> - if it did, the shipped default
+would leave the plugin unable to do its job. Use <code>*</code> when you mean the tree:</p>
+
+<table>
+  <thead><tr><th>Pattern</th><th>Matches</th><th>Does not match</th></tr></thead>
+  <tbody>
+    <tr><td><code>sailpoint</code></td><td><code>sailpoint</code></td>
+        <td><code>sailpoint.api.Provisioner</code></td></tr>
+    <tr><td><code>sailpoint.*</code></td>
+        <td><code>sailpoint.api.Provisioner</code>, <code>sailpoint.connector.LDAPConnector</code></td>
+        <td><code>sailpoint</code>, <code>org.hibernate.SQL</code></td></tr>
+    <tr><td><code>*.Provisioner</code></td><td><code>sailpoint.api.Provisioner</code></td>
+        <td><code>sailpoint.api.Provisioners</code></td></tr>
+    <tr><td><code>*</code></td><td>everything</td><td>-</td></tr>
+  </tbody>
+</table>
+
+<p>Matching is case-insensitive and <code>*</code> spans dots. Everything else is literal, so a
+logger name containing regex characters is treated as text. When a pattern refuses something the
+message names the pattern responsible, rather than leaving you to work out which entry matched.</p>
+
+<h3>root is guarded twice</h3>
+
+<p><em>Allow root logger</em> and <em>Untouchable loggers</em> overlap on <code>root</code>, and
+they are not redundant - they cover different actions:</p>
+
+<table>
+  <thead><tr><th></th><th>Add or change an override</th><th>Suppress / Clear from the table</th></tr></thead>
+  <tbody>
+    <tr><td><em>Allow root logger</em> off</td><td>blocks root</td><td>no effect</td></tr>
+    <tr><td><code>root</code> in <em>Untouchable loggers</em></td><td>blocks root</td><td>blocks root</td></tr>
+  </tbody>
+</table>
+
+<p>Root is blocked if <strong>either</strong> blocks it, and <em>Allow root logger</em> is checked
+first, so that is the message you see. To actually raise root you have to turn it on
+<strong>and</strong> take <code>root</code> out of the untouchable list. Turning the switch on by
+itself changes nothing except which refusal you get, so that second refusal says so.</p>
+
 <h2 id="settings">Plugin settings<a class="top" href="#">top</a></h2>
 
 <figure>
@@ -723,14 +770,20 @@ actions that matter.</p>
   bypass - the check is exactly this capability name.</dd>
   <dt>Default TTL / Maximum TTL</dt><dd>Preselected and maximum lifetime for a new override. Set
   Maximum to 0 to allow permanent overrides at any level.</dd>
-  <dt>Allow root logger</dt><dd>Whether the root logger may be targeted at all.</dd>
+  <dt>Allow root logger</dt><dd>Whether the root logger may be targeted by a new override. It is
+  not the only guard: <code>root</code> also ships in <em>Untouchable loggers</em>, which is what
+  stops it being Suppressed or Cleared from the table. To actually raise root you have to turn this
+  on <strong>and</strong> take <code>root</code> out of that list.</dd>
   <dt>Permanent loggers</dt><dd>Loggers enabled from the settings page with no expiry. They appear
   in <em>Plugin Logger Status</em> marked <em>from settings</em> and can only be changed there.</dd>
 
   <dt>Untouchable loggers</dt><dd>Comma-separated, <code>root,sailpoint</code> by default. Their
   Suppress and Clear controls are shown but disabled, so it is clear the action exists and is being
   refused rather than missing. Enforced by the API as well as the page, so it holds for anything
-  calling the REST endpoints directly.</dd>
+  calling the REST endpoints directly. A bare name matches that name only - protecting
+  <code>sailpoint</code> does not protect <code>sailpoint.api.Provisioner</code> - and
+  <code>*</code> protects a tree on purpose. See
+  <a href="#untouchable">Protecting loggers</a>.</dd>
 
   <dt>Show log files</dt><dd>Whether <em>Log Viewer</em> appears at all. Off removes the panel and
   with it any ability to read logs from this page.</dd>
@@ -741,9 +794,8 @@ actions that matter.</p>
   <dt>Take the host list from IIQ only</dt><dd>On by default. The Host Status table shows exactly
   the hosts IdentityIQ lists as <code>Server</code> objects, so retiring a host in IIQ retires it
   here too, and any status record left behind is offered for cleanup above the table. Turn it off
-  and those retired hosts come back as hosts - marked ORPHANED on their chip, dropped by default
-  from every section, and still fully operable. See
-  <a href="#hosts">Host Status and propagation</a>.</dd>
+  and those retired hosts come back as hosts - marked ORPHANED on their chip, and otherwise
+  operable like any other. See <a href="#hosts">Host Status and propagation</a>.</dd>
 </dl>
 
 <h2 id="trouble">If something looks wrong<a class="top" href="#">top</a></h2>

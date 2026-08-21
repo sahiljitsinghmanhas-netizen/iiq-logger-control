@@ -361,10 +361,16 @@ public class LoggerControlResource extends BasePluginResource {
 
             SailPointContext ctx = getContext();
             String target = str(body, "logger");
-            if (target != null && !target.trim().isEmpty()
-                    && PluginSettings.isUntouchable(ctx, target)) {
-                return error(Response.Status.BAD_REQUEST, target
-                        + " is in the untouchable loggers list and cannot be cleared from here.");
+            if (target != null && !target.trim().isEmpty()) {
+                String prot = PluginSettings.untouchableMatch(ctx, target);
+                if (prot != null) {
+                    return error(Response.Status.BAD_REQUEST, target
+                            + (prot.equalsIgnoreCase(target)
+                                ? " is in the untouchable loggers list"
+                                : " is protected by the pattern '" + prot
+                                  + "' in the untouchable loggers list")
+                            + " and cannot be cleared from here.");
+                }
             }
             LoggerConfigStore.requestRuntimeCleanup(ctx, user.getName(), target);
             AuditWriter.log(ctx, user.getName(), "removed from the live configuration",
@@ -1181,10 +1187,22 @@ public class LoggerControlResource extends BasePluginResource {
         }
         // Greying the button out is a courtesy; this is the enforcement. A
         // protected logger cannot be changed through the API either.
-        if (PluginSettings.isUntouchable(ctx, Log4jAgent.display(normalized))) {
-            return Log4jAgent.display(normalized) + " is in the untouchable loggers list and cannot "
-                    + "be changed from here. Edit 'Untouchable loggers' in the plugin settings if "
-                    + "you really need to.";
+        String shown = Log4jAgent.display(normalized);
+        String pattern = PluginSettings.untouchableMatch(ctx, shown);
+        if (pattern != null) {
+            String by = pattern.equalsIgnoreCase(shown)
+                    ? "is in the untouchable loggers list"
+                    : "is protected by the pattern '" + pattern + "' in the untouchable loggers list";
+            // Root is guarded twice, by two different settings, and someone who
+            // has just turned 'Allow root logger' on and hit this deserves to
+            // be told that rather than left toggling one switch.
+            String also = Log4jAgent.isRoot(normalized)
+                    ? " Root is guarded by two settings: 'Allow root logger' controls whether it may"
+                      + " be targeted at all, and this list controls whether it may be changed or"
+                      + " cleared. Both have to allow it."
+                    : "";
+            return shown + " " + by + " and cannot be changed from here. Edit 'Untouchable loggers'"
+                    + " in the plugin settings if you really need to." + also;
         }
         return null;
     }

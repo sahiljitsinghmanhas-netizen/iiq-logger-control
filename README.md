@@ -121,8 +121,8 @@ in every section. What differs is only where each section starts:
 | Section | Starts with |
 |---|---|
 | All Logger Status | the host serving the page, alone |
-| Host Status | every host, except any marked `ORPHANED` |
-| Log Viewer | every host, except any marked `ORPHANED` |
+| Host Status | every host |
+| Log Viewer | every host |
 
 Click any chip to toggle it; pick as many as you like. **All** / **None** at the
 end of the strip save clicking through twelve of them, and appear only when there
@@ -313,9 +313,45 @@ the next read; no restart.
 | `logTailKb` | `64` | How much of the end to read. Capped at 512 regardless. |
 | `hostsFromServersOnly` | `true` | Whether IdentityIQ's `Server` list is the only source of truth for which hosts exist. |
 
+### Protecting loggers
+
 `untouchableLoggers` greys out Suppress and Clear for those loggers and makes
-the API reject them. Matched **exactly, not by prefix** - protecting
-`sailpoint` does not protect `sailpoint.api.Provisioner`.
+the API reject them. A bare name matches **that name only, not by prefix** -
+protecting `sailpoint` does not protect `sailpoint.api.Provisioner`, or the
+plugin could not do its job.
+
+Use `*` to protect a whole tree deliberately:
+
+| Pattern | Matches | Does not match |
+|---|---|---|
+| `sailpoint` | `sailpoint` | `sailpoint.api.Provisioner` |
+| `sailpoint.*` | `sailpoint.api.Provisioner`, `sailpoint.connector.LDAPConnector` | `sailpoint`, `org.hibernate.SQL` |
+| `*.Provisioner` | `sailpoint.api.Provisioner` | `sailpoint.api.Provisioners` |
+| `*` | everything | - |
+
+Matching is case-insensitive and `*` spans dots. Everything else is literal, so
+a logger name containing regex characters is treated as text. The page and the
+API use the same rules, and the build fails if they ever disagree.
+
+When a pattern refuses something, the message names the pattern that did it -
+`sailpoint.api.Provisioner is protected by the pattern 'sailpoint.*'` - rather
+than leaving you to work out which entry matched.
+
+### root is guarded twice
+
+`allowRootLogger` and `untouchableLoggers` overlap on `root`, and they are not
+redundant. They cover different actions:
+
+| | Add or change an override | Suppress / Clear from the table |
+|---|---|---|
+| `allowRootLogger` = `false` | blocks root | no effect |
+| `root` in `untouchableLoggers` | blocks root | blocks root |
+
+Root is blocked if **either** blocks it, and `allowRootLogger` is checked first,
+so that is the message you see. To actually raise root you have to turn
+`allowRootLogger` on **and** take `root` out of `untouchableLoggers`. Turning
+the switch on by itself changes nothing except which refusal you get, so that
+second refusal now says so.
 
 `permanentLoggers` takes comma-separated `logger=LEVEL`, with an optional
 `@host` suffix to restrict one item to a single host:
@@ -454,10 +490,10 @@ can reach.
 ![The orphaned-record notice](docs/screenshots/17-orphans.png)
 
 **Off — they are hosts again, clearly marked.** Every place the plugin draws a
-host chip, an orphan carries an amber `ORPHANED` badge, and it starts dropped
-out of every section, so it is never in the way until you click it in. Once you
-do, it behaves like any other host: you can read what it last reported, see the
-loggers it had live, and aim an override at it.
+host chip, an orphan carries an amber `ORPHANED` badge. Otherwise it behaves
+like any other host: it is selected to begin with, you can read what it last
+reported, see the loggers it had live, and aim an override at it. Click its chip
+to drop it, the same as any other host.
 
 ![An orphaned host clicked back into the table](docs/screenshots/18-orphan-host.png)
 

@@ -678,6 +678,40 @@
 
     /** Shared host-label rendering, so a host looks the same in every table. */
     /**
+     * Whether a logger is protected by the untouchableLoggers setting.
+     *
+     * Greying the buttons out is a courtesy - the API refuses the call either
+     * way - but the two have to agree or the page looks broken. Same rules as
+     * PluginSettings.matches on the server: case-insensitive, '*' matches any
+     * run of characters including dots, and a bare name means that name alone.
+     */
+    function isUntouchable(logger) {
+        if (!logger) return false;
+        var name = String(logger).trim().toLowerCase();
+        var list = state.untouchableLoggers || [];
+        for (var i = 0; i < list.length; i++) {
+            var p = String(list[i]).toLowerCase();
+            if (p.indexOf('*') < 0) {
+                if (p === name) return true;
+                continue;
+            }
+            var re = '';
+            for (var j = 0; j < p.length; j++) {
+                var c = p.charAt(j);
+                re += (c === '*') ? '.*' : escapeRe(c);
+            }
+            try {
+                if (new RegExp('^' + re + '$').test(name)) return true;
+            } catch (e) { /* a pattern that will not compile protects nothing */ }
+        }
+        return false;
+    }
+
+    function escapeRe(c) {
+        return '.*+?^${}()|[]\\'.indexOf(c) > -1 ? '\\' + c : c;
+    }
+
+    /**
      * Hosts in a stable order, the one serving this page first.
      *
      * Used everywhere chips are drawn, so "the first chip" means the same
@@ -889,12 +923,8 @@
     var liveFilter = 'all';
     // null until the first render, which seeds it with the host serving the page.
     var livePick = null;   // reassigned wholesale by All/None
-    // Hosts clicked out of Host Status. Null until the first render, which
-    // seeds it: everything starts in the table except orphans, which start
-    // dropped. Same reason livePick is seeded rather than inferred - "nothing
-    // hidden" and "not seeded yet" are different states, and conflating them
-    // means None can never stick.
-    var hostHide = null;
+    // Hosts clicked out of Host Status. Everything starts in it.
+    var hostHide = {};
 
     /**
      * The rows this section would draw for one source filter, grouped exactly
@@ -1257,8 +1287,7 @@
                 // so it is clear the action exists and is being refused rather
                 // than missing. The list comes from the untouchableLoggers
                 // plugin setting and is enforced by the API as well.
-                var protectedLogger = (state.untouchableLoggers || []).indexOf(
-                    String(r.logger).toLowerCase()) > -1;
+                var protectedLogger = isUntouchable(r.logger);
                 if (protectedLogger) {
                     var lock = el('button', 'tol-toggle', 'Suppress');
                     lock.disabled = true;
@@ -1413,25 +1442,26 @@
                 ? (one ? 'One host below is' : orphans.length + ' hosts below are')
                   + ' orphaned - IdentityIQ no longer lists ' + (one ? 'it' : 'them')
                   + ' as a Server: ' + orphans.join(', ')
-                  + '. ' + (one ? 'It is' : 'They are') + ' shown so you can still see what '
-                  + (one ? 'it' : 'they') + ' last reported and still aim an override there, '
-                  + 'and ' + (one ? 'it starts' : 'they start') + ' dropped out of every section.'
+                  + '. ' + (one ? 'It is' : 'They are') + ' still shown, and still work the same '
+                  + 'way, so you can read what ' + (one ? 'it' : 'they') + ' last reported and '
+                  + 'aim an override there - but with nothing running to answer, an override '
+                  + 'will sit on pending.'
                 : orphans.length + ' status record' + (one ? '' : 's')
                   + ' left behind by ' + (one ? 'a host' : 'hosts')
                   + ' IdentityIQ no longer lists: ' + orphans.join(', ')
                   + '. Nothing is running there; only this plugin’s own record remains.'));
-            var ob2 = el('button', 'tol-btn tol-btn-danger', 'Clear '
-                + orphans.length + ' record' + (one ? '' : 's'));
+            var ob2 = el('button', 'tol-btn tol-btn-danger',
+                'Delete orphaned host' + (one ? '' : 's'));
             ob2.onclick = function () {
-                if (!window.confirm('Delete the status record'
-                    + (orphans.length === 1 ? '' : 's') + ' for '
-                    + orphans.join(', ') + '?'
-                    + '\n\nThis removes only this plugin’s own record of what those hosts '
-                    + 'last reported. It does not touch IdentityIQ, and it cannot affect a '
-                    + 'running host - none of them are in IIQ’s Server list.')) return;
+                if (!window.confirm('Delete orphaned host'
+                    + (one ? ' ' : 's ') + orphans.join(', ') + '?'
+                    + '\n\nThis removes only this plugin’s own record of what '
+                    + (one ? 'that host' : 'those hosts') + ' last reported. It does not touch '
+                    + 'IdentityIQ, and it cannot affect a running host - none of them are in '
+                    + 'IIQ’s Server list.')) return;
                 mutate(api('DELETE', '/hosts?orphans=true'),
-                    'Cleared ' + orphans.length + ' orphaned host record'
-                    + (orphans.length === 1 ? '' : 's') + '.');
+                    'Deleted ' + orphans.length + ' orphaned host'
+                    + (one ? '' : 's') + '.');
             };
             ob.appendChild(ob2);
             box.appendChild(ob);
@@ -1441,11 +1471,6 @@
         if (!all.length) {
             box.appendChild(el('div', 'tol-empty', 'No hosts reported yet.'));
             return box;
-        }
-
-        if (hostHide === null) {
-            hostHide = {};
-            all.forEach(function (h) { if (h.orphaned) hostHide[h.name] = true; });
         }
 
         // Everything starts in the table here, so unpicking a host is a
@@ -1635,10 +1660,7 @@
     // three hosts you care about once, then run tail, then a search, then
     // another search, and the narrowing holds across all of them. Rebuilding it
     // per query would make the chips useless for the thing they are for.
-    // off is null until the first render, which drops orphans out of the
-    // search. A retired host cannot answer a log query, so leaving it selected
-    // would mean every search sat on a chip that never resolves.
-    var logState = { lines: 40, text: '', off: null };
+    var logState = { lines: 40, text: '', off: {} };
 
     /**
      * What one host has to say about the request that is currently out.
@@ -1806,11 +1828,6 @@
         if (!hosts.length) {
             box.appendChild(el('div', 'tol-empty', 'No host has reported in yet.'));
             return box;
-        }
-
-        if (logState.off === null) {
-            logState.off = {};
-            hosts.forEach(function (h) { if (h.orphaned) logState.off[h.name] = true; });
         }
 
         var strip = el('div', 'tol-hoststrip');

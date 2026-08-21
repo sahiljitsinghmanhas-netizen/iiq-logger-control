@@ -44,6 +44,15 @@ find "$HERE/src" -name '*.java' > "$OUT_DIR/sources.txt"
     -d "$CLASSES_DIR" \
     "@$OUT_DIR/sources.txt"
 
+# The page greys the controls out and the API refuses the call, in two
+# different languages. They have to agree on what a pattern means, so both are
+# run against the same cases rather than read side by side.
+echo "Checking untouchable-logger matching..."
+"$JAVAC" -nowarn -cp "$CLASSES_DIR:$IIQ_LIB/*" -d "$OUT_DIR" "$HERE/tools/GlobTest.java" \
+    || { echo "ERROR: could not compile tools/GlobTest.java." >&2; exit 1; }
+"${JAVA_HOME:-}/bin/java" -cp "$OUT_DIR:$CLASSES_DIR:$IIQ_LIB/*" GlobTest \
+    || { echo "ERROR: untouchable-logger matching failed on the Java side." >&2; exit 1; }
+
 # Execute the page script against a stub DOM before packaging. A parse-only
 # check is not enough - 2.2.0-2.4.0 shipped a script that never parsed.
 JJS="${JAVA_HOME:-}/bin/jjs"
@@ -51,6 +60,8 @@ JJS="${JAVA_HOME:-}/bin/jjs"
 if [[ -x "$JJS" ]]; then
     echo "Running render check..."
     "$JJS" "$HERE/tools/render-check.js" -- "$HERE/ui/js/turnOnLoggers.js" "$HERE/tools/state-fixture.json" "$HERE/tools/state-fixture-logs.json"         || { echo "ERROR: render check failed - the page would not load. Build aborted." >&2; exit 1; }
+    "$JJS" "$HERE/tools/glob-check.js" -- "$HERE/ui/js/turnOnLoggers.js" \
+        || { echo "ERROR: untouchable-logger matching failed on the page side." >&2; exit 1; }
 else
     echo "WARNING: jjs not found, skipping render check." >&2
 fi
