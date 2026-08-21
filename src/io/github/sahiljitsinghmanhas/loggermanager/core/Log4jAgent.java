@@ -200,11 +200,6 @@ public final class Log4jAgent {
         return res;
     }
 
-    /** Drop every override this JVM holds and restore log4j2.properties state. */
-    public static synchronized ApplyResult revertAll() {
-        return apply(Collections.<String, String>emptyMap());
-    }
-
     /**
      * What log4j2 currently resolves the given loggers to on this host,
      * including whether the level is set on the logger itself or inherited

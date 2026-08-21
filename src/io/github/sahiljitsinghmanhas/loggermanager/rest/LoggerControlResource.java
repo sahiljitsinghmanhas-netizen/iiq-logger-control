@@ -1072,7 +1072,7 @@ public class LoggerControlResource extends BasePluginResource {
         if (!Log4jAgent.isRoot(normalized) && !LOGGER_NAME.matcher(normalized).matches()) {
             return "Logger name must look like a Java package or class name, e.g. "
                     + "sailpoint.api.Provisioner - or any custom logger of your own, "
-                    + "e.g. rule.groupAggregationRefresh.DBMSQL.";
+                    + "e.g. rule.myCustomRule.";
         }
         if (level == null || Log4jAgent.parseLevel(level) == null) {
             return "Level must be one of " + Log4jAgent.LEVELS + ".";
