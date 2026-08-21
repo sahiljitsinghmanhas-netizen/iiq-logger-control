@@ -698,10 +698,9 @@ jjs tools/nav-check.js    -- ui/js/snippets/header.js        # header icon
 the same engine `build.bat` and `build.sh` use.
 
 CI also checks that the manifest and shipped objects are well-formed, that every
-image and help-page anchor referenced actually exists, that no environment
-hostnames or employer names are present, and — on any pull request touching
-`src/`, `ui/`, `manifest.xml` or `import/` — that `version` in `manifest.xml`
-moved.
+image and help-page anchor referenced actually exists, and — on any pull request
+touching `src/`, `ui/`, `manifest.xml` or `import/` — that `version` in
+`manifest.xml` moved.
 
 **One gate cannot run on a hosted runner.** Compiling the Java needs
 `identityiq.jar`, which is SailPoint's and is not redistributable, so the
