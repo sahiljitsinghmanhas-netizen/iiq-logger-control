@@ -757,7 +757,11 @@
         if (errs.length) {
             return { key: 'error', why: errs.join(' ') };
         }
-        if (h.serviceOff) {
+        // Never say this about a host that is plainly working. Configuration is
+        // read second-hand and the observed behaviour is first-hand: if it is
+        // reporting at the current revision, it is running the service,
+        // whatever any list says.
+        if (h.serviceOff && !h.inSync) {
             // Not a fault, and not stale in any useful sense: IdentityIQ has
             // been told not to run this service here, so this host will never
             // tick no matter how long you wait. Saying "stale" sends people
@@ -1546,7 +1550,7 @@
             if (!h.reporting) {
                 c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'not reporting'));
                 c3.appendChild(el('div', 'tol-small', 'sync service has not run here yet'));
-            } else if (h.serviceOff) {
+            } else if (h.serviceOff && !h.inSync) {
                 c3.appendChild(el('span', 'tol-badge tol-badge-warn', 'service not enabled here'));
                 c3.appendChild(el('div', 'tol-small',
                     'Host Configuration excludes ' + 'TurnOnLoggersSync' + ' on this host'));

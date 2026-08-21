@@ -844,9 +844,11 @@ without disturbing who holds the right.</p>
   the only services that host runs - and a host whose list omits <code>TurnOnLoggersSync</code>
   never ticks, however global the service definition is. The tell is that anything you do from
   this page brings it back into sync for one interval and then it decays again, because that work
-  happens on the request thread rather than on a tick. Such a host is labelled
-  <em>service not enabled here</em> rather than stale. Add the service to that host's included
-  services to fix it.</dd>
+  happens on the request thread rather than on a tick. A host that explicitly excludes the service
+  and is not keeping up is labelled <em>service not enabled here</em> rather than stale; a host
+  that is in sync is never labelled, whatever any list says. Nothing here needs configuring for
+  the plugin to work - the normal case is every host in sync with no host configuration at
+  all.</dd>
 
   <dt>A host says "not reporting"</dt>
   <dd>Its sync service has not run. Check that host's <code>sailpoint.log</code> for

@@ -1372,12 +1372,21 @@ public class LoggerControlResource extends BasePluginResource {
      */
     private boolean runsSyncService(Server s) {
         try {
-            Object incl = s.get(Server.ATT_INCL_SERVICES);
-            Object excl = s.get(Server.ATT_EXCL_SERVICES);
-            if (namesService(excl)) return false;
-            List<String> in = asNameList(incl);
-            if (!in.isEmpty()) return namesService(incl);
-            return true;
+            // ONLY excludedServices. An earlier version of this also treated a
+            // non-empty includedServices as "this host runs only these", and
+            // reported hosts that were syncing perfectly well every thirty
+            // seconds as not running the service at all. That reading is
+            // wrong: for a definition that already covers every host,
+            // includedServices is an opt-IN for services whose definition does
+            // NOT cover it. A host that opts into some unrelated service has
+            // not thereby opted out of this one.
+            //
+            // Inferring "not running" from configuration is guesswork against
+            // a model with more cases than are visible from here, so this now
+            // reports only the one case that is unambiguous - the service
+            // named in this host's exclude list - and the page additionally
+            // refuses to say it about a host that is demonstrably in sync.
+            return !namesService(s.get(Server.ATT_EXCL_SERVICES));
         } catch (Throwable t) {
             // Never let a host-config quirk stop the page rendering; assume it
             // runs, which is the pre-existing behaviour.

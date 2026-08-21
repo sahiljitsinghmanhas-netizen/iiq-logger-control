@@ -598,10 +598,15 @@ The giveaways are exact:
   a tick, and then it decays again
 - no error appears anywhere, because nothing is failing
 
-The plugin detects this and labels such a host **service not enabled here**
-instead of *stale*. To fix it, add `TurnOnLoggersSync` to that host's included
-services (or remove it from its excluded ones). Until you do, overrides will
-not reach that host on their own.
+Where a host **explicitly excludes** `TurnOnLoggersSync` and is not keeping up,
+the plugin says so — **service not enabled here** rather than *stale*, since
+that is a setting and not a fault. It reports nothing about a host that is in
+sync, whatever any list says: the observed behaviour is first-hand and the
+configuration is not.
+
+**Nothing here needs configuring for the plugin to work.** A `ServiceDefinition`
+with `hosts="global"` runs everywhere by default, and the ordinary case is that
+every host reports *in sync* with no host configuration at all.
 
 
 | Symptom | Cause |
