@@ -245,7 +245,7 @@ pushing the page sideways.</p>
   <text class="c" x="6" y="66">never touched</text>
 
   <rect x="166" y="14" width="80" height="20" rx="3" fill="#e3f9e5" stroke="#a3d9a5"/>
-  <text class="s" x="174" y="28" fill="#207227">this plugin</text>
+  <text class="s" x="166" y="28" fill="#207227">Logger Manager</text>
   <text class="c" x="166" y="52">an override</text>
   <text class="c" x="166" y="66">yours to remove</text>
 
@@ -266,10 +266,10 @@ configuration file rather than inferred.</figcaption>
 <table>
   <tr><th>Source</th><th>Meaning</th><th>Cleared automatically?</th></tr>
   <tr><td><code>log4j2.properties</code></td><td>Declared in that host's own configuration file.</td><td>never</td></tr>
-  <tr><td><code>this plugin</code></td><td>An override currently managed here.</td><td>on removal or expiry</td></tr>
+  <tr><td><code>Logger Manager</code></td><td>An override currently managed here.</td><td>on removal or expiry</td></tr>
   <tr><td><code>left over</code></td><td>This plugin created it and lost track of it, which used to happen when the plugin was reinstalled while a logger was on.</td><td>yes, by <em>Clear all left over</em></td></tr>
   <tr><td><code>left over</code> <em>and</em> <code>set at runtime</code>, shown as two chips</td><td>Either one - the plugin has a record of creating it on this host, but the same logger is being set at runtime somewhere else in the cluster, and a rule can set it on any host at any time. See below.</td><td>yes, but read the warning</td></tr>
-  <tr><td><code>set at runtime</code></td><td>Something outside this plugin set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
+  <tr><td><code>set at runtime</code></td><td>Something outside Logger Manager set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
 </table>
 
 <h3 id="ambiguous">When the source cannot be known</h3>

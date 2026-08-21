@@ -73,9 +73,17 @@
         return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
     }
 
+    // Named rather than "this plugin". Every other badge here says where a
+    // level came from in terms that survive being looked at somewhere else -
+    // log4j2.properties names a file - and this one used to point at context
+    // the reader had to already be standing in. These badges end up in
+    // screenshots, in the help page and in the demo, where "this plugin"
+    // answers nothing. "Logger Manager" rather than "Logger Manager Plugin":
+    // the display name is enough, and at 14 characters it fits the column
+    // better than the widest badge already in it.
     var SRC = {
         file: 'log4j2.properties',
-        plugin: 'this plugin',
+        plugin: 'Logger Manager',
         leftover: 'left over',
         runtime: 'set at runtime',
         unknown: 'source unknown'
@@ -1000,7 +1008,7 @@
      *
      * Source is a fact per row now:
      *   log4j2.properties - declared in that host's file
-     *   this plugin       - an override currently managed here
+     *   Logger Manager    - an override currently managed here
      *   left over         - this plugin created it and lost track of it
      *   set at runtime    - something else set it: a rule, custom Java, a
      *                       connector. Never touched, never cleared.
@@ -1051,7 +1059,7 @@
         box.appendChild(head);
         box.appendChild(el('div', 'tol-hint',
             'Every logger log4j2 has configured on each host, and where it came from. '
-            + '"set at runtime" means something outside this plugin set it, typically a rule '
+            + '"set at runtime" means something outside Logger Manager set it, typically a rule '
             + 'calling Logger.getLogger(...).setLevel(...). Those are never touched or cleared. '
             + 'Pick the hosts you want below - this starts on the host serving the page, because '
             + 'a cluster mostly reports the same picture everywhere and reading it starts with '
@@ -1177,7 +1185,7 @@
             hostCounts[k] = Object.keys(hs).length;
         });
         var bar = el('div', 'tol-filters');
-        [['all', 'All'], ['file', 'From the file (log4j2.properties)'], ['plugin', 'This plugin'],
+        [['all', 'All'], ['file', 'From the file (log4j2.properties)'], ['plugin', 'Logger Manager'],
             ['leftover', 'Left over'], ['runtime', 'Set at runtime']].forEach(function (f) {
             if (f[0] !== 'all' && !counts[f[0]]) return;
             var b = el('button', 'tol-filter' + (liveFilter === f[0] ? ' tol-filter-on' : ''),
