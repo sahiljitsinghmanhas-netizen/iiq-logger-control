@@ -221,6 +221,7 @@ one place — so each button's tooltip states both.
 | `left over` | Created by this plugin, still live, and no longer managed by it | yes |
 | `left over` + `set at runtime` (two chips) | Either - see below | yes |
 | `set at runtime` | A rule or custom code set it | **never** |
+| `source unknown` | That host's log4j2 config could not be read, so no source can be determined for anything on it | n/a |
 
 That last row matters. A rule doing
 `Logger.getLogger("Rule.X").setLevel(DEBUG)` creates a `LoggerConfig` that is
@@ -507,6 +508,8 @@ debug page.
 | `not reporting` | grey | IIQ lists the host, but its sync service has never run here | Normal during rollout; otherwise check the plugin is active on that host |
 | *inactive* | grey | Marked inactive in IIQ and not reporting | Nothing, unless you expected it to be live |
 | error | red | The host itself reported a problem, e.g. `log4j2-core is not reachable` | Read the message; it came from that host |
+| `service not enabled here` | grey | Host Configuration excludes `TurnOnLoggersSync` on this host, so it will never tick | Add the service to that host's included services |
+| *sync service failing* | red | The host's sync tick threw, and it published why. The row shows the reason | Read the reason; it came from that host's own tick |
 
 Grey is deliberately not red. IIQ lists every `Server` it has ever seen,
 including hosts decommissioned years ago, and a cluster mid-rollout would

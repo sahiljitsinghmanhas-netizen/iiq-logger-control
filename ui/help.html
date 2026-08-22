@@ -270,6 +270,7 @@ configuration file rather than inferred.</figcaption>
   <tr><td><code>left over</code></td><td>This plugin created it and lost track of it, which used to happen when the plugin was reinstalled while a logger was on.</td><td>yes, by <em>Clear all left over</em></td></tr>
   <tr><td><code>left over</code> <em>and</em> <code>set at runtime</code>, shown as two chips</td><td>Either one - the plugin has a record of creating it on this host, but the same logger is being set at runtime somewhere else in the cluster, and a rule can set it on any host at any time. See below.</td><td>yes, but read the warning</td></tr>
   <tr><td><code>set at runtime</code></td><td>Something outside Logger Manager set it, typically a rule calling <code>Logger.getLogger(...).setLevel(...)</code>.</td><td><strong>never</strong></td></tr>
+  <tr><td><code>source unknown</code></td><td>That host could not read its own log4j2 configuration - it is XML or YAML rather than properties, or the file could not be parsed - so nothing on that host can be attributed to a source.</td><td>n/a</td></tr>
 </table>
 
 <h3 id="ambiguous">When the source cannot be known</h3>
@@ -849,6 +850,13 @@ without disturbing who holds the right.</p>
   that is in sync is never labelled, whatever any list says. Nothing here needs configuring for
   the plugin to work - the normal case is every host in sync with no host configuration at
   all.</dd>
+
+  <dt>A host says "sync service failing"</dt>
+  <dd>That host's sync tick threw an exception and published the reason, which is shown on the
+  row and in the chip's tooltip. Nothing else on that row was refreshed, so everything in it is
+  as old as its last sync says. The full stack trace is in that host's own
+  <code>sailpoint.log</code> under <code>[TurnOnLoggers] sync tick failed</code>. Note the host
+  keeps going stale while this is true - deliberately, since the record really is old.</dd>
 
   <dt>A host says "not reporting"</dt>
   <dd>Its sync service has not run. Check that host's <code>sailpoint.log</code> for
