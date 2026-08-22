@@ -4,11 +4,12 @@ An IdentityIQ plugin for turning log4j2 loggers on and off across every host in
 a deployment, from the IIQ UI. No shell access, no editing `log4j2.properties`,
 no restart.
 
-**[Watch the demo](docs/logger-manager-demo.mp4)** (2m 13s) - a screen recording
-that opens the plugin from the IdentityIQ header, tours the settings, turns a
+**[Watch the demo](docs/logger-manager-demo.mp4)** (2m 20s) - a screen recording
+that opens the plugin from the IdentityIQ header, tours the settings, takes in the whole
+page, turns a
 logger on across a cluster, watches each host confirm it, finds it live in the
 JVM, reads the log back from every host, and shows the change in the audit
-trail. There is a [shorter cut](docs/logger-manager-demo-short.mp4) (1m 30s) with
+trail. There is a [shorter cut](docs/logger-manager-demo-short.mp4) (1m 35s) with
 the two explanatory scenes dropped.
 
 Requires IdentityIQ **8.3 or later** (JDK 11, log4j2). Developed and tested on
