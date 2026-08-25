@@ -37,13 +37,39 @@
     var ITEM_ID = 'tol-nav-item';
     var CACHE_KEY = 'tol-nav-show';
     var LABEL = 'Logger Manager';
-    var CTX = (window.SailPoint && typeof window.SailPoint === 'object'
-               && window.SailPoint.CONTEXT_PATH) || '/identityiq';
+    // NOT guarded on typeof === 'object': window.SailPoint is a FUNCTION in
+    // IIQ 8.5 and carries its properties on the function object. The page
+    // script hit exactly this and documents it; this file repeated the
+    // mistake, so CTX always fell through to the default and would have been
+    // wrong on any install with a non-default context path.
+    var CTX = (window.SailPoint && window.SailPoint.CONTEXT_PATH) || '/identityiq';
 
     // The right-hand menubar in menu.xhtml. Shops re-skin IdentityIQ - colours,
     // logos, fonts - but they do not restructure this bootstrap navbar, so the
     // class is a safer anchor than any position or index would be. The second
     // selector is the looser form SailPoint's own sample uses.
+    // Same two-step the plugin page uses, and it matters more here: this runs
+    // on ordinary product pages, where window.SailPoint may not carry the token
+    // at all. Without the cookie fallback IdentityIQ rejected GET /nav with
+    // "CSRF validation failed" and the icon simply never appeared - on exactly
+    // the installs strict enough to enforce it.
+    //
+    // The cookie is CSRF-TOKEN on some builds and XSRF-TOKEN on others. Both
+    // are accepted so this keeps working either way.
+    function xsrf() {
+        try {
+            if (window.SailPoint && window.SailPoint.XSRF_TOKEN) {
+                return window.SailPoint.XSRF_TOKEN;
+            }
+        } catch (e) { /* fall through to the cookie */ }
+        try {
+            var m = document.cookie.match(/(?:^|;\s*)[XC]SRF-TOKEN=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function navBar() {
         return document.querySelector('ul.nav.navbar-nav.navbar-right')
             || document.querySelector('ul.navbar-right');
@@ -106,7 +132,7 @@
         // Deliberately no "Accept: application/json". IdentityIQ answers an
         // expired session by redirecting to exception.jsf, and that header
         // turns the redirect into a loop rather than a page.
-        var token = (window.SailPoint && window.SailPoint.XSRF_TOKEN) || null;
+        var token = xsrf();
         if (token) opts.headers['X-XSRF-TOKEN'] = token;
 
         fetch(url, opts).then(function (r) {

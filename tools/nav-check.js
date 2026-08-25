@@ -76,7 +76,12 @@ function collect(node, out) {
 // withBar   - whether the page has a right-hand navbar at all
 // answer    - what GET /nav replies, or null to make the request fail
 // runs      - how many times to execute the script against the same document
-function run(label, withBar, answer, runs) {
+var lastHeaders = null;
+
+// token: what window.SailPoint should carry, or null to make the script fall
+// back to the cookie. cookie: what document.cookie should say.
+function run(label, withBar, answer, runs, token, cookie) {
+    lastHeaders = null;
     var bar = withBar ? new Elem('ul') : null;
     var listeners = [];
     var timeouts = [];
@@ -97,9 +102,18 @@ function run(label, withBar, answer, runs) {
         }
     };
 
+    document.cookie = (cookie === undefined) ? '' : cookie;
+
     var store = {};
+    // window.SailPoint is a FUNCTION in IIQ 8.5 carrying its properties on the
+    // function object, not a plain object. The stub is a function for the same
+    // reason: a typeof === 'object' guard has to fail here the way it fails in
+    // the product.
+    var sp = function () {};
+    sp.CONTEXT_PATH = '/identityiq';
+    if (token !== null && token !== undefined) sp.XSRF_TOKEN = token;
     window = {
-        SailPoint: { CONTEXT_PATH: '/identityiq', XSRF_TOKEN: 'stub' },
+        SailPoint: sp,
         sessionStorage: {
             getItem: function (k) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
             setItem: function (k, v) { store[k] = String(v); }
@@ -110,7 +124,8 @@ function run(label, withBar, answer, runs) {
 
     // Synchronous stand-in for fetch. Resolves immediately so the whole run
     // completes before this function returns.
-    fetch = function () {
+    fetch = function (url, o) {
+        lastHeaders = (o && o.headers) || {};
         return {
             then: function (ok) {
                 var res = {
@@ -177,10 +192,33 @@ if (n !== 0) failures.push('an HTML answer means the session expired - draw noth
 n = run('re-render', true, { show: true }, 2);
 if (n !== 1) failures.push('running twice must leave one item, left ' + n);
 
+// ---- the CSRF token ------------------------------------------------------
+// Sending no token gets GET /nav rejected with "CSRF validation failed" on any
+// install that enforces it, and the icon then never appears. That shipped once:
+// the token was read only off window.SailPoint, which does not carry it on
+// ordinary product pages.
+run('token from SailPoint', true, { show: true }, 1, 'from-sailpoint', '');
+if (!lastHeaders || lastHeaders['X-XSRF-TOKEN'] !== 'from-sailpoint') {
+    failures.push('should send the token window.SailPoint carries, sent ' +
+                  (lastHeaders && lastHeaders['X-XSRF-TOKEN']));
+}
+
+run('token from CSRF-TOKEN cookie', true, { show: true }, 1, null, 'CSRF-TOKEN=from-cookie');
+if (!lastHeaders || lastHeaders['X-XSRF-TOKEN'] !== 'from-cookie') {
+    failures.push('with no token on window.SailPoint it must fall back to the ' +
+                  'CSRF-TOKEN cookie, sent ' + (lastHeaders && lastHeaders['X-XSRF-TOKEN']));
+}
+
+run('token from XSRF-TOKEN cookie', true, { show: true }, 1, null, 'XSRF-TOKEN=other-name');
+if (!lastHeaders || lastHeaders['X-XSRF-TOKEN'] !== 'other-name') {
+    failures.push('the cookie is XSRF-TOKEN on some builds and must also be ' +
+                  'accepted, sent ' + (lastHeaders && lastHeaders['X-XSRF-TOKEN']));
+}
+
 // ---- verdict --------------------------------------------------------------
 if (failures.length) {
     print('nav-check FAILED:');
     for (var f = 0; f < failures.length; f++) print('  - ' + failures[f]);
     exit(1);
 }
-print('nav-check ok: icon appears when allowed, never otherwise, and never twice');
+print('nav-check ok: icon appears when allowed, never otherwise, never twice, and always carries a CSRF token');

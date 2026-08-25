@@ -851,6 +851,15 @@ without disturbing who holds the right.</p>
   the plugin to work - the normal case is every host in sync with no host configuration at
   all.</dd>
 
+  <dt>The header icon is missing</dt>
+  <dd>Two things decide whether it is drawn, so establish which one first. If a product page's
+  source contains no <code>snippets/header.js</code>, IdentityIQ withheld it because the user does
+  not hold <code>ViewLoggerManagerIcon</code>. If the script is there but no icon appears, check
+  that host's log for <code>CSRF validation failed</code> against
+  <code>/plugin/rest/TurnOnLoggers/nav</code> - releases before 2.43.1 looked for the CSRF token
+  only on <code>window.SailPoint</code>, which does not carry it on ordinary product pages, so the
+  check was rejected wherever CSRF is enforced.</dd>
+
   <dt>A host says "sync service failing"</dt>
   <dd>That host's sync tick threw an exception and published the reason, which is shown on the
   row and in the chip's tooltip. Nothing else on that row was refreshed, so everything in it is

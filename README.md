@@ -589,6 +589,20 @@ to defaults. Logger overrides live in the `Custom` object and survive.
 
 ## Troubleshooting
 
+### The header icon does not appear for anyone
+
+First check the two gates in order. `GET /identityiq/plugin/rest/TurnOnLoggers/nav`
+should answer `{"show":true}` for a user who holds `ViewLoggerManagerIcon` *and*
+passes `requiredCapability`. If the page source of any product page contains no
+`snippets/header.js`, IdentityIQ decided the right is missing and nothing on the
+plugin side runs at all.
+
+If the script *is* being sent and the icon still does not appear, look for
+`CSRF validation failed for /identityiq/plugin/rest/TurnOnLoggers/nav` in that
+host's log. Releases before 2.43.1 read the CSRF token only from
+`window.SailPoint`, which does not carry it on ordinary product pages, so the
+request went out unsigned and installs that enforce CSRF rejected it. Upgrade.
+
 ### One host is permanently stale, and its heartbeat is fine
 
 Almost always this host is not running the sync service, rather than failing at
