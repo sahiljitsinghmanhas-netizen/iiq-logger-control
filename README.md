@@ -446,6 +446,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `DELETE` | `/entries?expiredOnly=true` | Remove only the expired ones |
 | `POST` | `/sync` | Reconcile the host serving the request |
 | `POST` | `/collections` | Save the current overrides, or a given list, under a name |
+| `PUT` | `/collections/{id}` | Change a collection's loggers, name or description |
 | `POST` | `/collections/{id}/apply` | Turn a whole collection on |
 | `DELETE` | `/collections/{id}` | Delete a collection |
 | `GET` | `/logtail?index=N&kb=K` | The end of one of this host's log files |

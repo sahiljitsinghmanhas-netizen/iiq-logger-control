@@ -550,6 +550,97 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Replace the contents of a saved collection.
+     *
+     * Editing rather than re-saving: POST /collections with an existing name
+     * drops the old row and writes a new one, which would give the collection a
+     * fresh id and reset "saved by" and the date to whoever last removed a
+     * logger from it. A collection is shared with everyone using the plugin, so
+     * that provenance is worth keeping.
+     *
+     * Logger names ARE validated here, unlike on save. Save takes what is
+     * already running, so the names came from log4j2 itself; edit takes them
+     * from somebody typing into a box.
+     */
+    @PUT
+    @Path("collections/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response updateCollection(@PathParam("id") String id, Map<String, Object> body) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            Map<String, String> existing = CollectionStore.byId(ctx, id);
+            if (existing == null) {
+                return error(Response.Status.NOT_FOUND,
+                        "That collection no longer exists - somebody else may have deleted it.");
+            }
+
+            String name = str(body, "name");
+            if (name != null) {
+                name = name.trim();
+                if (name.isEmpty()) return error(Response.Status.BAD_REQUEST, "A collection needs a name.");
+                if (name.length() > 80) name = name.substring(0, 80);
+                // Names are how people find these, and add() treats a repeated
+                // name as a replacement. Letting an edit collide would make one
+                // of the two vanish the next time anyone saved.
+                for (Map<String, String> other : CollectionStore.load(ctx)) {
+                    if (id.equals(other.get(CollectionStore.C_ID))) continue;
+                    if (name.equalsIgnoreCase(other.get(CollectionStore.C_NAME))) {
+                        return error(Response.Status.BAD_REQUEST,
+                                "There is already a collection called \"" + name + "\".");
+                    }
+                }
+            }
+
+            Map<String, String> loggers = null;
+            Object given = body == null ? null : body.get("loggers");
+            if (given instanceof Collection) {
+                loggers = new LinkedHashMap<>();
+                for (Object o : (Collection<?>) given) {
+                    if (!(o instanceof Map)) continue;
+                    Map<?, ?> m = (Map<?, ?>) o;
+                    String lg = m.get("logger") == null ? null : String.valueOf(m.get("logger")).trim();
+                    String lv = m.get("level") == null ? null : String.valueOf(m.get("level"));
+                    if (lg == null || lg.isEmpty()) continue;
+                    if (!LOGGER_NAME.matcher(lg).matches()) {
+                        return error(Response.Status.BAD_REQUEST,
+                                "\"" + lg + "\" is not a valid logger name.");
+                    }
+                    if (Log4jAgent.parseLevel(lv) == null) {
+                        return error(Response.Status.BAD_REQUEST,
+                                "\"" + lv + "\" is not a level. Use one of " + Log4jAgent.LEVELS + ".");
+                    }
+                    loggers.put(lg, lv);
+                }
+                if (loggers.isEmpty()) {
+                    return error(Response.Status.BAD_REQUEST,
+                            "A collection needs at least one logger. Delete it instead if you are "
+                            + "finished with it.");
+                }
+            }
+
+            Map<String, String> updated = CollectionStore.update(ctx, id, name,
+                    str(body, "description"), loggers);
+            if (updated == null) {
+                return error(Response.Status.NOT_FOUND, "That collection no longer exists.");
+            }
+
+            AuditWriter.log(ctx, user.getName(), "edited collection",
+                    updated.get(CollectionStore.C_NAME), null, null, 0L,
+                    updated.get(CollectionStore.C_LOGGERS));
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] updateCollection failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     @POST
     @Path("collections/{id}/apply")
     @Consumes(MediaType.APPLICATION_JSON)

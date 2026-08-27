@@ -85,13 +85,6 @@ public final class CollectionStore {
             throws GeneralException {
         List<Map<String, String>> all = load(ctx);
 
-        StringBuilder sb = new StringBuilder();
-        int n = 0;
-        for (Map.Entry<String, String> e : loggers.entrySet()) {
-            if (++n > MAX_LOGGERS_EACH) break;
-            if (sb.length() > 0) sb.append(",");
-            sb.append(e.getKey()).append("=").append(String.valueOf(e.getValue()).toUpperCase(Locale.ROOT));
-        }
 
         // Saving under an existing name replaces it, so refining a collection
         // does not leave three near-identical copies behind.
@@ -103,7 +96,7 @@ public final class CollectionStore {
         row.put(C_ID, UUID.randomUUID().toString());
         row.put(C_NAME, name);
         row.put(C_DESC, description == null ? "" : description);
-        row.put(C_LOGGERS, sb.toString());
+        row.put(C_LOGGERS, encode(loggers));
         row.put(C_CREATED, String.valueOf(System.currentTimeMillis()));
         row.put(C_BY, user == null ? "" : user);
         all.add(row);
@@ -111,6 +104,47 @@ public final class CollectionStore {
         while (all.size() > MAX_COLLECTIONS) all.remove(0);
         save(ctx, all);
         return row;
+    }
+
+    /** The stored "logger=LEVEL,logger=LEVEL" form. */
+    private static String encode(Map<String, String> loggers) {
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (Map.Entry<String, String> e : loggers.entrySet()) {
+            if (++n > MAX_LOGGERS_EACH) break;
+            if (sb.length() > 0) sb.append(",");
+            sb.append(e.getKey()).append("=")
+              .append(String.valueOf(e.getValue()).toUpperCase(Locale.ROOT));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Change an existing collection in place.
+     *
+     * Deliberately not add() with the same name. add() drops any collection
+     * that shares the name and appends a new row, which would hand the
+     * collection a new id and a new created date every time somebody removed a
+     * logger from it - so "saved by X, 7d ago" would silently become "saved by
+     * whoever edited it last, just now", and any link or audit line naming the
+     * old id would dangle. Editing keeps the identity and the provenance; only
+     * the contents change.
+     *
+     * @return the updated row, or null if no collection has that id.
+     */
+    public static Map<String, String> update(SailPointContext ctx, String id, String name,
+                                             String description, Map<String, String> loggers)
+            throws GeneralException {
+        List<Map<String, String>> all = load(ctx);
+        for (Map<String, String> c : all) {
+            if (id == null || !id.equals(c.get(C_ID))) continue;
+            if (name != null) c.put(C_NAME, name);
+            if (description != null) c.put(C_DESC, description);
+            if (loggers != null) c.put(C_LOGGERS, encode(loggers));
+            save(ctx, all);
+            return c;
+        }
+        return null;
     }
 
     public static Map<String, String> byId(SailPointContext ctx, String id) throws GeneralException {

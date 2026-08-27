@@ -1621,6 +1621,126 @@
      * LDAP bind failure can leave that where the next person finds it, so these
      * are deliberately global rather than per-user favourites.
      */
+    /**
+     * The editing form for one collection, as a row that replaces its own.
+     *
+     * Everything is held in collEdit until Save, so removing four loggers and
+     * changing your mind costs nothing. Typing sets formTouched, which stops
+     * the poll re-rendering the page underneath a half-filled form.
+     */
+    function collectionEditor(c) {
+        var tr = el('tr');
+        var td = el('td');
+        td.setAttribute('colspan', '4');
+
+        var f1 = field('Name', 'Shared with everyone using the plugin.');
+        var name = el('input', 'tol-input');
+        name.type = 'text';
+        name.value = collEdit.name;
+        name.maxLength = 80;
+        name.oninput = function () { formTouched = true; collEdit.name = name.value; };
+        f1.appendChild(name);
+        td.appendChild(f1);
+
+        var f2 = field('Description', 'What this set is for. Optional.');
+        var desc = el('input', 'tol-input');
+        desc.type = 'text';
+        desc.value = collEdit.description;
+        desc.maxLength = 200;
+        desc.oninput = function () { formTouched = true; collEdit.description = desc.value; };
+        f2.appendChild(desc);
+        td.appendChild(f2);
+
+        if (!collEdit.rows.length) {
+            td.appendChild(el('div', 'tol-empty',
+                'No loggers left. Add one, or cancel - a collection cannot be saved empty.'));
+        }
+
+        collEdit.rows.forEach(function (r, i) {
+            var line = el('div', 'tol-edit-row');
+            line.appendChild(el('span', 'tol-mono tol-small', r.logger));
+
+            var lvl = el('select', 'tol-input tol-input-inline');
+            (state.levels || []).forEach(function (L) {
+                lvl.appendChild(opt(L, L, L === r.level));
+            });
+            lvl.onchange = function () { formTouched = true; r.level = lvl.value; };
+            line.appendChild(lvl);
+
+            var rm = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Remove');
+            rm.title = 'Take ' + r.logger + ' out of this collection';
+            rm.onclick = function () {
+                collEdit.rows.splice(i, 1);
+                render();
+            };
+            line.appendChild(rm);
+            td.appendChild(line);
+        });
+
+        // add a logger
+        var add = el('div', 'tol-edit-row');
+        var box = el('input', 'tol-input');
+        box.type = 'text';
+        box.placeholder = 'add a logger, e.g. sailpoint.api.Provisioner';
+        box.setAttribute('list', 'tol-catalog');
+        box.setAttribute('autocomplete', 'off');
+        box.oninput = function () { formTouched = true; };
+        add.appendChild(box);
+
+        var addLvl = el('select', 'tol-input tol-input-inline');
+        (state.levels || []).forEach(function (L) { addLvl.appendChild(opt(L, L, L === 'DEBUG')); });
+        add.appendChild(addLvl);
+
+        var addBtn = el('button', 'tol-btn tol-btn-small', 'Add');
+        addBtn.onclick = function () {
+            var v = String(box.value || '').trim();
+            if (!v) return;
+            for (var i = 0; i < collEdit.rows.length; i++) {
+                if (collEdit.rows[i].logger === v) {
+                    // Already here: treat it as setting the level rather than
+                    // adding a duplicate the store would silently collapse.
+                    collEdit.rows[i].level = addLvl.value;
+                    box.value = '';
+                    render();
+                    return;
+                }
+            }
+            collEdit.rows.push({ logger: v, level: addLvl.value });
+            box.value = '';
+            render();
+        };
+        add.appendChild(addBtn);
+        td.appendChild(add);
+
+        var actions = el('div', 'tol-edit-actions');
+        var save = el('button', 'tol-btn tol-btn-small tol-btn-primary', 'Save changes');
+        save.disabled = !collEdit.rows.length;
+        save.onclick = function () {
+            var body = {
+                name: collEdit.name,
+                description: collEdit.description,
+                loggers: collEdit.rows.map(function (r) {
+                    return { logger: r.logger, level: r.level };
+                })
+            };
+            var id = collEdit.id;
+            var label = collEdit.name;
+            collEdit = null;
+            formTouched = false;
+            mutate(api('PUT', '/collections/' + encodeURIComponent(id), body),
+                   label + ' updated.');
+        };
+        actions.appendChild(save);
+
+        var cancel = el('button', 'tol-btn tol-btn-small', 'Cancel');
+        cancel.onclick = function () { collEdit = null; formTouched = false; render(); };
+        actions.appendChild(cancel);
+        td.appendChild(actions);
+
+        tr.appendChild(td);
+        return tr;
+    }
+
     function collectionsSection() {
         var colls = state.collections || [];
         var box = el('section', 'tol-card');
@@ -1628,7 +1748,8 @@
         box.appendChild(el('div', 'tol-hint',
             'Named sets of loggers, shared with everyone who uses this plugin. Applying one turns '
             + 'the whole set on with the expiry you choose. Save the current overrides as a '
-            + 'collection from the section below.'));
+            + 'collection from the section below, and use Edit to add or remove loggers '
+            + 'from one afterwards.'));
 
         if (!colls.length) {
             box.appendChild(el('div', 'tol-empty',
@@ -1640,6 +1761,10 @@
         t.appendChild(headRow(['Collection', 'Loggers', 'Saved by', '']));
         var tb = el('tbody');
         colls.forEach(function (c) {
+            if (collEdit && collEdit.id === c.id) {
+                tb.appendChild(collectionEditor(c));
+                return;
+            }
             var tr = el('tr');
 
             var c1 = el('td');
@@ -1678,6 +1803,26 @@
             })(c);
             c4.appendChild(apply);
 
+            var edit = el('button', 'tol-btn tol-btn-small', 'Edit');
+            edit.title = 'Add or remove loggers, or change the level of one';
+            edit.onclick = (function (coll) {
+                return function () {
+                    collEdit = {
+                        id: coll.id,
+                        name: coll.name || '',
+                        description: coll.description || '',
+                        rows: String(coll.loggers || '').split(',')
+                            .filter(function (x) { return x.trim(); })
+                            .map(function (pair) {
+                                var bits = pair.split('=');
+                                return { logger: bits[0], level: (bits[1] || 'DEBUG') };
+                            })
+                    };
+                    render();
+                };
+            })(c);
+            c4.appendChild(edit);
+
             var del = el('button', 'tol-btn tol-btn-small tol-btn-danger', 'Delete');
             del.onclick = (function (coll) {
                 return function () {
@@ -1702,6 +1847,11 @@
     // three hosts you care about once, then run tail, then a search, then
     // another search, and the narrowing holds across all of them. Rebuilding it
     // per query would make the chips useless for the thing they are for.
+    // The collection being edited, if any: { id, name, description, rows }.
+    // Module-level so it survives the page's own ten-second re-render, the same
+    // way the log and history panels keep their state.
+    var collEdit = null;
+
     var logState = { lines: 40, text: '', off: {} };
 
     /**

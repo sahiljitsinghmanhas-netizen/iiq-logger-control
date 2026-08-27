@@ -420,6 +420,16 @@ host; each override it creates is noted <code>from collection: &lt;name&gt;</cod
 the audit trail both say where it came from. Deleting a collection removes it for everyone and does
 not touch any logger that is currently on.</p>
 
+<p><strong>Editing one.</strong> <em>Edit</em> opens the collection in place: change its name or
+description, change the level on any logger, take one out with <em>Remove</em>, or type a name and
+press <em>Add</em>. Nothing is written until you press <em>Save changes</em>, so removing four
+loggers and changing your mind costs nothing - <em>Cancel</em> leaves the collection exactly as it
+was. A collection cannot be saved empty; delete it instead if you are finished with it.</p>
+
+<p>Editing keeps the collection's identity. It is not saved again under the same name, which would
+give it a new id and reset <em>saved by</em> and the date to whoever last edited it - on something
+shared with everyone using the plugin, that provenance is worth keeping.</p>
+
 <h2 id="logfile">Reading the log<a class="top" href="#">top</a></h2>
 <figure>
   <img src="img/12-logs.png" alt="The Logs panel: a search across five hosts, with a chip per host coloured by what it found" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
