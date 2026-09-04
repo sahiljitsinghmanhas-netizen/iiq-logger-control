@@ -438,8 +438,13 @@ public final class LoggerConfigStore {
         }
 
         long now = System.currentTimeMillis();
+        // A download asks for bytes, not for text, so it is active with an empty
+        // search box exactly as a tail is. Treating only "tail" that way meant a
+        // download request was read as "stop", removed before any host saw it,
+        // and the page then saved whatever the previous search had left behind.
         boolean tailing = "tail".equals(mode);
-        boolean active = tailing || (text != null && !text.trim().isEmpty());
+        boolean downloading = "download".equals(mode);
+        boolean active = tailing || downloading || (text != null && !text.trim().isEmpty());
 
         if (!active) {
             all.remove(user);
@@ -462,7 +467,7 @@ public final class LoggerConfigStore {
             }
             Map<String, String> q = new LinkedHashMap<>();
             q.put(Q_TEXT, text == null ? "" : text.trim());
-            q.put(Q_MODE, tailing ? "tail" : "search");
+            q.put(Q_MODE, tailing ? "tail" : (downloading ? "download" : "search"));
             q.put(Q_LINES, String.valueOf(lines <= 0 ? 40 : lines));
             q.put(Q_HOST, host == null ? "" : host.trim());
             q.put(Q_AT, String.valueOf(now));

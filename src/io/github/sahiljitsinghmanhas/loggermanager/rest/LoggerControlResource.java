@@ -894,9 +894,31 @@ public class LoggerControlResource extends BasePluginResource {
                     java.io.RandomAccessFile in = new java.io.RandomAccessFile(f, "r");
                     try {
                         if (from > 0) in.seek(from);
+                        // Exactly the number of bytes promised in Content-Length,
+                        // and not one more. A log is being written to while it is
+                        // being read, so streaming to end-of-file sends more than
+                        // was declared - which a browser tolerates and a proxy
+                        // treats as a broken response.
                         byte[] buf = new byte[64 * 1024];
-                        int n;
-                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                        long left = sending;
+                        while (left > 0) {
+                            int want = (int) Math.min((long) buf.length, left);
+                            int n = in.read(buf, 0, want);
+                            if (n <= 0) break;          // truncated under us
+                            out.write(buf, 0, n);
+                            left -= n;
+                        }
+                        // If the file shrank - a rollover mid-download - pad the
+                        // difference rather than close short, since a short body
+                        // against a declared length is the same protocol error.
+                        if (left > 0) {
+                            byte[] pad = new byte[8 * 1024];
+                            while (left > 0) {
+                                int n = (int) Math.min((long) pad.length, left);
+                                out.write(pad, 0, n);
+                                left -= n;
+                            }
+                        }
                         out.flush();
                     } finally {
                         try { in.close(); } catch (java.io.IOException ignored) { }

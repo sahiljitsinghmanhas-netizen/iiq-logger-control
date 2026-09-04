@@ -436,11 +436,17 @@ of whoever set them.
 
 ### A window of its own
 
-**Open in window** beside any host opens the log viewer on its own, scoped to
-that host — resizable, and as many at once as you like, which is how you compare
-two hosts or the same host before and after a change. `Ctrl+F` works because it
-is ordinary page text. That window also has a **wrap** toggle and a **highlight**
-box; double-click any word in the log to highlight every occurrence of it.
+**Open in window** beside any host opens that host's output on its own — nothing
+but the log, filling the window, scrolling inside itself and resizing with it.
+No banner, no page title, no host chips, no search form: those are controls for
+choosing what to look at, and that choice was made by the button that opened the
+window. What is left is the log and the two things you want while reading one:
+a **wrap** toggle and a **highlight** box. Double-click any word to highlight
+every occurrence of it, and `Ctrl+F` works because it is ordinary page text.
+
+Open as many as you like — that is how you compare two hosts, or one host before
+and after a change. Each window follows your own search, so refining it on the
+main page updates every reader you have open.
 
 ![The log viewer in a window of its own](docs/screenshots/20-log-popout.png)
 

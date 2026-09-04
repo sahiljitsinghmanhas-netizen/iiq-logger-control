@@ -257,6 +257,7 @@
         // handler is on a node that no longer exists. Both are cheap to redo and
         // losing your highlight every ten seconds would be maddening.
         if (LOG_ONLY) {
+            stripToReader();
             wireDoubleClickHighlight();
             if (logState.hilite) paintHighlights();
         }
@@ -1885,6 +1886,49 @@
 
     // A popped-out window can be pinned to one host, which is what makes two of
     // them side by side worth having.
+    /**
+     * A popped-out window is a reader, not a copy of the page.
+     *
+     * What was asked for is one host's output, as large as the window will
+     * allow, resizable and scrollable - the complaint being that the log block
+     * on the page is a small box that is hard to move around in. So everything
+     * else goes: IdentityIQ's own banner and navigation, the plugin's title and
+     * footer, the host chips, the search form, the other hosts. What is left is
+     * the log, a wrap toggle and a highlight box.
+     *
+     * IdentityIQ's chrome is hidden rather than avoided, because the plugin
+     * page is served inside it and there is no other page to be served from.
+     * Every selector here is one that simply matches nothing if a future
+     * release renames it, which is the failure mode to want.
+     */
+    function stripToReader() {
+        if (!LOG_ONLY) return;
+        if (document.getElementById('tol-reader-css')) return;
+        var css = document.createElement('style');
+        css.id = 'tol-reader-css';
+        css.appendChild(document.createTextNode([
+            '#menuMainDiv, .navbar, header.topbar, .tol-header, .tol-footer,',
+            '  #footer, .footer, .copyright, .tol-card-title, .tol-hint { display: none !important; }',
+            'body, html { margin: 0 !important; padding: 0 !important; height: 100%;',
+            '  overflow: hidden !important; background: #0f172a; }',
+            '#turn-on-loggers-root { margin: 0 !important; padding: 0 !important; height: 100vh;',
+            '  display: flex; flex-direction: column; }',
+            '#tol-sec-logs { margin: 0 !important; border: 0 !important; border-radius: 0 !important;',
+            '  box-shadow: none !important; padding: 0 !important; background: #0f172a;',
+            '  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }',
+            '.tol-readbar { margin: 0 !important; border-radius: 0 !important;',
+            '  border-left: 0; border-right: 0; border-top: 0; flex: 0 0 auto; }',
+            '.tol-logmeta { flex: 0 0 auto; padding: 6px 10px; background: #f5f7fa;',
+            '  border-bottom: 1px solid #e4e7eb; }',
+            // The point of the whole exercise: the log fills what is left of the
+            // window and scrolls inside itself.
+            'pre.tol-log { flex: 1 1 auto; min-height: 0; height: auto !important;',
+            '  max-height: none !important; overflow: auto !important; margin: 0 !important;',
+            '  border-radius: 0 !important; resize: none; }'
+        ].join('\n')));
+        document.getElementsByTagName('head')[0].appendChild(css);
+    }
+
     var LOG_HOST = (function () {
         try {
             var m = /[?&]tolhost=([^&]+)/.exec(window.location.search);
@@ -1928,6 +1972,10 @@
 
     /** Which host we asked for a file, so the save can fire when it lands. */
     var pendingDownload = null;
+    // What the person was looking at before they asked for a file, so it can be
+    // put back. A download borrows the one request slot this user has; without
+    // this it hands it back empty and their search is simply gone.
+    var downloadInterrupted = null;
 
     /**
      * Save a requested file the moment its host answers, then stop the request.
@@ -1947,8 +1995,19 @@
             var host = pendingDownload;
             pendingDownload = null;
             saveLines(host, lines);
-            say(host + ' sent ' + lines.length + ' lines. Saving.', 'info');
-            api('POST', '/logquery', { mode: 'search', text: '' })['catch'](function () {});
+
+            // Put back whatever they were looking at, rather than clearing the
+            // slot and leaving them staring at nothing.
+            var back = downloadInterrupted;
+            downloadInterrupted = null;
+            if (back && (back.text || back.mode === 'tail')) {
+                say(host + ' sent ' + lines.length + ' lines. Saved, and your search is back.',
+                    'info');
+                api('POST', '/logquery', back)['catch'](function () {});
+            } else {
+                say(host + ' sent ' + lines.length + ' lines. Saved.', 'info');
+                api('POST', '/logquery', { mode: 'search', text: '' })['catch'](function () {});
+            }
             return;
         }
     }
@@ -2183,7 +2242,9 @@
         bar1.appendChild(tailBtn);
         bar1.appendChild(lineSel);
         bar1.appendChild(el('span', 'tol-small', 'on every host - no filter, just the raw log'));
-        box.appendChild(bar1);
+        // A reader window is for reading one host's output, not for choosing
+        // what to fetch - that choice was made by the button that opened it.
+        if (!LOG_ONLY) box.appendChild(bar1);
 
         // --- search ---------------------------------------------------------
         var bar2 = el('div', 'tol-logbar');
@@ -2223,7 +2284,7 @@
             };
             bar2.appendChild(stop);
         }
-        box.appendChild(bar2);
+        if (!LOG_ONLY) box.appendChild(bar2);
 
         // --- one chip per host, always ---------------------------------------
         var hosts = sortedHosts();
@@ -2260,7 +2321,7 @@
                 },
                 function (h) { return !logState.off[h.name]; }));
         }
-        box.appendChild(strip);
+        if (!LOG_ONLY) box.appendChild(strip);
 
         if (!state.logActive) {
             box.appendChild(el('div', 'tol-empty',
@@ -2305,17 +2366,21 @@
             // when you wanted one host's log is not a kindness.
             var acts = el('span', 'tol-logacts');
 
-            var win = el('button', 'tol-btn tol-btn-small', 'Open in window');
-            win.title = 'Open ' + h.name + ' on its own, resizable. Open as many as you like.';
-            win.onclick = (function (name) {
-                return function () {
-                    window.open(CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers&tolview=logs'
-                        + '&tolhost=' + encodeURIComponent(name),
-                        'tolLogs' + Date.now(),
-                        'width=1280,height=860,resizable=yes,scrollbars=yes');
-                };
-            })(h.name);
-            acts.appendChild(win);
+            // Offering this inside a reader window would be offering to do
+            // what has already been done.
+            if (!LOG_ONLY) {
+                var win = el('button', 'tol-btn tol-btn-small', 'Open in window');
+                win.title = 'Open ' + h.name + ' on its own, resizable. Open as many as you like.';
+                win.onclick = (function (name) {
+                    return function () {
+                        window.open(CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers&tolview=logs'
+                            + '&tolhost=' + encodeURIComponent(name),
+                            'tolLogs' + Date.now(),
+                            'width=1280,height=860,resizable=yes,scrollbars=yes');
+                    };
+                })(h.name);
+                acts.appendChild(win);
+            }
 
             var truncMb = state.truncatedDownloadMb || 2;
             var fullMax = state.fullDownloadMaxMb || 0;
@@ -2354,6 +2419,11 @@
                 trunc.onclick = (function (name) {
                     return function () {
                         pendingDownload = name;
+                        downloadInterrupted = {
+                            mode: state.logMode || 'search',
+                            text: state.logQuery || '',
+                            lines: state.logLines || logState.lines
+                        };
                         mutate(api('POST', '/logquery',
                             { mode: 'download', text: '', host: name }),
                             'Asking ' + name + ' for the last ' + truncMb + 'MB of its log. It '
