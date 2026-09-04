@@ -36,6 +36,18 @@
      */
     var GIVE_UP_MS = 180000;
 
+    /**
+     * Which window this is.
+     *
+     * Fresh per page load, deliberately not stored: a popped-out window opened
+     * from this one would inherit sessionStorage in some browsers, which is
+     * precisely the confusion being removed. A download belongs to the window
+     * that asked for it, so opening a second window - or having three open on
+     * three hosts, which this plugin encourages - cannot make any of them save
+     * a file nobody just asked for.
+     */
+    var CLIENT = 'w' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+
     var state = null;
     var banner = null;
     var pollTimer = null;
@@ -177,11 +189,23 @@
         banner.appendChild(document.createTextNode(msg));
     }
 
-    function load(quiet) {
+    /**
+     * Fetch state, act on it, and usually repaint.
+     *
+     * noPaint exists because those are three different things and only the
+     * last one is unsafe while somebody is typing. Conflating them cost a
+     * fortnight of "the download takes forever, but if I refresh the page it
+     * arrives instantly": typing anywhere - the turn-on form, the collection
+     * editor, the highlight box in the log viewer - set a flag that made the
+     * poll return before doing anything at all, so nothing was fetched and the
+     * download that had been sitting there ready was never noticed. Reloading
+     * cleared the flag, which is what made a refresh look like a fix.
+     */
+    function load(quiet, noPaint) {
         return api('GET', '/state').then(function (data) {
             state = data;
             checkPendingDownload();
-            render();
+            if (!noPaint) render();
             if (!quiet) say(null);
         }).catch(function (e) {
             say(e.message, 'error');
@@ -2222,9 +2246,17 @@
     var pollingFast = false;
     function pollTick() {
         retimePoll();
-        // Do not yank the form out from under someone mid-type.
-        if (document.hidden || formTouched) return;
-        load(true);
+
+        // A hidden tab is not worth polling - except while a file is on its
+        // way, because coming back to a tab that quietly gave up on the
+        // download you asked for is the same complaint in a different shape.
+        var awaited = !!(state && state.download && state.download.host);
+        if (document.hidden && !awaited) return;
+
+        // Typing means do not repaint - it does NOT mean do not look. The
+        // repaint is what would yank the form out from under someone; fetching
+        // state and noticing that a host has answered disturbs nothing.
+        load(true, formTouched);
     }
     function retimePoll() {
         var waiting = !!(state && state.download && state.download.host);
@@ -2265,10 +2297,15 @@
         var dl = state && state.download;
         if (!dl || !dl.host || saving) return;
 
+        // Somebody else's window asked for this. Leave it entirely alone -
+        // acting on it is how one click became a file in every open window,
+        // and how opening a window downloaded a log nobody had just asked for.
+        if (dl.client && dl.client !== CLIENT) return;
+
         if (dl.error) {
             pendingDownload = null;
             say(dl.host + ' could not read its log: ' + dl.error, 'error');
-            api('POST', '/logdownload', { host: '' })['catch'](function () {});
+            api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
             return;
         }
         var lines = dl.lines || [];
@@ -2302,7 +2339,7 @@
                     + 'work there, which is why it looks fine. Restart IdentityIQ on '
                     + dl.host + ', or download from a host that has been restarted since the '
                     + 'upgrade.', 'error');
-                api('POST', '/logdownload', { host: '' })['catch'](function () {});
+                api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
                 pendingDownload = null;
                 return;
             }
@@ -2318,7 +2355,7 @@
                       + 'either syncing very slowly or has stopped. Giving up on this download - '
                       + 'nothing else was affected.';
                 say(why, 'error');
-                api('POST', '/logdownload', { host: '' })['catch'](function () {});
+                api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
                 pendingDownload = null;
             }
             return;
@@ -2338,7 +2375,7 @@
 
         // Clear the request, not a search: those megabytes would otherwise ride
         // along on every poll from here on.
-        api('POST', '/logdownload', { host: '' })
+        api('POST', '/logdownload', { host: '', client: CLIENT })
             .then(function () { saving = false; })
             ['catch'](function () { saving = false; });
     }
@@ -2738,7 +2775,8 @@
                 // While this host owes us a file, the button stops offering to
                 // ask again and starts reporting. Silence for up to a minute
                 // reads as a broken button; a count that moves reads as a wait.
-                var owed = state.download && state.download.host === h.name;
+                var owed = state.download && state.download.host === h.name
+                        && (!state.download.client || state.download.client === CLIENT);
                 var waited = 0;
                 if (owed) {
                     waited = Math.max(0, Math.round(
@@ -2768,7 +2806,7 @@
                         // Not mutate(): that repaints the page, and there is
                         // nothing here to repaint. Asking for a file changes
                         // nothing about what is on screen.
-                        api('POST', '/logdownload', { host: name })
+                        api('POST', '/logdownload', { host: name, client: CLIENT })
                             .then(function () {
                                 say('Asking ' + name + ' for the last ' + truncMb + 'MB of its '
                                     + 'log. It answers on its next sync, so this can take up to '

@@ -873,11 +873,18 @@
    people complain about most. */
 .tol-log-wrap { white-space: pre-wrap; word-break: break-word; }
 
+/* The log block is white text on very dark navy, and `color: inherit` kept it
+   white - white on pale yellow, which is close to invisible and was exactly
+   what people were complaining about. A highlight has to carry its own text
+   colour, not borrow one chosen for a different background. Amber against the
+   log's own near-black reads clearly on the dark block and still looks like a
+   highlight rather than an error. */
 mark.tol-hi {
-    background: #ffe08a;
-    color: inherit;
+    background: #f9a825;
+    color: #10192e;
+    font-weight: 600;
     border-radius: 2px;
-    padding: 0 1px;
+    padding: 0 2px;
 }
 
 /* The host serving the page, so it is obvious which one answered instantly. */

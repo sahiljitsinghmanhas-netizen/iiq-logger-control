@@ -1028,7 +1028,7 @@ public class LoggerControlResource extends BasePluginResource {
                         "Reading log files is switched off in the plugin settings.");
             }
             String host = str(body, "host");
-            LoggerConfigStore.setLogDownload(ctx, user.getName(), host);
+            LoggerConfigStore.setLogDownload(ctx, user.getName(), host, str(body, "client"));
             if (host != null && !host.trim().isEmpty()) {
                 int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
                 AuditWriter.log(ctx, user.getName(), "downloaded log",
@@ -1273,6 +1273,7 @@ public class LoggerControlResource extends BasePluginResource {
                 String target = String.valueOf(want.get(LoggerConfigStore.Q_HOST));
                 dl.put("host", target);
                 dl.put("askedAt", String.valueOf(want.get(LoggerConfigStore.Q_AT)));
+                dl.put("client", String.valueOf(want.get(LoggerConfigStore.Q_CLIENT)));
                 Map<String, Object> st = LoggerConfigStore.allStatuses(ctx).get(target);
                 Map<String, Object> ans = answerIn(st, LoggerConfigStore.S_LOG_DL_ANSWERS,
                         user.getName());

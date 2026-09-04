@@ -127,6 +127,17 @@ public final class LoggerConfigStore {
     public static final String Q_MODE  = "mode";
     public static final String Q_LINES = "lines";
     public static final String Q_HOST  = "host";
+    /**
+     * Which browser window asked for a download.
+     *
+     * The request belongs to a person, but saving a file is something a window
+     * does - and a person can have several open, which this plugin actively
+     * encourages: the whole point of Open in window is to have one per host.
+     * Without this, every open window saw the same outstanding request and
+     * every one of them saved it, so one click produced a file per window and
+     * opening a new window downloaded a log nobody had just asked for.
+     */
+    public static final String Q_CLIENT = "client";
     public static final String Q_AT    = "at";
 
     /**
@@ -427,7 +438,8 @@ public final class LoggerConfigStore {
      * megabytes should not be carried on every poll afterwards.
      */
     @SuppressWarnings("unchecked")
-    public static void setLogDownload(SailPointContext ctx, String user, String host)
+    public static void setLogDownload(SailPointContext ctx, String user, String host,
+                                      String client)
             throws GeneralException {
         if (user == null) return;
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
@@ -459,6 +471,7 @@ public final class LoggerConfigStore {
             q.put(Q_MODE, "download");
             q.put(Q_LINES, "0");            // deliberately unused: bytes, not lines
             q.put(Q_HOST, host.trim());
+            q.put(Q_CLIENT, client == null ? "" : client.trim());
             q.put(Q_AT, String.valueOf(System.currentTimeMillis()));
             all.put(user, q);
         }
