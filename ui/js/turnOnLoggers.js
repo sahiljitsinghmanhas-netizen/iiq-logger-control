@@ -158,8 +158,9 @@
     }
 
     function load(quiet) {
-        return api('GET', '/state' + (logState.want || LOG_ONLY ? '?logs=1' : '')).then(function (data) {
+        return api('GET', '/state').then(function (data) {
             state = data;
+            checkPendingDownload();
             render();
             if (!quiet) say(null);
         }).catch(function (e) {
@@ -250,6 +251,14 @@
             // the right answer in that case.
             if (scroller) scroller.scrollTop = wasAt;
             if (window.scrollY !== wasAt && window.scrollTo) window.scrollTo(0, wasAt);
+        }
+
+        // The tree was just rebuilt, so any marks are gone and the double-click
+        // handler is on a node that no longer exists. Both are cheap to redo and
+        // losing your highlight every ten seconds would be maddening.
+        if (LOG_ONLY) {
+            wireDoubleClickHighlight();
+            if (logState.hilite) paintHighlights();
         }
     }
 
@@ -1858,12 +1867,13 @@
     // way the log and history panels keep their state.
     var collEdit = null;
 
-    // want: whether this page is asking the server for the log lines themselves.
-    // Off by default. The host chips run off logMatchCount, which always
-    // travels; the lines are the expensive part and are fetched only once
-    // somebody is actually reading them. See the comment on logMatchCount in
-    // LoggerControlResource.
-    var logState = { lines: 40, text: '', off: {}, want: false };
+    // Reading state for the log viewer. The answers themselves belong to
+    // whoever ran the query, so what arrives here is only ever this person's -
+    // there is nothing to opt into and nothing of anyone else's to hide.
+    var logState = { lines: 40, text: '', off: {}, wrap: true, hilite: '' };
+    try {
+        if (window.sessionStorage.getItem('tol-log-wrap') === 'n') logState.wrap = false;
+    } catch (e) { /* ignore */ }
 
     // A popped-out window shows the log viewer on its own, so several can be
     // opened side by side. Same page, same script, one section.
@@ -1871,6 +1881,15 @@
         try {
             return /[?&]tolview=logs(&|$)/.test(window.location.search);
         } catch (e) { return false; }
+    }());
+
+    // A popped-out window can be pinned to one host, which is what makes two of
+    // them side by side worth having.
+    var LOG_HOST = (function () {
+        try {
+            var m = /[?&]tolhost=([^&]+)/.exec(window.location.search);
+            return m ? decodeURIComponent(m[1]) : '';
+        } catch (e) { return ''; }
     }());
 
     /**
@@ -1882,6 +1901,125 @@
      * so a second search sends every chip back to waiting instead of leaving
      * the previous answer sitting there looking current.
      */
+    /**
+     * Write lines already on the page to a file the browser saves.
+     *
+     * No round trip: whatever this host sent is already in the state we are
+     * rendering from, so asking the server for it again would be fetching the
+     * same bytes twice.
+     */
+    function saveLines(host, lines) {
+        try {
+            var blob = new Blob([lines.join('\n') + '\n'], { type: 'text/plain' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = host + '-sailpoint.log';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            // Revoked on a timer rather than immediately: some browsers have not
+            // finished reading the blob by the time click() returns.
+            window.setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+        } catch (e) {
+            say('Could not save the file: ' + e.message, 'error');
+        }
+    }
+
+    /** Which host we asked for a file, so the save can fire when it lands. */
+    var pendingDownload = null;
+
+    /**
+     * Save a requested file the moment its host answers, then stop the request.
+     *
+     * Stopping matters as much as saving: the answer is a couple of megabytes
+     * sitting in that host's status record, and until the request ends it would
+     * be sent again on every ten-second poll.
+     */
+    function checkPendingDownload() {
+        if (!pendingDownload) return;
+        var hosts = state && state.hosts ? state.hosts : [];
+        for (var i = 0; i < hosts.length; i++) {
+            var h = hosts[i];
+            if (h.name !== pendingDownload) continue;
+            var lines = h.logMatches || [];
+            if (!lines.length) return;             // still reading
+            var host = pendingDownload;
+            pendingDownload = null;
+            saveLines(host, lines);
+            say(host + ' sent ' + lines.length + ' lines. Saving.', 'info');
+            api('POST', '/logquery', { mode: 'search', text: '' })['catch'](function () {});
+            return;
+        }
+    }
+
+    /**
+     * Mark every occurrence of the highlight text in the log blocks.
+     *
+     * Plain text nodes rebuilt with <mark> around the matches, rather than a
+     * regex over innerHTML - log lines are full of angle brackets and quotes
+     * and rewriting them as HTML would both corrupt the output and hand anyone
+     * who can write to a log a way to inject markup into this page.
+     *
+     * Capped, because a wide-open highlight over a two-megabyte tail would
+     * build hundreds of thousands of nodes and lock the window up.
+     */
+    var HILITE_MAX = 2000;
+
+    function paintHighlights() {
+        var want = (logState.hilite || '').trim();
+        var pres = document.querySelectorAll('#tol-sec-logs pre.tol-log');
+        for (var i = 0; i < pres.length; i++) {
+            var pre = pres[i];
+            if (pre.getAttribute('data-raw') === null) {
+                pre.setAttribute('data-raw', pre.textContent);
+            }
+            var raw = pre.getAttribute('data-raw');
+            clear(pre);
+            if (!want) {
+                pre.appendChild(document.createTextNode(raw));
+                continue;
+            }
+            var hay = raw.toLowerCase();
+            var needle = want.toLowerCase();
+            var at = 0, found = 0, idx;
+            while ((idx = hay.indexOf(needle, at)) !== -1 && found < HILITE_MAX) {
+                if (idx > at) pre.appendChild(document.createTextNode(raw.slice(at, idx)));
+                var m = el('mark', 'tol-hi');
+                m.appendChild(document.createTextNode(raw.slice(idx, idx + want.length)));
+                pre.appendChild(m);
+                at = idx + want.length;
+                found++;
+            }
+            pre.appendChild(document.createTextNode(raw.slice(at)));
+        }
+    }
+
+    /** Double-clicking a word in the log fills the highlight box with it. */
+    function wireDoubleClickHighlight() {
+        var sec = document.getElementById('tol-sec-logs');
+        if (!sec || sec.getAttribute('data-dbl') === 'y') return;
+        sec.setAttribute('data-dbl', 'y');
+        sec.addEventListener('dblclick', function () {
+            var sel = '';
+            try { sel = String(window.getSelection()); } catch (e) { return; }
+            sel = sel.trim();
+            if (!sel || sel.length > 200) return;
+            logState.hilite = sel;
+            var f = document.getElementById('tol-hilite');
+            if (f) f.value = sel;
+            paintHighlights();
+        });
+    }
+
+    function fmtBytes(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+        if (n < 1024 * 1024 * 1024) return (n / 1048576).toFixed(1) + ' MB';
+        return (n / 1073741824).toFixed(2) + ' GB';
+    }
+
     function logStatus(h) {
         if (!h.reporting) {
             // Grey for the same reason as hostHealth: a host the plugin has
@@ -1972,51 +2110,60 @@
         }
 
         box.appendChild(el('div', 'tol-hint',
-            'Every host reads its own log file and reports back. ' + state.thisHost
-            + ' answers immediately; the others answer on their next sync, so give them a minute. '
+            'Every host reads its own log file and reports back. The host serving this page '
+            + 'answers immediately; the others answer on their next sync, so give them a minute. '
             + 'The chips below show what each host found - click one to drop it from the output, '
             + 'click it again to bring it back.'));
 
-        var tools = el('div', 'tol-logtools');
-        var toolCount = 0;
 
-        // The lines are not fetched by default - they are the bulk of this
-        // endpoint and most people on the page are not reading them. If some
-        // host has found something and this page has not asked, offer to.
-        var found = 0;
-        (state.hosts || []).forEach(function (h) {
-            found += (typeof h.logMatchCount === 'number') ? h.logMatchCount : 0;
-        });
-        if (!logState.want && !LOG_ONLY && found) {
-            var show = el('button', 'tol-btn tol-btn-small tol-btn-primary',
-                'Show output (' + found + ' line' + (found === 1 ? '' : 's') + ')');
-            show.title = 'Fetch the lines each host found. Not fetched automatically, because '
-                       + 'they are large and most of the time nobody is reading them.';
-            show.onclick = function () { logState.want = true; load(); };
-            tools.appendChild(show);
-            toolCount++;
-        }
 
-        // A separate window can be resized, and several can be opened side by
-        // side to compare hosts or two different searches. Unique name per
-        // click so a second press opens a second window rather than replacing
-        // the first.
-        if (!LOG_ONLY) {
-            var pop = el('button', 'tol-btn tol-btn-small', 'Open in a new window');
-            pop.title = 'Open the log viewer on its own, resizable, as many as you like';
-            pop.onclick = function () {
-                var url = CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers&tolview=logs';
-                var nm = 'tolLogs' + Date.now();
-                window.open(url, nm, 'width=1280,height=860,resizable=yes,scrollbars=yes');
+        // Reading controls, in the window somebody opened to read in. The
+        // complaint these answer is real: a fixed-height box you cannot search
+        // or resize is worse than a text editor, and if the answer is "go to
+        // Splunk" then people go to Splunk and stay there.
+        if (LOG_ONLY) {
+            var rd = el('div', 'tol-readbar');
+
+            var wrapLbl = el('label', 'tol-check');
+            var wrapBox = document.createElement('input');
+            wrapBox.type = 'checkbox';
+            wrapBox.checked = !!logState.wrap;
+            wrapBox.onchange = function () {
+                logState.wrap = wrapBox.checked;
+                try { window.sessionStorage.setItem('tol-log-wrap', logState.wrap ? 'y' : 'n'); }
+                catch (e) { /* ignore */ }
+                render();
             };
-            tools.appendChild(pop);
-            toolCount++;
-        }
+            wrapLbl.appendChild(wrapBox);
+            wrapLbl.appendChild(el('span', '', ' Wrap long lines'));
+            rd.appendChild(wrapLbl);
 
-        // Counted rather than asked of the node: childNodes is a DOM detail
-        // the build's stub DOM does not carry, and the render gate is the
-        // thing that has to be able to run this.
-        if (toolCount) box.appendChild(tools);
+            var hi = document.createElement('input');
+            hi.type = 'text';
+            hi.className = 'tol-input';
+            hi.id = 'tol-hilite';
+            hi.placeholder = 'highlight text - or double-click a word in the log';
+            hi.value = logState.hilite || '';
+            hi.oninput = function () {
+                logState.hilite = hi.value;
+                formTouched = true;
+                paintHighlights();
+            };
+            rd.appendChild(hi);
+
+            var clear = el('button', 'tol-btn tol-btn-small', 'Clear');
+            clear.onclick = function () {
+                logState.hilite = '';
+                var f = document.getElementById('tol-hilite');
+                if (f) f.value = '';
+                paintHighlights();
+            };
+            rd.appendChild(clear);
+
+            rd.appendChild(el('span', 'tol-small',
+                'Ctrl+F searches this window like any page. Drag the window edge to resize.'));
+            box.appendChild(rd);
+        }
 
         // --- raw tail -------------------------------------------------------
         var bar1 = el('div', 'tol-logbar');
@@ -2030,7 +2177,6 @@
         var tailBtn = el('button', 'tol-btn tol-btn-small', 'Output last');
         tailBtn.title = 'The end of the log, with no filter - no search term needed';
         tailBtn.onclick = function () {
-            logState.want = true;
             mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
                 'Reading the last ' + logState.lines + ' lines on every host.');
         };
@@ -2055,7 +2201,6 @@
 
         var searchBtn = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
         searchBtn.onclick = function () {
-            logState.want = true;
             var text = document.getElementById('tol-log-q').value || '';
             logState.text = text;
             if (!text.trim()) {
@@ -2135,6 +2280,7 @@
         // --- one block per host still in the output --------------------------
         var any = false;
         shown.forEach(function (h) {
+            if (LOG_HOST && h.name !== LOG_HOST) return;
             var st = logStatus(h);
             if (st.key === 'idle' || st.key === 'down') return;
             any = true;
@@ -2153,6 +2299,71 @@
                 : st.why;
             head.appendChild(el('span', 'tol-small',
                 line + (h.logPath ? ' - ' + h.logPath : '')));
+
+            // Per host, because comparing two hosts side by side is the whole
+            // reason to want a window of your own, and downloading everything
+            // when you wanted one host's log is not a kindness.
+            var acts = el('span', 'tol-logacts');
+
+            var win = el('button', 'tol-btn tol-btn-small', 'Open in window');
+            win.title = 'Open ' + h.name + ' on its own, resizable. Open as many as you like.';
+            win.onclick = (function (name) {
+                return function () {
+                    window.open(CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers&tolview=logs'
+                        + '&tolhost=' + encodeURIComponent(name),
+                        'tolLogs' + Date.now(),
+                        'width=1280,height=860,resizable=yes,scrollbars=yes');
+                };
+            })(h.name);
+            acts.appendChild(win);
+
+            var truncMb = state.truncatedDownloadMb || 2;
+            var fullMax = state.fullDownloadMaxMb || 0;
+
+            if (h.name === state.thisHost) {
+                var bytes = Number(state.thisHostLogBytes || 0);
+                var capped = fullMax > 0 && bytes > fullMax * 1024 * 1024;
+                var dl = el('button', 'tol-btn tol-btn-small',
+                    capped ? 'Download last ' + fullMax + 'MB' : 'Download full log');
+                dl.title = capped
+                    ? 'This log is ' + fmtBytes(bytes) + ', past the ' + fullMax + 'MB limit in the '
+                      + 'plugin settings, so the END of the file is sent - the part you want when '
+                      + 'you are looking at what just happened. Raise Full download limit to send '
+                      + 'more, or 0 to always send all of it. It streams from disk in pieces, so '
+                      + 'the size costs you a slow download rather than IdentityIQ any memory.'
+                    : 'The whole file, ' + fmtBytes(bytes) + ', streamed straight off this host\u2019s '
+                      + 'disk. This is the host serving your page, so there is no size limit beyond '
+                      + 'the Full download limit setting and nothing crosses the database.';
+                dl.onclick = (function (name) {
+                    return function () {
+                        window.location = CTX + '/plugin/rest/TurnOnLoggers/logfile?host='
+                            + encodeURIComponent(name);
+                    };
+                })(h.name);
+                acts.appendChild(dl);
+            } else {
+                var trunc = el('button', 'tol-btn tol-btn-small',
+                    'Download truncated log (last ' + truncMb + 'MB)');
+                trunc.title = 'The last ' + truncMb + 'MB of ' + h.name + '\u2019s log, not the whole '
+                    + 'file. No host can read another host\u2019s disk - that is what lets this work '
+                    + 'across Windows, Linux and containers with nothing shared - so ' + h.name
+                    + ' has to read its own file and publish the result through the database. '
+                    + 'It answers on its next sync, within a minute, and the download starts by '
+                    + 'itself when it arrives. Change the size with Truncated download size in the '
+                    + 'plugin settings.';
+                trunc.onclick = (function (name) {
+                    return function () {
+                        pendingDownload = name;
+                        mutate(api('POST', '/logquery',
+                            { mode: 'download', text: '', host: name }),
+                            'Asking ' + name + ' for the last ' + truncMb + 'MB of its log. It '
+                            + 'answers on its next sync - the download starts on its own.');
+                    };
+                })(h.name);
+                acts.appendChild(trunc);
+            }
+
+            head.appendChild(acts);
             box.appendChild(head);
 
             // No black panel for a host with nothing to show. On a thirteen-host
@@ -2161,16 +2372,9 @@
             // line above already says what happened.
             if (st.key === 'wait' || st.key === 'none') return;
 
-            var pre = el('pre', 'tol-log');
+            var pre = el('pre', 'tol-log' + (logState.wrap ? ' tol-log-wrap' : ''));
             if (st.key === 'error') {
                 pre.appendChild(el('div', 'tol-err-text', h.logError));
-            } else if (!h.logMatches) {
-                // The count says there is something here, but this page has not
-                // asked for the lines. Say so and offer to fetch them, rather
-                // than showing an empty box that looks like a bug.
-                pre.appendChild(document.createTextNode(
-                    st.count + ' line' + (st.count === 1 ? '' : 's') + ' found. '
-                    + 'Press "Show output" above to read them.'));
             } else {
                 (h.logMatches || []).forEach(function (l) {
                     pre.appendChild(document.createTextNode(l + '\n'));

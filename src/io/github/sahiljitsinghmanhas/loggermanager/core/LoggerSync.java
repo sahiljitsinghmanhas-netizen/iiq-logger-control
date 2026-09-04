@@ -39,10 +39,7 @@ public final class LoggerSync {
         public List<String> reverted = new ArrayList<>();
         public List<String> errors = new ArrayList<>();
         public long lastClear;
-        public List<String> logMatches = new ArrayList<>();
-        public long logAnsweredAt;
-        public String logPath = "";
-        public String logError = "";
+        public Map<String, Map<String, Object>> logAnswers = new LinkedHashMap<>();
     }
 
     public static synchronized SyncResult run(SailPointContext ctx, String trigger) {
@@ -142,25 +139,50 @@ public final class LoggerSync {
         // Answer the cluster-wide log search, if one is running. No host can
         // read another's disk, so each one looks in its own file and publishes
         // what it found; the page merges them.
+        // One answer per person with a live query. Searching is reading, so it
+        // belongs to whoever asked - two people looking for different things at
+        // once used to overwrite each other, and both saw whoever went last.
         try {
-            if (LoggerConfigStore.logRequestActive(ctx)
-                    && LoggerConfigStore.logTargets(ctx, r.host)) {
-                String mode = LoggerConfigStore.logMode(ctx);
-                LogTail.Answer a = "tail".equals(mode)
-                        ? LogTail.tailLines(LoggerConfigStore.logLines(ctx))
-                        : LogTail.search(LoggerConfigStore.logQuery(ctx));
-                r.logMatches = a.lines;
-                r.logError = a.error == null ? "" : a.error;
-                r.logAnsweredAt = System.currentTimeMillis();
-                List<String> files = HostFacts.logFilePaths();
-                r.logPath = files.isEmpty() ? "" : files.get(0);
+            Map<String, Map<String, String>> queries = LoggerConfigStore.activeQueries(ctx);
+            List<String> files = HostFacts.logFilePaths();
+            String path = files.isEmpty() ? "" : files.get(0);
+            long answeredAt = System.currentTimeMillis();
+
+            for (Map.Entry<String, Map<String, String>> e : queries.entrySet()) {
+                Map<String, String> q = e.getValue();
+                if (!LoggerConfigStore.queryTargets(q, r.host)) continue;
+
+                Map<String, Object> answer = new LinkedHashMap<>();
+                try {
+                    String qmode = q.get(LoggerConfigStore.Q_MODE);
+                    LogTail.Answer a;
+                    if ("download".equals(qmode)) {
+                        // Whole lines, nothing clipped: this one is going into a
+                        // file rather than onto a page.
+                        int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
+                        a = LogTail.tailBytes(Math.max(1, mb) * 1024);
+                    } else if ("tail".equals(qmode)) {
+                        a = LogTail.tailLines(LoggerConfigStore.asInt(
+                                q.get(LoggerConfigStore.Q_LINES), 40));
+                    } else {
+                        a = LogTail.search(q.get(LoggerConfigStore.Q_TEXT));
+                    }
+                    answer.put(LoggerConfigStore.AN_MATCHES, new ArrayList<String>(a.lines));
+                    answer.put(LoggerConfigStore.AN_ERROR, a.error == null ? "" : a.error);
+                } catch (Throwable t) {
+                    // Per query, not per tick: one person's bad pattern must not
+                    // stop everyone else's search from being answered.
+                    LOG.warn("[TurnOnLoggers] log read failed on " + r.host
+                            + " for " + e.getKey() + ": " + t);
+                    answer.put(LoggerConfigStore.AN_MATCHES, new ArrayList<String>());
+                    answer.put(LoggerConfigStore.AN_ERROR, String.valueOf(t));
+                }
+                answer.put(LoggerConfigStore.AN_ANSWERED, String.valueOf(answeredAt));
+                answer.put(LoggerConfigStore.AN_PATH, path);
+                r.logAnswers.put(e.getKey(), answer);
             }
         } catch (Throwable t) {
-            LOG.warn("[TurnOnLoggers] log search failed on " + r.host + ": " + t);
-            // Say so rather than staying silent: a host that never answers looks
-            // like a host that is still thinking, and it would spin for ever.
-            r.logError = String.valueOf(t);
-            r.logAnsweredAt = System.currentTimeMillis();
+            LOG.warn("[TurnOnLoggers] could not read the log requests on " + r.host + ": " + t);
         }
 
         writeStatusQuietly(ctx, r, trigger);
@@ -179,7 +201,7 @@ public final class LoggerSync {
     private static void writeStatusQuietly(SailPointContext ctx, SyncResult r, String trigger) {
         try {
             LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors,
-                    r.lastClear, r.logMatches, r.logAnsweredAt, r.logPath, r.logError);
+                    r.lastClear, r.logAnswers);
         } catch (Throwable t) {
             // Status is diagnostics. Failing to publish it must never undo a
             // successful apply.
@@ -193,7 +215,7 @@ public final class LoggerSync {
      * Format: comma-separated {@code logger=LEVEL}, with an optional
      * {@code @host} suffix to restrict an item to one host, e.g.
      *
-     *   sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02
+     *   sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@the-host-name
      *
      * The REST layer uses this to list these alongside the UI-managed
      * overrides, so the page shows one combined list of everything that is on

@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.45.0"
+        version="2.46.0"
         minSystemVersion="8.3">
 
   <!--
@@ -158,11 +158,29 @@
                      label="Show the icon in the IdentityIQ header"
                      helpText="Whether to draw a Logger Manager icon in IdentityIQ's top-right navigation, so the page can be opened from anywhere in the product instead of through gear icon -&gt; Plugins. This is the second of two gates and the only one you can reach from here: IdentityIQ itself will not send the icon's script to anyone who does not hold the ViewLoggerManagerIcon right, which ships in import/install/ and is therefore imported when the plugin is installed - but it is granted to nobody, so outside SystemAdministrator nobody sees an icon until you add that right to a capability. Beyond that right, the icon is drawn only for users who also pass the Required capability check above, so nobody is shown a link to a page that will refuse them. Turn this off to remove the icon for everyone without touching who holds the right."/>
 
+            <Setting name="maxLogSearches"
+                     dataType="int"
+                     defaultValue="50"
+                     label="Concurrent log searches"
+                     helpText="How many people may have a log search running at the same time. Searches are per person - yours never shows anyone else theirs, and theirs never replaces yours - so this is not about correctness but about load: every live search costs each host one read of its own log per sync tick, and one answer stored in its status record. Measured on a twenty-one host cluster, twenty concurrent searches left the page answering in about a quarter of a second, because each person is only ever sent their own results. Set to 0 to lift the limit entirely."/>
+
+            <Setting name="truncatedDownloadMb"
+                     dataType="int"
+                     defaultValue="2"
+                     label="Truncated download size (MB)"
+                     helpText="How much of a log to fetch when you download it from a host other than the one serving your page. No host can read another host's disk - that is what lets this plugin work across Windows, Linux and containers with no shared filesystem - so a remote host has to publish what it read through the database, and that is worth keeping bounded. This is the end of the file, which is the part anyone investigating wants. The host serving your page is not affected by this: its own file streams straight from disk, governed by Full download limit instead."/>
+
+            <Setting name="fullDownloadMaxMb"
+                     dataType="int"
+                     defaultValue="0"
+                     label="Full download limit (MB)"
+                     helpText="A ceiling on what this page will stream from the host serving it. Ships as 0, meaning no ceiling: Download full log sends the whole file, however large. Set a number and anything past it sends the LAST that many megabytes instead, with the button saying so rather than quietly handing over part of a file. Either way the file is streamed in 64 KB pieces and never read into memory, so size costs the person a slow download rather than costing IdentityIQ its heap - a ceiling is about not starting a five gigabyte transfer by accident, not about safety. This does not affect other hosts: they cannot stream their own files at all and are governed by Truncated download size."/>
+
             <Setting name="permanentLoggers"
                      dataType="string"
                      defaultValue=""
                      label="Permanent loggers (never expire)"
-                     helpText="NOT the normal way to turn a logger on. For day-to-day use, open the Logger Manager page (gear icon -> Plugins -> click 'Logger Manager', or go straight to plugins/pluginPage.jsf?pn=TurnOnLoggers) and use the 'Turn on a logger' form there - it has a logger picker, per-host targeting and an expiry. This field is the exception: loggers listed here have NO expiry, so they stay on until you edit this box. Use it only for a logger you want on indefinitely. They still appear in the Logger Manager page's table marked 'from settings', so that page remains a single list of everything that is on. Format: comma-separated logger=LEVEL, with an optional @host suffix to restrict one item to a single host. Example: sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02"/>
+                     helpText="NOT the normal way to turn a logger on. For day-to-day use, open the Logger Manager page (gear icon -> Plugins -> click 'Logger Manager', or go straight to plugins/pluginPage.jsf?pn=TurnOnLoggers) and use the 'Turn on a logger' form there - it has a logger picker, per-host targeting and an expiry. This field is the exception: loggers listed here have NO expiry, so they stay on until you edit this box. Use it only for a logger you want on indefinitely. They still appear in the Logger Manager page's table marked 'from settings', so that page remains a single list of everything that is on. Format: comma-separated logger=LEVEL, with an optional @host suffix to restrict one item to a single host. Example: sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@the-host-name"/>
           </List>
         </value>
       </entry>

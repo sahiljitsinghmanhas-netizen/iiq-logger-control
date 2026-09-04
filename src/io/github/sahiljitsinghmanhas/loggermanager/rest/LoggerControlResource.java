@@ -82,13 +82,13 @@ public class LoggerControlResource extends BasePluginResource {
     @GET
     @Path("state")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response state(@QueryParam("logs") @DefaultValue("") String logs) {
+    public Response state() {
         try {
             Identity user = requireUser();
             if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
             String denied = capabilityDenial(user);
             if (denied != null) return error(Response.Status.FORBIDDEN, denied);
-            return json(Response.Status.OK, buildState(user, truthy(logs)));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] state failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -206,7 +206,7 @@ public class LoggerControlResource extends BasePluginResource {
                     Log4jAgent.display(normalized), level.toUpperCase(Locale.ROOT),
                     hosts, expires, note);
             LoggerSync.run(ctx, "rest:add");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] addEntry failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -263,7 +263,7 @@ public class LoggerControlResource extends BasePluginResource {
                     LoggerConfigStore.asLong(target.get(LoggerConfigStore.E_EXPIRES), 0L),
                     String.valueOf(target.get(LoggerConfigStore.E_NOTE)));
             LoggerSync.run(ctx, "rest:update");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] updateEntry failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -297,7 +297,7 @@ public class LoggerControlResource extends BasePluginResource {
                     String.valueOf(gone.get(LoggerConfigStore.E_HOSTS)), 0L,
                     String.valueOf(gone.get(LoggerConfigStore.E_NOTE)));
             LoggerSync.run(ctx, "rest:delete");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] deleteEntry failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -337,20 +337,20 @@ public class LoggerControlResource extends BasePluginResource {
                 if (removed == 0) {
                     // Nothing to do is not an error, and re-saving would bump
                     // the revision and send every host chasing a no-op.
-                    return json(Response.Status.OK, buildState(user, true));
+                    return json(Response.Status.OK, buildState(user));
                 }
                 LoggerConfigStore.saveEntries(ctx, keep, user.getName());
                 AuditWriter.log(ctx, user.getName(), "removed expired overrides",
                         "(" + removed + " expired)", null, "*", 0L, null);
                 LoggerSync.run(ctx, "rest:clearExpired");
-                return json(Response.Status.OK, buildState(user, true));
+                return json(Response.Status.OK, buildState(user));
             }
 
             LoggerConfigStore.saveEntries(ctx, new ArrayList<Map<String, String>>(), user.getName());
             AuditWriter.log(ctx, user.getName(), "turned everything off",
                     "(all overrides)", null, "*", 0L, null);
             LoggerSync.run(ctx, "rest:clear");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] clearAll failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -372,7 +372,7 @@ public class LoggerControlResource extends BasePluginResource {
             LoggerSync.run(ctx, "rest:sync");
             AuditWriter.log(ctx, user.getName(), "synced", HostFacts.hostName(),
                     null, HostFacts.hostName(), 0L, null);
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] syncNow failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -416,7 +416,7 @@ public class LoggerControlResource extends BasePluginResource {
                     (target == null || target.trim().isEmpty()) ? "(loggers left over)" : target,
                     null, "*", 0L, null);
             LoggerSync.run(ctx, "rest:cleanup");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] cleanupRuntime failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -439,7 +439,7 @@ public class LoggerControlResource extends BasePluginResource {
             }
             LoggerConfigStore.deleteStatus(getContext(), host);
             AuditWriter.log(getContext(), user.getName(), "forgot host", host, null, host, 0L, null);
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] forgetHost failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -487,7 +487,7 @@ public class LoggerControlResource extends BasePluginResource {
                 AuditWriter.log(ctx, user.getName(), "cleared orphaned host records",
                         String.join(", ", gone), null, String.join(", ", gone), 0L, null);
             }
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] forgetOrphans failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -543,7 +543,7 @@ public class LoggerControlResource extends BasePluginResource {
             CollectionStore.add(ctx, name, str(body, "description"), loggers, user.getName());
             AuditWriter.log(ctx, user.getName(), "saved collection", name,
                     null, null, 0L, String.valueOf(loggers.keySet()));
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] saveCollection failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -634,7 +634,7 @@ public class LoggerControlResource extends BasePluginResource {
             AuditWriter.log(ctx, user.getName(), "edited collection",
                     updated.get(CollectionStore.C_NAME), null, null, 0L,
                     updated.get(CollectionStore.C_LOGGERS));
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] updateCollection failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -695,7 +695,7 @@ public class LoggerControlResource extends BasePluginResource {
                     coll.get(CollectionStore.C_NAME), null, hosts, 0L,
                     String.valueOf(applied) + (refused.isEmpty() ? "" : " refused=" + refused));
             LoggerSync.run(ctx, "rest:collection");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] applyCollection failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -718,7 +718,7 @@ public class LoggerControlResource extends BasePluginResource {
             CollectionStore.remove(ctx, id);
             AuditWriter.log(ctx, user.getName(), "deleted collection",
                     coll.get(CollectionStore.C_NAME), null, null, 0L, null);
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] deleteCollection failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -821,6 +821,100 @@ public class LoggerControlResource extends BasePluginResource {
         }
     }
 
+    /**
+     * Stream this host's whole log file to the browser as a download.
+     *
+     * Only this host's own file, and only a file its own log4j2 configuration
+     * already writes to - the same rule the tail follows. There is no path
+     * parameter to point somewhere else, and asking for another host is a
+     * refusal rather than an attempt, because no host can read another's disk:
+     * that is the whole reason the rest of this plugin publishes findings
+     * through the database instead.
+     *
+     * Streamed rather than read into memory. These files reach hundreds of
+     * megabytes, and this runs inside IdentityIQ's own JVM.
+     */
+    @GET
+    @Path("logfile")
+    public Response logFile(@QueryParam("host") @DefaultValue("") String host,
+                            @QueryParam("index") @DefaultValue("0") int index) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            if (!PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true)) {
+                return error(Response.Status.FORBIDDEN,
+                        "Reading log files from this page is switched off in the plugin settings.");
+            }
+
+            String me = HostFacts.hostName();
+            if (host != null && !host.trim().isEmpty() && !host.trim().equals(me)) {
+                return error(Response.Status.BAD_REQUEST,
+                        "Only " + me + " can stream its own log file, and this request reached "
+                        + me + ". No host can read another host's disk - open " + host.trim()
+                        + " from its own page, or save what it has already reported.");
+            }
+
+            final List<String> files = HostFacts.logFilePaths();
+            if (files.isEmpty()) {
+                return error(Response.Status.NOT_FOUND,
+                        "This host's log4j2 configuration does not name a file to read.");
+            }
+            if (index < 0 || index >= files.size()) {
+                return error(Response.Status.BAD_REQUEST,
+                        "There is no log file " + index + " on this host.");
+            }
+
+            final java.io.File f = new java.io.File(files.get(index));
+            if (!f.isFile() || !f.canRead()) {
+                return error(Response.Status.NOT_FOUND,
+                        "Cannot read " + f.getPath() + " from this host.");
+            }
+
+            // A five gigabyte log is not something anyone means to start
+            // downloading. Past the ceiling the end of the file is sent instead,
+            // which is the part somebody investigating wants anyway, and the
+            // button says so rather than the download quietly being partial.
+            int capMb = PluginSettings.getInt(ctx, PluginSettings.S_DL_FULL_MB, 0);
+            final long total = f.length();
+            final long cap = capMb <= 0 ? total : (long) capMb * 1024L * 1024L;
+            final long from = total > cap ? total - cap : 0L;
+            final long sending = total - from;
+
+            AuditWriter.log(ctx, user.getName(), "downloaded log file", f.getName(),
+                    null, me, 0L, sending + " of " + total + " bytes");
+
+            javax.ws.rs.core.StreamingOutput body = new javax.ws.rs.core.StreamingOutput() {
+                public void write(java.io.OutputStream out) throws java.io.IOException {
+                    // Streamed in 64 KB pieces, never held whole: this runs
+                    // inside IdentityIQ's own JVM and the file can be enormous.
+                    java.io.RandomAccessFile in = new java.io.RandomAccessFile(f, "r");
+                    try {
+                        if (from > 0) in.seek(from);
+                        byte[] buf = new byte[64 * 1024];
+                        int n;
+                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                        out.flush();
+                    } finally {
+                        try { in.close(); } catch (java.io.IOException ignored) { }
+                    }
+                }
+            };
+
+            String name = (from > 0 ? me + "-last-" + capMb + "mb-" : me + "-") + f.getName();
+            return Response.ok(body, MediaType.APPLICATION_OCTET_STREAM)
+                    .header("Content-Disposition", "attachment; filename=\"" + name + "\"")
+                    .header("Content-Length", String.valueOf(sending))
+                    .build();
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] logFile failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     @GET
     @Path("logtail")
     @Produces(MediaType.APPLICATION_JSON)
@@ -896,7 +990,7 @@ public class LoggerControlResource extends BasePluginResource {
                 lines = 40;
             }
             String host = str(body, "host");
-            LoggerConfigStore.setLogQuery(ctx, text, mode, lines, host, user.getName());
+            LoggerConfigStore.setLogQuery(ctx, user.getName(), text, mode, lines, host);
             if ("tail".equals(mode)) {
                 AuditWriter.log(ctx, user.getName(), "read logs",
                         "last " + lines + " lines", null,
@@ -906,7 +1000,7 @@ public class LoggerControlResource extends BasePluginResource {
                         null, "*", 0L, null);
             }
             LoggerSync.run(ctx, "rest:logquery");
-            return json(Response.Status.OK, buildState(user, true));
+            return json(Response.Status.OK, buildState(user));
         } catch (Throwable t) {
             LOG.error("[TurnOnLoggers] logQuery failed", t);
             return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
@@ -918,14 +1012,6 @@ public class LoggerControlResource extends BasePluginResource {
     // ==================================================================
 
     private Map<String, Object> buildState(Identity user) throws Exception {
-        return buildState(user, false);
-    }
-
-    /**
-     * @param wantLogs whether to include the log lines each host found. Off for
-     *                 the ten-second poll, on when somebody is reading them.
-     */
-    private Map<String, Object> buildState(Identity user, boolean wantLogs) throws Exception {
         SailPointContext ctx = getContext();
 
         // If a release has moved the service executor, the ServiceDefinition
@@ -1046,7 +1132,7 @@ public class LoggerControlResource extends BasePluginResource {
 
         // --- hosts --------------------------------------------------------
         out.put("hosts", buildHosts(servers, statuses, revision, now, thisHost, visible,
-                orphanNames, wantLogs));
+                orphanNames, user.getName()));
         out.put("orphanHosts", orphanNames);
         // Whether those orphans are also in the host table, so the page knows
         // whether it is offering cleanup for records nobody can see, or
@@ -1076,15 +1162,30 @@ public class LoggerControlResource extends BasePluginResource {
         out.put("logFiles", tail ? LogTail.files() : new ArrayList<Object>());
         out.put("logTailKb", PluginSettings.getInt(ctx, PluginSettings.S_LOGTAIL_KB, 64));
         try {
-            out.put("logQuery", LoggerConfigStore.logQuery(ctx));
-            out.put("logQueryAt", String.valueOf(LoggerConfigStore.logQueryAt(ctx)));
-            out.put("logActive", LoggerConfigStore.logRequestActive(ctx));
-            out.put("logMode", LoggerConfigStore.logMode(ctx));
-            out.put("logLines", LoggerConfigStore.logLines(ctx));
+            // Only ever this caller's own request. Two people searching for
+            // different things at once is normal; neither should see the other's.
+            Map<String, String> mine = LoggerConfigStore.queryFor(ctx, user.getName());
+            out.put("logQuery", mine == null ? "" : String.valueOf(mine.get(LoggerConfigStore.Q_TEXT)));
+            out.put("logQueryAt", mine == null ? "0" : String.valueOf(mine.get(LoggerConfigStore.Q_AT)));
+            out.put("logActive", mine != null);
+            out.put("logMode", mine == null ? "search" : String.valueOf(mine.get(LoggerConfigStore.Q_MODE)));
+            out.put("logLines", mine == null ? 40
+                    : LoggerConfigStore.asInt(mine.get(LoggerConfigStore.Q_LINES), 40));
+            out.put("logHost", mine == null ? "" : String.valueOf(mine.get(LoggerConfigStore.Q_HOST)));
+            out.put("truncatedDownloadMb", PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2));
+            out.put("fullDownloadMaxMb", PluginSettings.getInt(ctx, PluginSettings.S_DL_FULL_MB, 0));
+            try {
+                List<String> lf = HostFacts.logFilePaths();
+                java.io.File own = lf.isEmpty() ? null : new java.io.File(lf.get(0));
+                out.put("thisHostLogBytes", own != null && own.isFile() ? own.length() : 0L);
+            } catch (Throwable t) {
+                out.put("thisHostLogBytes", 0L);
+            }
             out.put("logHost", LoggerConfigStore.logHost(ctx));
         } catch (Throwable t) {
             out.put("logQuery", "");
             out.put("logQueryAt", "0");
+            out.put("logHost", "");
             out.put("logActive", false);
             out.put("logMode", "search");
             out.put("logLines", 40);
@@ -1143,7 +1244,7 @@ public class LoggerControlResource extends BasePluginResource {
                                                  String thisHost,
                                                  Set<String> visible,
                                                  List<String> orphanNames,
-                                                 boolean wantLogs) {
+                                                 String forUser) {
         // IdentityIQ's Server list is the source of truth for which hosts
         // exist: its heartbeat creates a Server the moment a JVM starts, and
         // recreates one if you delete it while the JVM is still running. So a
@@ -1195,14 +1296,18 @@ public class LoggerControlResource extends BasePluginResource {
             // The count always travels, because that is what the host chips
             // show and it costs nothing. The lines travel only when the caller
             // asks, which the page does once somebody is actually reading them.
-            Object matches = st.get(LoggerConfigStore.S_LOG_MATCHES);
-            int matchCount = (matches instanceof List) ? ((List<?>) matches).size() : 0;
-            h.put("logMatchCount", matchCount);
-            if (wantLogs) h.put("logMatches", matches);
-            h.put("logAnsweredAt", String.valueOf(
-                    LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LOG_ANSWERED)), 0L)));
-            h.put("logPath", st.get(LoggerConfigStore.S_LOG_PATH));
-            h.put("logError", st.get(LoggerConfigStore.S_LOG_ERROR));
+            // Pull this caller's answer out of the per-user map and present it
+            // in the shape the page has always read. No gating any more: the
+            // only lines here are ones this person asked for.
+            Map<String, Object> answer = answerFor(st, forUser);
+            Object matches = answer == null ? null : answer.get(LoggerConfigStore.AN_MATCHES);
+            h.put("logMatchCount", (matches instanceof List) ? ((List<?>) matches).size() : 0);
+            h.put("logMatches", matches);
+            h.put("logAnsweredAt", answer == null ? "0"
+                    : String.valueOf(LoggerConfigStore.asLong(
+                            String.valueOf(answer.get(LoggerConfigStore.AN_ANSWERED)), 0L)));
+            h.put("logPath", answer == null ? "" : answer.get(LoggerConfigStore.AN_PATH));
+            h.put("logError", answer == null ? "" : answer.get(LoggerConfigStore.AN_ERROR));
             h.put("tickError", st.get(LoggerConfigStore.S_TICK_ERROR));
             h.put("tickErrorAt", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_TICK_ERROR_AT)), 0L)));
@@ -1294,6 +1399,21 @@ public class LoggerControlResource extends BasePluginResource {
             }
             if (changed) h.put("liveLoggers", copy);
         }
+    }
+
+    /** One user's answer out of a host status record, or null. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> answerFor(Map<String, Object> status, String user) {
+        if (status == null || user == null) return null;
+        Object raw = status.get(LoggerConfigStore.S_LOG_ANSWERS);
+        if (!(raw instanceof Map)) return null;
+        Object mine = ((Map<?, ?>) raw).get(user);
+        if (!(mine instanceof Map)) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) mine).entrySet()) {
+            out.put(String.valueOf(e.getKey()), e.getValue());
+        }
+        return out;
     }
 
     private Map<String, Object> hostRow(Map<String, Map<String, Object>> hosts, String name) {

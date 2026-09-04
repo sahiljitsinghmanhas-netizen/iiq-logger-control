@@ -356,6 +356,9 @@ the next read; no restart.
 | `permanentLoggers` | *(blank)* | Loggers enabled from the settings page, with no expiry. |
 | `showLogFiles` | `true` | Whether the page can show the end of this host's log files. |
 | `showNavIcon` | `true` | Whether to draw the header icon. Gated by the `ViewLoggerManagerIcon` right as well. |
+| `maxLogSearches` | `50` | How many people may search at once. `0` for no limit. |
+| `truncatedDownloadMb` | `2` | How much of its log a *remote* host sends when you download it. |
+| `fullDownloadMaxMb` | `0` | Ceiling on streaming the serving host's own log. `0` means no ceiling. |
 | `logTailKb` | `64` | How much of the end to read. Capped at 512 regardless. |
 | `hostsFromServersOnly` | `true` | Whether IdentityIQ's `Server` list is the only source of truth for which hosts exist. |
 
@@ -406,6 +409,39 @@ second refusal now says so.
 sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02
 ```
 
+## Reading logs
+
+Every host reads its own log file and reports what it found. No host reads
+another's disk — that is what lets this work across Windows, Linux and
+containers with nothing shared between them — so a remote host publishes its
+findings through the database and the page collects them.
+
+**Searches belong to the person who ran them.** Yours never shows you anyone
+else's, and starting one never disturbs theirs. Up to `maxLogSearches` people
+can be searching at once, each with their own results and their own fifteen
+minute expiry. Overrides are the opposite and deliberately so: turning a logger
+on changes that JVM for everyone on it, so those are shared and carry the name
+of whoever set them.
+
+> Before 2.46.0 there was a single search for the whole deployment. Two people
+> searching overwrote each other and both saw whichever ran last. If you are
+> upgrading from earlier, that is fixed.
+
+### Downloading
+
+| Where | Button | What arrives |
+|---|---|---|
+| The host serving your page | **Download full log** | The whole file, streamed from disk in 64 KB pieces. Never read into memory, so size costs a slow download and nothing else. Set `fullDownloadMaxMb` to put a ceiling on it, after which the button says `Download last N MB` rather than claiming to be full. |
+| Any other host | **Download truncated log (last 2MB)** | The end of that host's file, `truncatedDownloadMb` worth. It answers on its next sync and the download starts by itself, then the request is stopped so those megabytes are not carried on every poll. |
+
+### A window of its own
+
+**Open in window** beside any host opens the log viewer on its own, scoped to
+that host — resizable, and as many at once as you like, which is how you compare
+two hosts or the same host before and after a change. `Ctrl+F` works because it
+is ordinary page text. That window also has a **wrap** toggle and a **highlight**
+box; double-click any word in the log to highlight every occurrence of it.
+
 ## Audit
 
 Every action writes an IIQ audit event under the action `LoggerManagerChange`:
@@ -450,6 +486,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 | `POST` | `/collections/{id}/apply` | Turn a whole collection on |
 | `DELETE` | `/collections/{id}` | Delete a collection |
 | `GET` | `/logtail?index=N&kb=K` | The end of one of this host's log files |
+| `GET` | `/logfile?host=H` | Streams that host's log file as a download. Only the host serving the request |
 | `POST` | `/logquery` | Start or stop a cluster-wide log search |
 | `POST` | `/cleanup` | Clear left-over loggers, or one named logger |
 | `GET` | `/history?limit=N&kind=change\|all` | Changes read back from the audit trail |

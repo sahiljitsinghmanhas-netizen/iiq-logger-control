@@ -68,6 +68,7 @@
     <li><a href="#fileclear">Clearing a file-declared logger</a></li>
     <li><a href="#collections">Saved Logger Collections</a></li>
     <li><a href="#logfile">Reading the log</a></li>
+    <li><a href="#multiuser">More than one person at once</a></li>
     <li><a href="#history">History</a></li>
     <li><a href="#levels">Levels and expiry</a></li>
     <li><a href="#hosts">Host Status and propagation</a></li>
@@ -526,6 +527,21 @@ running a search or a tail asks automatically, and if somebody else's search is 
 <em>Show output</em> fetches it. A popped-out window always asks, since reading output is the only
 reason it exists.</p>
 
+<h2 id="multiuser">More than one person at once<a class="top" href="#">top</a></h2>
+
+<p><strong>A search belongs to whoever ran it.</strong> Yours never shows you anyone else's, and
+running one never disturbs theirs. Several people can search for different things at the same
+time, each with their own results and their own fifteen-minute expiry, up to the
+<em>Concurrent log searches</em> setting.</p>
+
+<p><strong>Overrides are the opposite, deliberately.</strong> Turning a logger on changes that
+JVM's log4j2 for everyone on it - that is the entire point of the plugin - so overrides are shared,
+and each one carries the name of whoever set it, why, and when it expires. Saved collections are
+shared for the same reason.</p>
+
+<p>Before 2.46.0 there was one search for the whole deployment: two people searching overwrote each
+other and both saw whichever ran last. If you are upgrading from earlier, that is fixed.</p>
+
 <h2 id="history">History<a class="top" href="#">top</a></h2>
 <figure>
   <img src="img/16-history.png" alt="The History panel expanded, showing recent changes with the revision each one produced" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
@@ -633,7 +649,7 @@ are reported in a single line above it, with a button on the right to delete the
 cannot quietly pile up in a database that no screen can reach.</p>
 
 <figure>
-  <img src="img/17-orphans.png" alt="A notice reading: 1 status record left behind by a host IdentityIQ no longer lists: iiq-app-09, with a Delete orphaned host button on the right" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <img src="img/17-orphans.png" alt="A notice reading that one status record was left behind by a host IdentityIQ no longer lists, naming that host, with a Delete orphaned host button on the right" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
   <figcaption>Deleting removes only this plugin's own record of what those hosts last reported. It
   does not touch IdentityIQ, and it cannot affect anything that is running, since by definition
   none of them are in IIQ's Server list. The action is audited like any other change.</figcaption>
@@ -852,6 +868,22 @@ without disturbing who holds the right.</p>
   <code>ViewLoggerManagerIcon</code> right, which decides whether the icon's script is sent at all,
   and which this setting cannot override in either direction. See
   <a href="#navicon">The header icon</a>.</dd>
+
+  <dt>Concurrent log searches</dt><dd>How many people may have a search running at the same
+  time, 50 by default. Searches belong to whoever ran them - yours never shows you anyone else's -
+  so this is about load rather than correctness: each live search costs every host one read of its
+  own log per sync tick. Measured on a twenty-one host cluster, twenty at once left the page
+  answering in about a quarter of a second. Set to 0 for no limit.</dd>
+
+  <dt>Truncated download size (MB)</dt><dd>How much of its log a host other than the one serving
+  your page sends when you download it, 2 MB by default. Those hosts cannot stream their own files
+  - nothing can read another machine's disk - so they publish the end of the file through the
+  database, which is worth keeping bounded.</dd>
+
+  <dt>Full download limit (MB)</dt><dd>A ceiling on streaming the log of the host serving your
+  page. Ships as 0, meaning no ceiling at all. Set a number and anything past it sends the last
+  that-many megabytes instead, with the button saying so. Either way the file streams in 64 KB
+  pieces and is never held in memory.</dd>
 
   <dt>Take the host list from IIQ only</dt><dd>On by default. The Host Status table shows exactly
   the hosts IdentityIQ lists as <code>Server</code> objects, so retiring a host in IIQ retires it

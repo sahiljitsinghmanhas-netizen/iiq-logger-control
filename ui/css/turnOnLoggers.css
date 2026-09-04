@@ -842,6 +842,44 @@
     border-top: 1px solid #e4e7eb;
 }
 
+/* The per-host controls on a log result: open this host in its own window,
+   and save what it holds. Pushed to the right so the summary line reads first
+   and the buttons sit out of the way of the sentence. */
+.tol-logacts {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+    padding-left: 12px;
+    flex: 0 0 auto;
+}
+.tol-logmeta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Reading controls in a popped-out window. */
+.tol-readbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    background: #f5f7fa;
+    border: 1px solid #e4e7eb;
+    border-radius: 4px;
+}
+.tol-readbar .tol-input { flex: 1 1 280px; max-width: 460px; }
+
+/* Off by default in the page, on in a popped-out window, because the reason to
+   pop out is to read - and a log line that runs off the right edge is the thing
+   people complain about most. */
+.tol-log-wrap { white-space: pre-wrap; word-break: break-word; }
+
+mark.tol-hi {
+    background: #ffe08a;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
 /* The host serving the page, so it is obvious which one answered instantly. */
 .tol-lhost-self .tol-lhost-name { text-decoration: underline; text-underline-offset: 2px; }
 

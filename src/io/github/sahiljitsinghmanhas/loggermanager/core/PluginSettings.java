@@ -32,6 +32,9 @@ public final class PluginSettings {
     public static final String S_LOGTAIL_KB    = "logTailKb";
     public static final String S_SERVERS_ONLY  = "hostsFromServersOnly";
     public static final String S_NAV_ICON      = "showNavIcon";
+    public static final String S_MAX_SEARCHES  = "maxLogSearches";
+    public static final String S_DL_TRUNC_MB   = "truncatedDownloadMb";
+    public static final String S_DL_FULL_MB    = "fullDownloadMaxMb";
 
     private PluginSettings() {
     }

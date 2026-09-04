@@ -137,6 +137,37 @@ public final class LogTail {
      * path, but no filter - for when the search finds nothing and you just want
      * to see what the host is actually writing.
      */
+    /**
+     * The last {@code kb} kilobytes of this host's log, whole lines, untruncated.
+     *
+     * Separate from tailLines because that one is for reading on a page: it
+     * caps at a few hundred lines and clips each one, which is right when the
+     * result is going to be looked at and wrong when it is going to be saved to
+     * a file. This is the download path, so nothing is trimmed except the
+     * amount read.
+     *
+     * Bounded by whatever the caller asks for rather than by MAX_KB, since the
+     * ceiling here comes from a setting the deployment chose and the point is
+     * to allow more than a page-sized read.
+     */
+    public static Answer tailBytes(int kb) {
+        Answer a = new Answer();
+        if (kb <= 0) kb = 64;
+
+        Result r = tail(0, kb, kb);
+        if (r.error != null) {
+            a.error = r.error;
+            return a;
+        }
+        // The first line of a byte-bounded read is almost always a fragment,
+        // because the window opened in the middle of one.
+        int from = r.lines.size() > 1 ? 1 : 0;
+        for (int i = from; i < r.lines.size(); i++) {
+            if (r.lines.get(i) != null) a.lines.add(r.lines.get(i));
+        }
+        return a;
+    }
+
     public static Answer tailLines(int lines) {
         Answer a = new Answer();
         if (lines <= 0) lines = 40;
@@ -158,6 +189,11 @@ public final class LogTail {
     }
 
     public static Result tail(int index, int kb) {
+        return tail(index, kb, MAX_KB);
+    }
+
+    /** @param ceiling the largest read allowed, so a download can exceed MAX_KB. */
+    public static Result tail(int index, int kb, int ceiling) {
         Result r = new Result();
         List<String> paths = HostFacts.logFilePaths();
         if (index < 0 || index >= paths.size()) {
@@ -165,7 +201,7 @@ public final class LogTail {
             return r;
         }
         if (kb <= 0) kb = 64;
-        if (kb > MAX_KB) kb = MAX_KB;
+        if (ceiling > 0 && kb > ceiling) kb = ceiling;
 
         r.path = paths.get(index);
         File f = new File(r.path);

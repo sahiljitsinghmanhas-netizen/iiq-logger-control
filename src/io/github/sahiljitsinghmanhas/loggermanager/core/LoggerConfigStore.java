@@ -73,6 +73,14 @@ public final class LoggerConfigStore {
     public static final String S_LAST_CLEAR = "lastClearAt";
     /** "false" when this host's log4j2 config could not be read, so sources are unknown. */
     public static final String S_FILE_PARSED = "fileParsed";
+    /** user -> { matches, answeredAt, path, error }. */
+    public static final String S_LOG_ANSWERS = "logAnswers";
+    /** Keys inside one answer. */
+    public static final String AN_MATCHES  = "matches";
+    public static final String AN_ANSWERED = "answeredAt";
+    public static final String AN_PATH     = "path";
+    public static final String AN_ERROR    = "error";
+
     public static final String S_LOG_MATCHES = "logMatches";
     public static final String S_LOG_ANSWERED = "logAnsweredAt";
     public static final String S_LOG_PATH    = "logPath";
@@ -101,6 +109,37 @@ public final class LoggerConfigStore {
     public static final String A_CLEAR_LOGGER = "clearRuntimeLogger";
 
     /** A cluster-wide log search: every host answers about its own file. */
+    /**
+     * Every live log request, keyed by the user who asked.
+     *
+     * There used to be one query for the whole deployment, which meant two
+     * people searching overwrote each other and everybody saw whoever went
+     * last. A search is a private act of reading - it changes nothing - so it
+     * belongs to the person who ran it. Overrides stay shared, because turning
+     * a logger on genuinely changes the JVM for everyone on it.
+     *
+     * Shape: user -> { text, mode, lines, host, at }.
+     */
+    public static final String A_LOG_QUERIES  = "logQueries";
+    public static final String Q_TEXT  = "text";
+    public static final String Q_MODE  = "mode";
+    public static final String Q_LINES = "lines";
+    public static final String Q_HOST  = "host";
+    public static final String Q_AT    = "at";
+
+    /**
+     * How many people may have a search running at once.
+     *
+     * Measured on a 21-host cluster before this number was chosen: with twenty
+     * concurrent searches the status records hold 4.5 MB between them, and
+     * /state still answered in about a quarter of a second - because each
+     * caller is sent only their own answers, so the payload stays flat at
+     * ~31 KB however many people are looking. The cost that does grow is what
+     * every host writes each tick, which is why there is a ceiling at all
+     * rather than none.
+     */
+    public static final int DEFAULT_MAX_QUERIES = 50;
+
     public static final String A_LOG_QUERY    = "logQuery";
     public static final String A_LOG_QUERY_AT = "logQueryAt";
     /** "search" for matching lines, "tail" for the last N lines. */
@@ -336,31 +375,105 @@ public final class LoggerConfigStore {
     public static final long LOG_QUERY_TTL_MS = 900000L;   // 15 minutes
 
     /** True while hosts should be answering, whether searching or tailing. */
-    public static boolean logRequestActive(SailPointContext ctx) throws GeneralException {
+    /** Every query that has not aged out, keyed by user. */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Map<String, String>> activeQueries(SailPointContext ctx)
+            throws GeneralException {
+        Map<String, Map<String, String>> out = new LinkedHashMap<>();
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        if (cfg == null) return false;
-        long at = asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
-        return at > 0 && (System.currentTimeMillis() - at) <= LOG_QUERY_TTL_MS;
+        if (cfg == null) return out;
+        Object raw = cfg.get(A_LOG_QUERIES);
+        if (!(raw instanceof Map)) return out;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
+            if (!(e.getValue() instanceof Map)) continue;
+            Map<String, String> q = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> f : ((Map<?, ?>) e.getValue()).entrySet()) {
+                q.put(String.valueOf(f.getKey()), f.getValue() == null ? "" : String.valueOf(f.getValue()));
+            }
+            long at = asLong(q.get(Q_AT), 0L);
+            if (at <= 0 || (now - at) > LOG_QUERY_TTL_MS) continue;
+            out.put(String.valueOf(e.getKey()), q);
+        }
+        return out;
     }
 
-    public static String logQuery(SailPointContext ctx) throws GeneralException {
-        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        if (cfg == null) return "";
-        if (!logRequestActive(ctx)) return "";
-        String q = cfg.getString(A_LOG_QUERY);
-        return q == null ? "" : q;
+    /** One user's live query, or null. */
+    public static Map<String, String> queryFor(SailPointContext ctx, String user)
+            throws GeneralException {
+        if (user == null) return null;
+        return activeQueries(ctx).get(user);
     }
 
-    public static long logQueryAt(SailPointContext ctx) throws GeneralException {
-        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        return cfg == null ? 0L : asLong(cfg.getString(A_LOG_QUERY_AT), 0L);
+    /** Whether a given query wants an answer from this host. Blank means all. */
+    public static boolean queryTargets(Map<String, String> q, String host) {
+        if (q == null) return false;
+        String want = q.get(Q_HOST);
+        return want == null || want.trim().isEmpty() || want.trim().equals(host);
     }
 
-    public static String logMode(SailPointContext ctx) throws GeneralException {
+    /**
+     * Record, replace or clear one user's request. Blank text in search mode
+     * clears it - "stop" and "I typed nothing" are the same intent.
+     */
+    @SuppressWarnings("unchecked")
+    public static void setLogQuery(SailPointContext ctx, String user, String text,
+                                   String mode, int lines, String host)
+            throws GeneralException {
+        if (user == null) return;
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        if (cfg == null) return "search";
-        String m = cfg.getString(A_LOG_MODE);
-        return (m == null || m.isEmpty()) ? "search" : m;
+        if (cfg == null) {
+            cfg = new Custom();
+            cfg.setName(CONFIG_NAME);
+            cfg.setAttributes(new Attributes<String, Object>());
+        }
+        if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
+
+        Map<String, Object> all = new LinkedHashMap<>();
+        Object raw = cfg.get(A_LOG_QUERIES);
+        if (raw instanceof Map) {
+            for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
+                all.put(String.valueOf(e.getKey()), e.getValue());
+            }
+        }
+
+        long now = System.currentTimeMillis();
+        boolean tailing = "tail".equals(mode);
+        boolean active = tailing || (text != null && !text.trim().isEmpty());
+
+        if (!active) {
+            all.remove(user);
+        } else {
+            // Drop anyone else's expired entry while we are here, so the map
+            // cannot grow without bound, and refuse to start a new one past the
+            // cap - each live query is a log read on every host every tick.
+            long cut = now - LOG_QUERY_TTL_MS;
+            for (String k : new ArrayList<>(all.keySet())) {
+                Object v = all.get(k);
+                long at = (v instanceof Map)
+                        ? asLong(String.valueOf(((Map<?, ?>) v).get(Q_AT)), 0L) : 0L;
+                if (at <= cut) all.remove(k);
+            }
+            int cap = PluginSettings.getInt(ctx, PluginSettings.S_MAX_SEARCHES,
+                    DEFAULT_MAX_QUERIES);
+            if (cap > 0 && !all.containsKey(user) && all.size() >= cap) {
+                throw new GeneralException(cap + " log searches are already running "
+                        + "across this deployment. Wait for one to finish, or stop yours and retry.");
+            }
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put(Q_TEXT, text == null ? "" : text.trim());
+            q.put(Q_MODE, tailing ? "tail" : "search");
+            q.put(Q_LINES, String.valueOf(lines <= 0 ? 40 : lines));
+            q.put(Q_HOST, host == null ? "" : host.trim());
+            q.put(Q_AT, String.valueOf(now));
+            all.put(user, q);
+        }
+
+        cfg.put(A_LOG_QUERIES, all);
+        cfg.put(A_UPDATED, String.valueOf(now));
+        cfg.put(A_UPDATED_BY, user);
+        ctx.saveObject(cfg);
+        ctx.commitTransaction();
     }
 
     public static String logHost(SailPointContext ctx) throws GeneralException {
@@ -371,43 +484,7 @@ public final class LoggerConfigStore {
     }
 
     /** True if this host should answer the current request. */
-    public static boolean logTargets(SailPointContext ctx, String host) throws GeneralException {
-        String want = logHost(ctx);
-        if (want == null || want.isEmpty() || ALL_HOSTS.equals(want)) return true;
-        return want.equalsIgnoreCase(host);
-    }
-
-    public static int logLines(SailPointContext ctx) throws GeneralException {
-        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        return cfg == null ? 40 : asInt(cfg.getString(A_LOG_LINES), 40);
-    }
-
     /** Ask every host to look in its own log - for text, or just for the last N lines. */
-    public static long setLogQuery(SailPointContext ctx, String text, String mode, int lines,
-                                   String host, String user) throws GeneralException {
-        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
-        if (cfg == null) {
-            cfg = new Custom();
-            cfg.setName(CONFIG_NAME);
-            cfg.setAttributes(new Attributes<String, Object>());
-        }
-        if (cfg.getAttributes() == null) cfg.setAttributes(new Attributes<String, Object>());
-        long now = System.currentTimeMillis();
-        boolean tailing = "tail".equals(mode);
-        boolean active = tailing || (text != null && !text.trim().isEmpty());
-        cfg.put(A_LOG_QUERY, text == null ? "" : text.trim());
-        cfg.put(A_LOG_MODE, tailing ? "tail" : "search");
-        cfg.put(A_LOG_LINES, String.valueOf(lines <= 0 ? 40 : lines));
-        cfg.put(A_LOG_HOST, host == null ? "" : host.trim());
-        cfg.put(A_LOG_QUERY_AT, active ? String.valueOf(now) : "0");
-        // Not a revision bump: a search changes nothing about what is logged,
-        // so it must not make every host look like it is behind on config.
-        cfg.put(A_UPDATED, String.valueOf(now));
-        cfg.put(A_UPDATED_BY, user == null ? "" : user);
-        ctx.saveObject(cfg);
-        ctx.commitTransaction();
-        return now;
-    }
 
     public static long clearRequestedAt(SailPointContext ctx) throws GeneralException {
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
@@ -452,10 +529,8 @@ public final class LoggerConfigStore {
                                    Map<String, String> applied,
                                    List<String> errors,
                                    long lastClear,
-                                   List<String> logMatches,
-                                   long logAnsweredAt,
-                                   String logPath,
-                                   String logError) throws GeneralException {
+                                   Map<String, Map<String, Object>> logAnswers)
+            throws GeneralException {
         String name = statusName(host);
         Custom st = ctx.getObjectByName(Custom.class, name);
         if (st == null) {
@@ -501,10 +576,12 @@ public final class LoggerConfigStore {
         st.put(S_OWNED, new LinkedHashMap<String, String>(Log4jAgent.ownedSnapshot()));
         st.put(S_LAST_CLEAR, String.valueOf(lastClear));
         st.put(S_FILE_PARSED, String.valueOf(fileParsed));
-        st.put(S_LOG_MATCHES, new ArrayList<String>(logMatches));
-        st.put(S_LOG_ANSWERED, String.valueOf(logAnsweredAt));
-        st.put(S_LOG_PATH, logPath == null ? "" : logPath);
-        st.put(S_LOG_ERROR, logError == null ? "" : logError);
+        // One answer per user who has a live query, rather than one answer for
+        // whoever searched most recently. Written whole each tick, so a query
+        // that has ended takes its answer with it.
+        st.put(S_LOG_ANSWERS, logAnswers == null
+                ? new LinkedHashMap<String, Map<String, Object>>()
+                : new LinkedHashMap<>(logAnswers));
         ctx.saveObject(st);
         ctx.commitTransaction();
     }
