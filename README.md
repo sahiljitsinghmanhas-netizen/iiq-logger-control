@@ -406,7 +406,7 @@ second refusal now says so.
 `@host` suffix to restrict one item to a single host:
 
 ```
-sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@iiq-app-02
+sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@the-host-name
 ```
 
 ## Reading logs

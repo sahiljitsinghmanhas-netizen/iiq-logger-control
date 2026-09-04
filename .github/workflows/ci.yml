@@ -92,6 +92,17 @@ jobs:
       # These have all drifted at least once. The help page shipped images that
       # were a release behind the README, and a section was added without a
       # table-of-contents entry.
+      # A hostname invented for the screenshot cluster is not a secret, but it
+      # is a name no customer should ever read in their own settings page. Two
+      # of them reached shipped help text and the README before anyone noticed.
+      - name: No staged demo hostnames in shipped text
+        run: |
+          if grep -rInE 'iiq-app-[0-9]|iiq-server-?[0-9]'                --exclude-dir=.git --exclude-dir=.github --exclude-dir=tools                --exclude='*.png' --exclude='*.mp4' --exclude='*.zip' .; then
+            echo "a hostname from the demo cluster is in text that ships"
+            exit 1
+          fi
+          echo "clean"
+
       - name: Documentation references resolve
         run: |
           fail=0
