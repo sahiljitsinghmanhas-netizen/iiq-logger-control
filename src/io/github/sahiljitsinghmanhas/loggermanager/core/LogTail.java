@@ -40,7 +40,7 @@ public final class LogTail {
     /** Matching lines kept per host. Enough to see a pattern, small enough to store. */
     public static final int SEARCH_MAX_LINES = 40;
     /** Ceiling on a raw tail, whatever the caller asks for - it travels through the database. */
-    public static final int TAIL_MAX_LINES = 100;
+    public static final int TAIL_MAX_LINES = 300;
     /** Long lines are truncated - a stack trace line can be enormous. */
     public static final int SEARCH_MAX_CHARS = 400;
 

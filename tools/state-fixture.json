@@ -138,7 +138,9 @@
         }
       ],
       "fileParsed": true,
-      "isThisHost": true
+      "isThisHost": true,
+      "logMatchCount": 12,
+      "logAnsweredAt": null
     },
     {
       "name": "iiq-app-01",

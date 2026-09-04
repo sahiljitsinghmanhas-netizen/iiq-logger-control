@@ -158,7 +158,7 @@
     }
 
     function load(quiet) {
-        return api('GET', '/state').then(function (data) {
+        return api('GET', '/state' + (logState.want || LOG_ONLY ? '?logs=1' : '')).then(function (data) {
             state = data;
             render();
             if (!quiet) say(null);
@@ -226,13 +226,19 @@
         // reordered twice, and anything targeting them by position - the
         // screenshot tool, a stylesheet, a bookmarklet - silently pointed at
         // the wrong one each time.
-        [[addForm(), 'tol-sec-form'],
-         [collectionsSection(), 'tol-sec-collections'],
-         [overridesSection(), 'tol-sec-overrides'],
-         [liveLoggersSection(), 'tol-sec-live'],
-         [hostsSection(), 'tol-sec-hosts'],
-         [logsSection(), 'tol-sec-logs'],
-         [historySection(), 'tol-sec-history']].forEach(function (pair) {
+        // A popped-out window is only there to read logs. Everything else would
+        // be a second copy of controls that change shared state, which is a
+        // good way for two windows to fight over the same override.
+        var sections = LOG_ONLY
+            ? [[logsSection(), 'tol-sec-logs']]
+            : [[addForm(), 'tol-sec-form'],
+               [collectionsSection(), 'tol-sec-collections'],
+               [overridesSection(), 'tol-sec-overrides'],
+               [liveLoggersSection(), 'tol-sec-live'],
+               [hostsSection(), 'tol-sec-hosts'],
+               [logsSection(), 'tol-sec-logs'],
+               [historySection(), 'tol-sec-history']];
+        sections.forEach(function (pair) {
             if (!pair[0]) return;
             pair[0].id = pair[1];
             root.appendChild(pair[0]);
@@ -1852,7 +1858,20 @@
     // way the log and history panels keep their state.
     var collEdit = null;
 
-    var logState = { lines: 40, text: '', off: {} };
+    // want: whether this page is asking the server for the log lines themselves.
+    // Off by default. The host chips run off logMatchCount, which always
+    // travels; the lines are the expensive part and are fetched only once
+    // somebody is actually reading them. See the comment on logMatchCount in
+    // LoggerControlResource.
+    var logState = { lines: 40, text: '', off: {}, want: false };
+
+    // A popped-out window shows the log viewer on its own, so several can be
+    // opened side by side. Same page, same script, one section.
+    var LOG_ONLY = (function () {
+        try {
+            return /[?&]tolview=logs(&|$)/.test(window.location.search);
+        } catch (e) { return false; }
+    }());
 
     /**
      * What one host has to say about the request that is currently out.
@@ -1883,7 +1902,10 @@
         if (h.logError) {
             return { key: 'error', count: '!', why: h.logError };
         }
-        var n = (h.logMatches || []).length;
+        // Not logMatches.length: the lines are not on the page unless somebody
+        // asked for them, but the count always is.
+        var n = (typeof h.logMatchCount === 'number')
+            ? h.logMatchCount : (h.logMatches || []).length;
         if (!n) {
             return {
                 key: 'none', count: '0',
@@ -1955,11 +1977,52 @@
             + 'The chips below show what each host found - click one to drop it from the output, '
             + 'click it again to bring it back.'));
 
+        var tools = el('div', 'tol-logtools');
+        var toolCount = 0;
+
+        // The lines are not fetched by default - they are the bulk of this
+        // endpoint and most people on the page are not reading them. If some
+        // host has found something and this page has not asked, offer to.
+        var found = 0;
+        (state.hosts || []).forEach(function (h) {
+            found += (typeof h.logMatchCount === 'number') ? h.logMatchCount : 0;
+        });
+        if (!logState.want && !LOG_ONLY && found) {
+            var show = el('button', 'tol-btn tol-btn-small tol-btn-primary',
+                'Show output (' + found + ' line' + (found === 1 ? '' : 's') + ')');
+            show.title = 'Fetch the lines each host found. Not fetched automatically, because '
+                       + 'they are large and most of the time nobody is reading them.';
+            show.onclick = function () { logState.want = true; load(); };
+            tools.appendChild(show);
+            toolCount++;
+        }
+
+        // A separate window can be resized, and several can be opened side by
+        // side to compare hosts or two different searches. Unique name per
+        // click so a second press opens a second window rather than replacing
+        // the first.
+        if (!LOG_ONLY) {
+            var pop = el('button', 'tol-btn tol-btn-small', 'Open in a new window');
+            pop.title = 'Open the log viewer on its own, resizable, as many as you like';
+            pop.onclick = function () {
+                var url = CTX + '/plugins/pluginPage.jsf?pn=TurnOnLoggers&tolview=logs';
+                var nm = 'tolLogs' + Date.now();
+                window.open(url, nm, 'width=1280,height=860,resizable=yes,scrollbars=yes');
+            };
+            tools.appendChild(pop);
+            toolCount++;
+        }
+
+        // Counted rather than asked of the node: childNodes is a DOM detail
+        // the build's stub DOM does not carry, and the render gate is the
+        // thing that has to be able to run this.
+        if (toolCount) box.appendChild(tools);
+
         // --- raw tail -------------------------------------------------------
         var bar1 = el('div', 'tol-logbar');
         var lineSel = document.createElement('select');
         lineSel.className = 'tol-input tol-log-lines';
-        [20, 40, 100].forEach(function (n) {
+        [20, 40, 100, 300].forEach(function (n) {
             lineSel.appendChild(opt(String(n), n + ' lines', n === logState.lines));
         });
         lineSel.onchange = function () { logState.lines = parseInt(lineSel.value, 10); };
@@ -1967,6 +2030,7 @@
         var tailBtn = el('button', 'tol-btn tol-btn-small', 'Output last');
         tailBtn.title = 'The end of the log, with no filter - no search term needed';
         tailBtn.onclick = function () {
+            logState.want = true;
             mutate(api('POST', '/logquery', { mode: 'tail', lines: logState.lines, text: '' }),
                 'Reading the last ' + logState.lines + ' lines on every host.');
         };
@@ -1991,6 +2055,7 @@
 
         var searchBtn = el('button', 'tol-btn tol-btn-primary tol-btn-small', 'Search all hosts');
         searchBtn.onclick = function () {
+            logState.want = true;
             var text = document.getElementById('tol-log-q').value || '';
             logState.text = text;
             if (!text.trim()) {
@@ -2099,6 +2164,13 @@
             var pre = el('pre', 'tol-log');
             if (st.key === 'error') {
                 pre.appendChild(el('div', 'tol-err-text', h.logError));
+            } else if (!h.logMatches) {
+                // The count says there is something here, but this page has not
+                // asked for the lines. Say so and offer to fetch them, rather
+                // than showing an empty box that looks like a bug.
+                pre.appendChild(document.createTextNode(
+                    st.count + ' line' + (st.count === 1 ? '' : 's') + ' found. '
+                    + 'Press "Show output" above to read them.'));
             } else {
                 (h.logMatches || []).forEach(function (l) {
                     pre.appendChild(document.createTextNode(l + '\n'));

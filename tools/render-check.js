@@ -152,7 +152,19 @@ function run(scenario) {
         return;
     }
     if (hasRoot) {
-        if (rootEl.children.length < 2 || rootEl.textLen() < 500) {
+        if (scenario.logOnly) {
+            // A popped-out window must show the log viewer and nothing else.
+            // Anything more means a second set of controls that change shared
+            // state, in a window the user opened to read output side by side.
+            var ids = sectionIds(rootEl);
+            if (ids.length !== 1 || ids[0] !== 'tol-sec-logs') {
+                failures.push(scenario.name + ': expected only the log viewer, got ['
+                    + ids.join(', ') + ']');
+            } else {
+                print('  ' + scenario.name + ': log viewer only, '
+                    + rootEl.textLen() + ' chars');
+            }
+        } else if (rootEl.children.length < 2 || rootEl.textLen() < 500) {
             var shown = rootEl.text().replace(/\s+/g, ' ').trim();
             failures.push(scenario.name + ': page did not render (children='
                 + rootEl.children.length + ', text=' + rootEl.textLen() + ')'
@@ -169,6 +181,18 @@ function run(scenario) {
             print('  ' + scenario.name + ': banner inserted');
         }
     }
+}
+
+/** The ids of every <section> the page put on the root, in order. */
+function sectionIds(node, out) {
+    out = out || [];
+    if (!node || !node.children) return out;
+    for (var i = 0; i < node.children.length; i++) {
+        var c = node.children[i];
+        if (c && c.tagName === 'SECTION' && c.id) out.push(c.id);
+        sectionIds(c, out);
+    }
+    return out;
 }
 
 /**
@@ -240,6 +264,19 @@ statePaths.forEach(function (sp) {
         location: { pathname: '/identityiq/plugins/pluginPage.jsf', search: '?pn=TurnOnLoggers', hash: '' }
     });
 });
+// The pop-out: same page, same script, ?tolview=logs in the URL.
+stateJson = readFile(statePaths[statePaths.length - 1]);
+run({
+    name: 'popped-out log viewer',
+    hasRoot: true,
+    logOnly: true,
+    location: {
+        pathname: '/identityiq/plugins/pluginPage.jsf',
+        search: '?pn=TurnOnLoggers&tolview=logs',
+        hash: ''
+    }
+});
+
 stateJson = readFile(statePaths[0]);
 run({
     name: 'configure page',

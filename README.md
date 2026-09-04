@@ -437,7 +437,7 @@ capability; mutating calls need an `X-XSRF-TOKEN` header.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/state` | Everything the page renders |
+| `GET` | `/state` | Everything the page renders. Log lines are omitted unless `?logs=1` |
 | `GET` | `/nav` | Whether to draw the header icon for the caller. Always 200 |
 | `POST` | `/entries` | Add or replace an override |
 | `PUT` | `/entries/{id}` | Change level, TTL or hosts |

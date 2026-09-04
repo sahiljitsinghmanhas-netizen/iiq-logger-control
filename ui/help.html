@@ -513,6 +513,19 @@ the next question every time you turn one on.</p>
   handled the request - the others will show nothing.</li>
 </ol>
 
+<p><strong>Reading it in its own window.</strong> <em>Open in a new window</em> puts the log
+viewer on its own, resizable, with nothing else on the page. Press it more than once and you get
+more than one window, which is how you compare two hosts, or the same host before and after a
+change, side by side. Each window polls independently.</p>
+
+<p><strong>Why the output is not always there.</strong> The lines each host found are by far the
+largest thing this page fetches - on a twenty-host cluster they measured ten times the rest of the
+page put together - and most people looking at Logger Manager are not reading them. So the chips
+always show how many lines each host found, and the lines themselves are fetched only once you ask:
+running a search or a tail asks automatically, and if somebody else's search is still running,
+<em>Show output</em> fetches it. A popped-out window always asks, since reading output is the only
+reason it exists.</p>
+
 <h2 id="history">History<a class="top" href="#">top</a></h2>
 <figure>
   <img src="img/16-history.png" alt="The History panel expanded, showing recent changes with the revision each one produced" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
