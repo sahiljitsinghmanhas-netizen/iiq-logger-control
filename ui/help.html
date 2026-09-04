@@ -536,8 +536,8 @@ time, each with their own results and their own fifteen-minute expiry, up to the
 
 <p><strong>Overrides are the opposite, deliberately.</strong> Turning a logger on changes that
 JVM's log4j2 for everyone on it - that is the entire point of the plugin - so overrides are shared,
-and each one carries the name of whoever set it, why, and when it expires. Saved collections are
-shared for the same reason.</p>
+and each one carries the name of whoever set it, why, and when it expires. Saved Logger
+Collections are shared for the same reason.</p>
 
 <p>Before 2.46.0 there was one search for the whole deployment: two people searching overwrote each
 other and both saw whichever ran last. If you are upgrading from earlier, that is fixed.</p>
