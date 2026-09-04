@@ -1970,12 +1970,89 @@
         }
     }
 
-    /** Which host we asked for a file, so the save can fire when it lands. */
+    /**
+     * Fetch this host's whole log and hand it to the browser to save.
+     *
+     * It used to be a plain navigation - set window.location to the endpoint
+     * and let the browser download it. That can never work here. IdentityIQ
+     * puts /plugin/rest/* behind its CSRF filter, and that filter validates
+     * GET requests too, taking the token from the X-XSRF-TOKEN header and
+     * nowhere else. A navigation cannot carry a header, so the request arrived
+     * without a token and IdentityIQ answered with its error page - HTTP 200,
+     * content-type text/html, a stack trace where the log should have been.
+     *
+     * Only IdentityIQ's own report, image and export paths are exempt from
+     * that filter, and the exemption list lives in web.xml, which is not
+     * something a plugin can add itself to and not something worth asking
+     * anyone to edit. So the file is fetched with the header like every other
+     * call this page makes, and saved from memory the same way a truncated
+     * download already is.
+     *
+     * The cost is that the file passes through the browser rather than going
+     * straight to disk. That is what the Full download limit setting is for on
+     * a deployment whose logs run to gigabytes.
+     */
+    function downloadFullLog(host, button) {
+        var url = CTX + '/plugin/rest/TurnOnLoggers/logfile?host=' + encodeURIComponent(host);
+        var label = button ? button.textContent : '';
+        if (button) { button.disabled = true; button.textContent = 'Fetching...'; }
+
+        function done(msg, kind) {
+            if (button) { button.disabled = false; button.textContent = label; }
+            if (msg) say(msg, kind || 'info');
+        }
+
+        var headers = {};
+        var t = xsrf();
+        if (t) headers['X-XSRF-TOKEN'] = t;
+
+        fetch(url, { method: 'GET', credentials: 'same-origin', headers: headers })
+            .then(function (r) {
+                var type = r.headers.get('content-type') || '';
+                // The failure mode worth naming, because it looks like success:
+                // a rejected request still answers 200, just with HTML. Saving
+                // that would put an error page on disk named sailpoint.log.
+                if (!r.ok || type.indexOf('text/html') === 0) {
+                    throw new Error(type.indexOf('text/html') === 0
+                        ? 'IdentityIQ answered with a page rather than the file, which usually '
+                          + 'means the session has expired. Reload and try again.'
+                        : 'the host answered ' + r.status);
+                }
+                var total = Number(r.headers.get('content-length') || 0);
+                if (total && button) {
+                    button.textContent = 'Fetching ' + fmtBytes(total) + '...';
+                }
+                return r.blob();
+            })
+            .then(function (blob) {
+                var link = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = link;
+                a.download = host + '-sailpoint.log';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                // On a timer, not immediately: some browsers have not finished
+                // reading the blob by the time click() returns.
+                window.setTimeout(function () { URL.revokeObjectURL(link); }, 30000);
+                done(host + ' sent ' + fmtBytes(blob.size) + '. Saving.', 'info');
+            })
+            ['catch'](function (e) {
+                done('Could not download ' + host + '\u2019s log: ' + e.message, 'error');
+            });
+    }
+
+    /**
+     * Which host we asked for a file, so the save fires once and only once.
+     *
+     * There used to be a second variable here holding the search a download had
+     * interrupted, so it could be put back afterwards. That is gone, because
+     * nothing is interrupted any more: a download is its own request on the
+     * server now, and pressing the button leaves the log viewer exactly as it
+     * was. Restoring state you should not have disturbed is a worse fix than
+     * not disturbing it.
+     */
     var pendingDownload = null;
-    // What the person was looking at before they asked for a file, so it can be
-    // put back. A download borrows the one request slot this user has; without
-    // this it hands it back empty and their search is simply gone.
-    var downloadInterrupted = null;
 
     /**
      * Save a requested file the moment its host answers, then stop the request.
@@ -1984,32 +2061,45 @@
      * sitting in that host's status record, and until the request ends it would
      * be sent again on every ten-second poll.
      */
-    function checkPendingDownload() {
-        if (!pendingDownload) return;
-        var hosts = state && state.hosts ? state.hosts : [];
-        for (var i = 0; i < hosts.length; i++) {
-            var h = hosts[i];
-            if (h.name !== pendingDownload) continue;
-            var lines = h.logMatches || [];
-            if (!lines.length) return;             // still reading
-            var host = pendingDownload;
-            pendingDownload = null;
-            saveLines(host, lines);
+    /** Bytes a set of lines will occupy once written out, newlines included. */
+    function byteLength(lines) {
+        var n = 0;
+        for (var i = 0; i < lines.length; i++) n += lines[i].length + 1;
+        return n;
+    }
 
-            // Put back whatever they were looking at, rather than clearing the
-            // slot and leaving them staring at nothing.
-            var back = downloadInterrupted;
-            downloadInterrupted = null;
-            if (back && (back.text || back.mode === 'tail')) {
-                say(host + ' sent ' + lines.length + ' lines. Saved, and your search is back.',
-                    'info');
-                api('POST', '/logquery', back)['catch'](function () {});
-            } else {
-                say(host + ' sent ' + lines.length + ' lines. Saved.', 'info');
-                api('POST', '/logquery', { mode: 'search', text: '' })['catch'](function () {});
-            }
+    /**
+     * Save a download once its host has answered.
+     *
+     * Driven by the request on the server rather than by a variable set when
+     * the button was pressed, so a file that lands after the page was reloaded
+     * still saves itself. `saving` guards the gap between saving and the
+     * server confirming the request is cleared, which is a poll or two wide
+     * and would otherwise save the same file twice.
+     */
+    var saving = false;
+    function checkPendingDownload() {
+        var dl = state && state.download;
+        if (!dl || !dl.host || saving) return;
+
+        if (dl.error) {
+            pendingDownload = null;
+            say(dl.host + ' could not read its log: ' + dl.error, 'error');
+            api('POST', '/logdownload', { host: '' })['catch'](function () {});
             return;
         }
+        var lines = dl.lines || [];
+        if (!lines.length) return;                 // still reading
+
+        saving = true;
+        pendingDownload = null;
+        saveLines(dl.host, lines);
+        say(dl.host + ' sent ' + fmtBytes(byteLength(lines)) + '. Saving.', 'info');
+        // Clear the request, not a search: those megabytes would otherwise ride
+        // along on every poll from here on.
+        api('POST', '/logdownload', { host: '' })
+            .then(function () { saving = false; })
+            ['catch'](function () { saving = false; });
     }
 
     /**
@@ -2400,10 +2490,7 @@
                       + 'disk. This is the host serving your page, so there is no size limit beyond '
                       + 'the Full download limit setting and nothing crosses the database.';
                 dl.onclick = (function (name) {
-                    return function () {
-                        window.location = CTX + '/plugin/rest/TurnOnLoggers/logfile?host='
-                            + encodeURIComponent(name);
-                    };
+                    return function () { downloadFullLog(name, this); };
                 })(h.name);
                 acts.appendChild(dl);
             } else {
@@ -2419,15 +2506,18 @@
                 trunc.onclick = (function (name) {
                     return function () {
                         pendingDownload = name;
-                        downloadInterrupted = {
-                            mode: state.logMode || 'search',
-                            text: state.logQuery || '',
-                            lines: state.logLines || logState.lines
-                        };
-                        mutate(api('POST', '/logquery',
-                            { mode: 'download', text: '', host: name }),
-                            'Asking ' + name + ' for the last ' + truncMb + 'MB of its log. It '
-                            + 'answers on its next sync - the download starts on its own.');
+                        // Not mutate(): that repaints the page, and there is
+                        // nothing here to repaint. Asking for a file changes
+                        // nothing about what is on screen.
+                        api('POST', '/logdownload', { host: name })
+                            .then(function () {
+                                say('Asking ' + name + ' for the last ' + truncMb + 'MB of its '
+                                    + 'log. It answers on its next sync - the download starts on '
+                                    + 'its own, and nothing here changes meanwhile.', 'info');
+                            })['catch'](function (e) {
+                                pendingDownload = null;
+                                say('Could not ask ' + name + ' for its log: ' + e.message, 'error');
+                            });
                     };
                 })(h.name);
                 acts.appendChild(trunc);

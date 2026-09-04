@@ -514,6 +514,13 @@ the next question every time you turn one on.</p>
   handled the request - the others will show nothing.</li>
 </ol>
 
+<p><strong>Downloading does not disturb what you are reading.</strong> A download is its own
+request, kept apart from your search: pressing either download button leaves the log viewer exactly
+as it was, leaves your search running, and does not count towards the concurrent-search limit. The
+truncated download is always the size in the settings - it has nothing to do with how many lines
+you have on screen. Before 2.48.0 a download borrowed the asker's search slot, which emptied their
+viewer until the file arrived and made a person showing forty lines download forty lines.</p>
+
 <p><strong>Reading it in its own window.</strong> <em>Open in window</em>, beside each host, opens
 that host's output on its own - nothing but the log, filling the window, scrolling inside itself
 and growing when you drag the window edge. The banner, the page title, the host chips and the

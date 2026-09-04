@@ -985,6 +985,50 @@ public class LoggerControlResource extends BasePluginResource {
      * interval. The search stops being answered after fifteen minutes so hosts
      * are not left scanning their logs forever.
      */
+    /**
+     * Ask one host for the end of its log, as a file.
+     *
+     * Separate from logquery on purpose. A download used to be filed as the
+     * asker's search, which emptied their log viewer for as long as it took to
+     * arrive and tied the size of the file to the number of lines they had on
+     * screen. It is its own request now: pressing this does not disturb a
+     * search, anyone else's or your own.
+     *
+     * Passing no host clears the request, which the page does as soon as the
+     * file has been saved - there is no reason to carry those megabytes on
+     * every poll afterwards.
+     */
+    @POST
+    @Path("logdownload")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response logDownload(Map<String, Object> body) {
+        try {
+            Identity user = requireUser();
+            if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
+            String denied = capabilityDenial(user);
+            if (denied != null) return error(Response.Status.FORBIDDEN, denied);
+
+            SailPointContext ctx = getContext();
+            if (!PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true)) {
+                return error(Response.Status.FORBIDDEN,
+                        "Reading log files is switched off in the plugin settings.");
+            }
+            String host = str(body, "host");
+            LoggerConfigStore.setLogDownload(ctx, user.getName(), host);
+            if (host != null && !host.trim().isEmpty()) {
+                int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
+                AuditWriter.log(ctx, user.getName(), "downloaded log",
+                        "last " + mb + "MB", null, host.trim(), 0L, null);
+                LoggerSync.run(ctx, "rest:logdownload");
+            }
+            return json(Response.Status.OK, buildState(user));
+        } catch (Throwable t) {
+            LOG.error("[TurnOnLoggers] logDownload failed", t);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(t.getMessage()));
+        }
+    }
+
     @POST
     @Path("logquery")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -1204,6 +1248,26 @@ public class LoggerControlResource extends BasePluginResource {
                 out.put("thisHostLogBytes", 0L);
             }
             out.put("logHost", LoggerConfigStore.logHost(ctx));
+
+            // A download in flight, and its lines once they land. Only ever
+            // this caller's own, and only the one host that was asked - the
+            // lines are megabytes, so they travel exactly once and the page
+            // clears the request as soon as it has saved them.
+            Map<String, Object> dl = new LinkedHashMap<>();
+            Map<String, String> want = LoggerConfigStore.downloadFor(ctx, user.getName());
+            if (want != null) {
+                String target = String.valueOf(want.get(LoggerConfigStore.Q_HOST));
+                dl.put("host", target);
+                dl.put("askedAt", String.valueOf(want.get(LoggerConfigStore.Q_AT)));
+                Map<String, Object> st = LoggerConfigStore.allStatuses(ctx).get(target);
+                Map<String, Object> ans = answerIn(st, LoggerConfigStore.S_LOG_DL_ANSWERS,
+                        user.getName());
+                Object lines = ans == null ? null : ans.get(LoggerConfigStore.AN_MATCHES);
+                dl.put("ready", lines instanceof List && !((List<?>) lines).isEmpty());
+                dl.put("lines", lines);
+                dl.put("error", ans == null ? "" : ans.get(LoggerConfigStore.AN_ERROR));
+            }
+            out.put("download", dl);
         } catch (Throwable t) {
             out.put("logQuery", "");
             out.put("logQueryAt", "0");
@@ -1426,8 +1490,13 @@ public class LoggerControlResource extends BasePluginResource {
     /** One user's answer out of a host status record, or null. */
     @SuppressWarnings("unchecked")
     private Map<String, Object> answerFor(Map<String, Object> status, String user) {
+        return answerIn(status, LoggerConfigStore.S_LOG_ANSWERS, user);
+    }
+
+    /** One user's answer out of one of the per-user answer maps on a host. */
+    private Map<String, Object> answerIn(Map<String, Object> status, String attribute, String user) {
         if (status == null || user == null) return null;
-        Object raw = status.get(LoggerConfigStore.S_LOG_ANSWERS);
+        Object raw = status.get(attribute);
         if (!(raw instanceof Map)) return null;
         Object mine = ((Map<?, ?>) raw).get(user);
         if (!(mine instanceof Map)) return null;

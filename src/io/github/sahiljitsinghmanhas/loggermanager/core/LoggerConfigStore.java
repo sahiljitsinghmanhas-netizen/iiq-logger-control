@@ -398,6 +398,103 @@ public final class LoggerConfigStore {
         return out;
     }
 
+    /**
+     * Downloads are requests too, but they are not searches.
+     *
+     * A download used to reuse the one request slot a person has, which meant
+     * pressing Download emptied the log viewer - the slot now said "download,
+     * no text", so nothing matched and the output vanished until the file
+     * arrived and the search was put back. It also meant the size of the file
+     * and the number of lines on screen were the same field, so showing forty
+     * lines downloaded forty lines.
+     *
+     * Both of those stop being possible if a download is simply a different
+     * request. It is filed under the same person with this marker appended, so
+     * it inherits the expiry, the answering and the per-user isolation that
+     * already exist, and queryFor() - which looks the person up by their exact
+     * name - never sees it. Nothing a download does can reach a search.
+     */
+    public static final String A_LOG_DOWNLOADS = "logDownloads";
+
+    /** Per-host answers to download requests, keyed by user. */
+    public static final String S_LOG_DL_ANSWERS = "logDownloadAnswers";
+
+    /**
+     * Ask one host for the end of its log. Passing a blank host clears it,
+     * which is what the page does once the file has been saved - those
+     * megabytes should not be carried on every poll afterwards.
+     */
+    @SuppressWarnings("unchecked")
+    public static void setLogDownload(SailPointContext ctx, String user, String host)
+            throws GeneralException {
+        if (user == null) return;
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) {
+            cfg = new Custom();
+            cfg.setName(CONFIG_NAME);
+        }
+        Object raw = cfg.get(A_LOG_DOWNLOADS);
+        Map<String, Object> all = (raw instanceof Map)
+                ? new LinkedHashMap<>((Map<String, Object>) raw)
+                : new LinkedHashMap<String, Object>();
+
+        // Drop anyone else's stale request while we are here, so a person who
+        // closed the tab mid-download does not leave a host reading its log
+        // every tick forever.
+        long cut = System.currentTimeMillis() - LOG_QUERY_TTL_MS;
+        for (String k : new ArrayList<>(all.keySet())) {
+            Object v = all.get(k);
+            long at = (v instanceof Map)
+                    ? asLong(String.valueOf(((Map<?, ?>) v).get(Q_AT)), 0L) : 0L;
+            if (at <= cut) all.remove(k);
+        }
+
+        if (host == null || host.trim().isEmpty()) {
+            all.remove(user);
+        } else {
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put(Q_TEXT, "");
+            q.put(Q_MODE, "download");
+            q.put(Q_LINES, "0");            // deliberately unused: bytes, not lines
+            q.put(Q_HOST, host.trim());
+            q.put(Q_AT, String.valueOf(System.currentTimeMillis()));
+            all.put(user, q);
+        }
+        cfg.put(A_LOG_DOWNLOADS, all);
+        ctx.saveObject(cfg);
+        ctx.commitTransaction();
+    }
+
+    /** Every download request that has not aged out, keyed by user. */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Map<String, String>> activeDownloads(SailPointContext ctx)
+            throws GeneralException {
+        Map<String, Map<String, String>> out = new LinkedHashMap<>();
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return out;
+        Object raw = cfg.get(A_LOG_DOWNLOADS);
+        if (!(raw instanceof Map)) return out;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
+            if (!(e.getValue() instanceof Map)) continue;
+            Map<String, String> q = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> f : ((Map<?, ?>) e.getValue()).entrySet()) {
+                q.put(String.valueOf(f.getKey()), f.getValue() == null ? "" : String.valueOf(f.getValue()));
+            }
+            long at = asLong(q.get(Q_AT), 0L);
+            if (at <= 0 || (now - at) > LOG_QUERY_TTL_MS) continue;
+            out.put(String.valueOf(e.getKey()), q);
+        }
+        return out;
+    }
+
+    /** One user's live download request, or null. */
+    public static Map<String, String> downloadFor(SailPointContext ctx, String user)
+            throws GeneralException {
+        if (user == null) return null;
+        return activeDownloads(ctx).get(user);
+    }
+
     /** One user's live query, or null. */
     public static Map<String, String> queryFor(SailPointContext ctx, String user)
             throws GeneralException {
@@ -443,8 +540,7 @@ public final class LoggerConfigStore {
         // download request was read as "stop", removed before any host saw it,
         // and the page then saved whatever the previous search had left behind.
         boolean tailing = "tail".equals(mode);
-        boolean downloading = "download".equals(mode);
-        boolean active = tailing || downloading || (text != null && !text.trim().isEmpty());
+        boolean active = tailing || (text != null && !text.trim().isEmpty());
 
         if (!active) {
             all.remove(user);
@@ -461,13 +557,18 @@ public final class LoggerConfigStore {
             }
             int cap = PluginSettings.getInt(ctx, PluginSettings.S_MAX_SEARCHES,
                     DEFAULT_MAX_QUERIES);
+            // Only searches are counted, and only searches are in this map:
+            // downloads are kept separately. The limit exists because each live
+            // search costs every host a scan of its log every tick, and letting
+            // people saving files lock everyone else out of searching would be
+            // the opposite of the point.
             if (cap > 0 && !all.containsKey(user) && all.size() >= cap) {
                 throw new GeneralException(cap + " log searches are already running "
                         + "across this deployment. Wait for one to finish, or stop yours and retry.");
             }
             Map<String, String> q = new LinkedHashMap<>();
             q.put(Q_TEXT, text == null ? "" : text.trim());
-            q.put(Q_MODE, tailing ? "tail" : (downloading ? "download" : "search"));
+            q.put(Q_MODE, tailing ? "tail" : "search");
             q.put(Q_LINES, String.valueOf(lines <= 0 ? 40 : lines));
             q.put(Q_HOST, host == null ? "" : host.trim());
             q.put(Q_AT, String.valueOf(now));
@@ -534,7 +635,8 @@ public final class LoggerConfigStore {
                                    Map<String, String> applied,
                                    List<String> errors,
                                    long lastClear,
-                                   Map<String, Map<String, Object>> logAnswers)
+                                   Map<String, Map<String, Object>> logAnswers,
+                                   Map<String, Map<String, Object>> logDownloadAnswers)
             throws GeneralException {
         String name = statusName(host);
         Custom st = ctx.getObjectByName(Custom.class, name);
@@ -587,6 +689,9 @@ public final class LoggerConfigStore {
         st.put(S_LOG_ANSWERS, logAnswers == null
                 ? new LinkedHashMap<String, Map<String, Object>>()
                 : new LinkedHashMap<>(logAnswers));
+        st.put(S_LOG_DL_ANSWERS, logDownloadAnswers == null
+                ? new LinkedHashMap<String, Map<String, Object>>()
+                : new LinkedHashMap<>(logDownloadAnswers));
         ctx.saveObject(st);
         ctx.commitTransaction();
     }

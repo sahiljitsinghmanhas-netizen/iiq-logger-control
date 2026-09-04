@@ -432,7 +432,13 @@ of whoever set them.
 | Where | Button | What arrives |
 |---|---|---|
 | The host serving your page | **Download full log** | The whole file, streamed from disk in 64 KB pieces. Never read into memory, so size costs a slow download and nothing else. Set `fullDownloadMaxMb` to put a ceiling on it, after which the button says `Download last N MB` rather than claiming to be full. |
-| Any other host | **Download truncated log (last 2MB)** | The end of that host's file, `truncatedDownloadMb` worth. It answers on its next sync and the download starts by itself, then the request is stopped so those megabytes are not carried on every poll. |
+| Any other host | **Download truncated log (last 2MB)** | The end of that host's file, `truncatedDownloadMb` worth - always that much, whatever number of lines you happen to be displaying. It answers on its next sync and the download starts by itself, then the request is stopped so those megabytes are not carried on every poll. |
+
+A download is its own request, separate from your search. Pressing either
+download button does not disturb what is on screen, does not clear your search,
+and does not count against `maxLogSearches`. Before 2.48.0 a download borrowed
+the asker's search slot, which emptied their log viewer until the file arrived
+and tied the size of the file to the number of lines they were displaying.
 
 ### A window of its own
 

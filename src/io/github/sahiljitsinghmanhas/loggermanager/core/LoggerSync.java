@@ -40,6 +40,8 @@ public final class LoggerSync {
         public List<String> errors = new ArrayList<>();
         public long lastClear;
         public Map<String, Map<String, Object>> logAnswers = new LinkedHashMap<>();
+        /** Answers to download requests, which are not searches. */
+        public Map<String, Map<String, Object>> logDownloadAnswers = new LinkedHashMap<>();
     }
 
     public static synchronized SyncResult run(SailPointContext ctx, String trigger) {
@@ -156,12 +158,7 @@ public final class LoggerSync {
                 try {
                     String qmode = q.get(LoggerConfigStore.Q_MODE);
                     LogTail.Answer a;
-                    if ("download".equals(qmode)) {
-                        // Whole lines, nothing clipped: this one is going into a
-                        // file rather than onto a page.
-                        int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
-                        a = LogTail.tailBytes(Math.max(1, mb) * 1024);
-                    } else if ("tail".equals(qmode)) {
+                    if ("tail".equals(qmode)) {
                         a = LogTail.tailLines(LoggerConfigStore.asInt(
                                 q.get(LoggerConfigStore.Q_LINES), 40));
                     } else {
@@ -185,6 +182,40 @@ public final class LoggerSync {
             LOG.warn("[TurnOnLoggers] could not read the log requests on " + r.host + ": " + t);
         }
 
+        // Downloads, which are deliberately not searches. Someone asking for a
+        // file must not disturb what anyone has on screen - their own search
+        // least of all - so these are a separate request answered separately,
+        // and bounded by bytes rather than by however many lines the person
+        // happens to be displaying.
+        try {
+            Map<String, Map<String, String>> wants = LoggerConfigStore.activeDownloads(ctx);
+            List<String> files = HostFacts.logFilePaths();
+            String path = files.isEmpty() ? "" : files.get(0);
+            long answeredAt = System.currentTimeMillis();
+            int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
+
+            for (Map.Entry<String, Map<String, String>> e : wants.entrySet()) {
+                if (!LoggerConfigStore.queryTargets(e.getValue(), r.host)) continue;
+                Map<String, Object> answer = new LinkedHashMap<>();
+                try {
+                    LogTail.Answer a = LogTail.tailBytes(Math.max(1, mb) * 1024);
+                    answer.put(LoggerConfigStore.AN_MATCHES, new ArrayList<String>(a.lines));
+                    answer.put(LoggerConfigStore.AN_ERROR, a.error == null ? "" : a.error);
+                } catch (Throwable t) {
+                    LOG.warn("[TurnOnLoggers] log download failed on " + r.host
+                            + " for " + e.getKey() + ": " + t);
+                    answer.put(LoggerConfigStore.AN_MATCHES, new ArrayList<String>());
+                    answer.put(LoggerConfigStore.AN_ERROR, String.valueOf(t));
+                }
+                answer.put(LoggerConfigStore.AN_ANSWERED, String.valueOf(answeredAt));
+                answer.put(LoggerConfigStore.AN_PATH, path);
+                r.logDownloadAnswers.put(e.getKey(), answer);
+            }
+        } catch (Throwable t) {
+            LOG.warn("[TurnOnLoggers] could not read the download requests on "
+                    + r.host + ": " + t);
+        }
+
         writeStatusQuietly(ctx, r, trigger);
         return r;
     }
@@ -201,7 +232,7 @@ public final class LoggerSync {
     private static void writeStatusQuietly(SailPointContext ctx, SyncResult r, String trigger) {
         try {
             LoggerConfigStore.writeStatus(ctx, r.host, r.revision, trigger, r.applied, r.errors,
-                    r.lastClear, r.logAnswers);
+                    r.lastClear, r.logAnswers, r.logDownloadAnswers);
         } catch (Throwable t) {
             // Status is diagnostics. Failing to publish it must never undo a
             // successful apply.
