@@ -514,10 +514,18 @@ the next question every time you turn one on.</p>
   handled the request - the others will show nothing.</li>
 </ol>
 
-<p><strong>Reading it in its own window.</strong> <em>Open in a new window</em> puts the log
-viewer on its own, resizable, with nothing else on the page. Press it more than once and you get
-more than one window, which is how you compare two hosts, or the same host before and after a
-change, side by side. Each window polls independently.</p>
+<p><strong>Reading it in its own window.</strong> <em>Open in window</em>, beside each host, puts that host's log
+viewer on its own, resizable, with nothing else on the page. Open two and you can read two
+hosts side by side, or the same host before and after a change. Each window polls
+independently.</p>
+
+<figure>
+  <img src="img/20-log-popout.png" alt="The log viewer open in a window of its own, scoped to one host, with a wrap toggle and a highlight box above the output" style="width:100%;border:1px solid #cbd2d9;border-radius:4px"/>
+  <figcaption>A popped-out window, scoped to the host whose button opened it. Nothing else from the
+  page is here: a second set of controls that change shared state is how two windows end up
+  fighting over one override. Ctrl+F works, long lines can be wrapped, and typing in the highlight
+  box - or double-clicking a word in the log - marks every occurrence.</figcaption>
+</figure>
 
 <p><strong>Why the output is not always there.</strong> The lines each host found are by far the
 largest thing this page fetches - on a twenty-host cluster they measured ten times the rest of the

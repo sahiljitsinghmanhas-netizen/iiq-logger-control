@@ -442,6 +442,8 @@ two hosts or the same host before and after a change. `Ctrl+F` works because it
 is ordinary page text. That window also has a **wrap** toggle and a **highlight**
 box; double-click any word in the log to highlight every occurrence of it.
 
+![The log viewer in a window of its own](docs/screenshots/20-log-popout.png)
+
 ## Audit
 
 Every action writes an IIQ audit event under the action `LoggerManagerChange`:
