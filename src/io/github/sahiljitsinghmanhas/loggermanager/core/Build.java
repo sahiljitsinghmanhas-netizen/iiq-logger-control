@@ -26,7 +26,7 @@ package io.github.sahiljitsinghmanhas.loggermanager.core;
  */
 public final class Build {
 
-    public static final String VERSION = "2.51.0";
+    public static final String VERSION = "2.52.0";
 
     private Build() { }
 }

@@ -188,14 +188,21 @@ public final class LoggerSync {
         // and bounded by bytes rather than by however many lines the person
         // happens to be displaying.
         try {
-            Map<String, Map<String, String>> wants = LoggerConfigStore.activeDownloads(ctx);
+            Map<String, List<Map<String, String>>> wants = LoggerConfigStore.activeDownloads(ctx);
             List<String> files = HostFacts.logFilePaths();
             String path = files.isEmpty() ? "" : files.get(0);
             long answeredAt = System.currentTimeMillis();
             int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
 
-            for (Map.Entry<String, Map<String, String>> e : wants.entrySet()) {
-                if (!LoggerConfigStore.queryTargets(e.getValue(), r.host)) continue;
+            for (Map.Entry<String, List<Map<String, String>>> e : wants.entrySet()) {
+                // At most one of a person's requests names this host, and this
+                // host answers only that one - which is why the answer can
+                // still be filed under their name alone.
+                boolean forMe = false;
+                for (Map<String, String> q : e.getValue()) {
+                    if (LoggerConfigStore.queryTargets(q, r.host)) { forMe = true; break; }
+                }
+                if (!forMe) continue;
                 Map<String, Object> answer = new LinkedHashMap<>();
                 try {
                     LogTail.Answer a = LogTail.tailBytes(Math.max(1, mb) * 1024);

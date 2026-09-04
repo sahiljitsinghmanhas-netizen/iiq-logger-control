@@ -433,9 +433,16 @@ public final class LoggerConfigStore {
     public static final String S_LOG_DL_ANSWERS = "logDownloadAnswers";
 
     /**
-     * Ask one host for the end of its log. Passing a blank host clears it,
-     * which is what the page does once the file has been saved - those
-     * megabytes should not be carried on every poll afterwards.
+     * Ask a host for the end of its log, as a file.
+     *
+     * Filed per host rather than per person. It used to be one request per
+     * person, which meant asking a second host silently replaced the first:
+     * press three download buttons and the first two went back to looking
+     * untouched while their files never arrived. Wanting several at once is
+     * not unusual - it is what somebody comparing hosts during an incident
+     * does - so several is what this stores.
+     *
+     * A blank host clears everything this person has outstanding.
      */
     @SuppressWarnings("unchecked")
     public static void setLogDownload(SailPointContext ctx, String user, String host,
@@ -452,20 +459,31 @@ public final class LoggerConfigStore {
                 ? new LinkedHashMap<>((Map<String, Object>) raw)
                 : new LinkedHashMap<String, Object>();
 
-        // Drop anyone else's stale request while we are here, so a person who
-        // closed the tab mid-download does not leave a host reading its log
-        // every tick forever.
+        // Drop anything that has aged out, anyone's, while we are here - a
+        // person who closed the tab mid-download must not leave a host reading
+        // its log every tick for ever.
         long cut = System.currentTimeMillis() - LOG_QUERY_TTL_MS;
-        for (String k : new ArrayList<>(all.keySet())) {
-            Object v = all.get(k);
-            long at = (v instanceof Map)
-                    ? asLong(String.valueOf(((Map<?, ?>) v).get(Q_AT)), 0L) : 0L;
-            if (at <= cut) all.remove(k);
+        for (String u : new ArrayList<>(all.keySet())) {
+            Object v = all.get(u);
+            if (!(v instanceof Map)) { all.remove(u); continue; }
+            Map<String, Object> byHost = new LinkedHashMap<>((Map<String, Object>) v);
+            for (String hk : new ArrayList<>(byHost.keySet())) {
+                Object q = byHost.get(hk);
+                long at = (q instanceof Map)
+                        ? asLong(String.valueOf(((Map<?, ?>) q).get(Q_AT)), 0L) : 0L;
+                if (at <= cut) byHost.remove(hk);
+            }
+            if (byHost.isEmpty()) all.remove(u);
+            else all.put(u, byHost);
         }
 
         if (host == null || host.trim().isEmpty()) {
             all.remove(user);
         } else {
+            Object mine = all.get(user);
+            Map<String, Object> byHost = (mine instanceof Map)
+                    ? new LinkedHashMap<>((Map<String, Object>) mine)
+                    : new LinkedHashMap<String, Object>();
             Map<String, String> q = new LinkedHashMap<>();
             q.put(Q_TEXT, "");
             q.put(Q_MODE, "download");
@@ -473,8 +491,30 @@ public final class LoggerConfigStore {
             q.put(Q_HOST, host.trim());
             q.put(Q_CLIENT, client == null ? "" : client.trim());
             q.put(Q_AT, String.valueOf(System.currentTimeMillis()));
-            all.put(user, q);
+            byHost.put(host.trim(), q);
+            all.put(user, byHost);
         }
+        cfg.put(A_LOG_DOWNLOADS, all);
+        ctx.saveObject(cfg);
+        ctx.commitTransaction();
+    }
+
+    /** Finish one download without disturbing any others this person has. */
+    @SuppressWarnings("unchecked")
+    public static void clearLogDownload(SailPointContext ctx, String user, String host)
+            throws GeneralException {
+        if (user == null || host == null || host.trim().isEmpty()) return;
+        Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
+        if (cfg == null) return;
+        Object raw = cfg.get(A_LOG_DOWNLOADS);
+        if (!(raw instanceof Map)) return;
+        Map<String, Object> all = new LinkedHashMap<>((Map<String, Object>) raw);
+        Object mine = all.get(user);
+        if (!(mine instanceof Map)) return;
+        Map<String, Object> byHost = new LinkedHashMap<>((Map<String, Object>) mine);
+        if (byHost.remove(host.trim()) == null) return;
+        if (byHost.isEmpty()) all.remove(user);
+        else all.put(user, byHost);
         cfg.put(A_LOG_DOWNLOADS, all);
         ctx.saveObject(cfg);
         ctx.commitTransaction();
@@ -482,9 +522,9 @@ public final class LoggerConfigStore {
 
     /** Every download request that has not aged out, keyed by user. */
     @SuppressWarnings("unchecked")
-    public static Map<String, Map<String, String>> activeDownloads(SailPointContext ctx)
+    public static Map<String, List<Map<String, String>>> activeDownloads(SailPointContext ctx)
             throws GeneralException {
-        Map<String, Map<String, String>> out = new LinkedHashMap<>();
+        Map<String, List<Map<String, String>>> out = new LinkedHashMap<>();
         Custom cfg = ctx.getObjectByName(Custom.class, CONFIG_NAME);
         if (cfg == null) return out;
         Object raw = cfg.get(A_LOG_DOWNLOADS);
@@ -492,22 +532,29 @@ public final class LoggerConfigStore {
         long now = System.currentTimeMillis();
         for (Map.Entry<?, ?> e : ((Map<?, ?>) raw).entrySet()) {
             if (!(e.getValue() instanceof Map)) continue;
-            Map<String, String> q = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> f : ((Map<?, ?>) e.getValue()).entrySet()) {
-                q.put(String.valueOf(f.getKey()), f.getValue() == null ? "" : String.valueOf(f.getValue()));
+            List<Map<String, String>> mine = new ArrayList<>();
+            for (Map.Entry<?, ?> h : ((Map<?, ?>) e.getValue()).entrySet()) {
+                if (!(h.getValue() instanceof Map)) continue;
+                Map<String, String> q = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> f : ((Map<?, ?>) h.getValue()).entrySet()) {
+                    q.put(String.valueOf(f.getKey()),
+                          f.getValue() == null ? "" : String.valueOf(f.getValue()));
+                }
+                long at = asLong(q.get(Q_AT), 0L);
+                if (at <= 0 || (now - at) > LOG_QUERY_TTL_MS) continue;
+                mine.add(q);
             }
-            long at = asLong(q.get(Q_AT), 0L);
-            if (at <= 0 || (now - at) > LOG_QUERY_TTL_MS) continue;
-            out.put(String.valueOf(e.getKey()), q);
+            if (!mine.isEmpty()) out.put(String.valueOf(e.getKey()), mine);
         }
         return out;
     }
 
-    /** One user's live download request, or null. */
-    public static Map<String, String> downloadFor(SailPointContext ctx, String user)
+    /** Everything one person currently has on order, newest last. */
+    public static List<Map<String, String>> downloadsFor(SailPointContext ctx, String user)
             throws GeneralException {
-        if (user == null) return null;
-        return activeDownloads(ctx).get(user);
+        if (user == null) return new ArrayList<>();
+        List<Map<String, String>> mine = activeDownloads(ctx).get(user);
+        return mine == null ? new ArrayList<Map<String, String>>() : mine;
     }
 
     /** One user's live query, or null. */

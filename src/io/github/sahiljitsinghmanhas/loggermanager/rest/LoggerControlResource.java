@@ -1028,6 +1028,15 @@ public class LoggerControlResource extends BasePluginResource {
                         "Reading log files is switched off in the plugin settings.");
             }
             String host = str(body, "host");
+            String only = str(body, "only");
+            if ((host == null || host.trim().isEmpty())
+                    && only != null && !only.trim().isEmpty()) {
+                // Finish one download and leave the person's others alone. A
+                // blank host used to mean "clear everything", which is right
+                // for a tidy-up and quite wrong for finishing one of several.
+                LoggerConfigStore.clearLogDownload(ctx, user.getName(), only);
+                return json(Response.Status.OK, buildState(user));
+            }
             LoggerConfigStore.setLogDownload(ctx, user.getName(), host, str(body, "client"));
             if (host != null && !host.trim().isEmpty()) {
                 int mb = PluginSettings.getInt(ctx, PluginSettings.S_DL_TRUNC_MB, 2);
@@ -1263,43 +1272,38 @@ public class LoggerControlResource extends BasePluginResource {
             }
             out.put("logHost", LoggerConfigStore.logHost(ctx));
 
-            // A download in flight, and its lines once they land. Only ever
-            // this caller's own, and only the one host that was asked - the
-            // lines are megabytes, so they travel exactly once and the page
-            // clears the request as soon as it has saved them.
-            Map<String, Object> dl = new LinkedHashMap<>();
-            Map<String, String> want = LoggerConfigStore.downloadFor(ctx, user.getName());
-            if (want != null) {
+            // Everything this caller has on order, and the lines for any that
+            // have landed. Only ever their own. A person can have several
+            // going at once - which is what somebody comparing hosts during an
+            // incident actually does - so this is a list, and each one carries
+            // enough for the page to decide whether it is the window that
+            // should be saving it.
+            List<Map<String, Object>> dls = new ArrayList<>();
+            Map<String, Map<String, Object>> statuses2 = LoggerConfigStore.allStatuses(ctx);
+            for (Map<String, String> want : LoggerConfigStore.downloadsFor(ctx, user.getName())) {
+                Map<String, Object> dl = new LinkedHashMap<>();
                 String target = String.valueOf(want.get(LoggerConfigStore.Q_HOST));
                 dl.put("host", target);
                 dl.put("askedAt", String.valueOf(want.get(LoggerConfigStore.Q_AT)));
                 dl.put("client", String.valueOf(want.get(LoggerConfigStore.Q_CLIENT)));
-                Map<String, Object> st = LoggerConfigStore.allStatuses(ctx).get(target);
-                Map<String, Object> ans = answerIn(st, LoggerConfigStore.S_LOG_DL_ANSWERS,
+
+                Map<String, Object> hst = statuses2.get(target);
+                Map<String, Object> ans = answerIn(hst, LoggerConfigStore.S_LOG_DL_ANSWERS,
                         user.getName());
                 Object lines = ans == null ? null : ans.get(LoggerConfigStore.AN_MATCHES);
                 dl.put("ready", lines instanceof List && !((List<?>) lines).isEmpty());
                 dl.put("lines", lines);
                 dl.put("error", ans == null ? "" : ans.get(LoggerConfigStore.AN_ERROR));
-
-                // When the host answered, which is not the same question as
-                // whether it sent anything. A host with an empty log answers
-                // with no lines, and without this the page cannot tell that
-                // apart from a host that has not got round to it yet - so it
-                // waited for a file that had already been decided on.
                 dl.put("answeredAt", ans == null ? "0"
                         : String.valueOf(LoggerConfigStore.asLong(
                                 String.valueOf(ans.get(LoggerConfigStore.AN_ANSWERED)), 0L)));
-
-                // And whether the host is in a position to answer at all. One
-                // that is not running the sync service never will, and saying
-                // so beats counting seconds at somebody.
-                long hostSync = st == null ? 0L : LoggerConfigStore.asLong(
-                        String.valueOf(st.get(LoggerConfigStore.S_LAST_SYNC)), 0L);
+                long hostSync = hst == null ? 0L : LoggerConfigStore.asLong(
+                        String.valueOf(hst.get(LoggerConfigStore.S_LAST_SYNC)), 0L);
                 dl.put("hostLastSync", String.valueOf(hostSync));
-                dl.put("hostReporting", st != null);
+                dl.put("hostReporting", hst != null);
+                dls.add(dl);
             }
-            out.put("download", dl);
+            out.put("downloads", dls);
         } catch (Throwable t) {
             out.put("logQuery", "");
             out.put("logQueryAt", "0");

@@ -201,11 +201,41 @@
      * download that had been sitting there ready was never noticed. Reloading
      * cleared the flag, which is what made a refresh look like a fix.
      */
+    /**
+     * Where each log block was scrolled to, so a repaint can put it back.
+     *
+     * The page rebuilds itself on a timer, and rebuilding a log block resets it
+     * to the top. On a two thousand line log that means being thrown back to
+     * the beginning every few seconds while trying to read the middle, which
+     * is the single most irritating thing a page like this can do.
+     */
+    function logScrollPositions() {
+        var out = {};
+        var pres = document.querySelectorAll('#tol-sec-logs pre.tol-log');
+        for (var i = 0; i < pres.length; i++) {
+            if (pres[i].scrollTop > 0) out[pres[i].getAttribute('data-host') || i] = pres[i].scrollTop;
+        }
+        return out;
+    }
+
+    function restoreLogScroll(saved) {
+        if (!saved) return;
+        var pres = document.querySelectorAll('#tol-sec-logs pre.tol-log');
+        for (var i = 0; i < pres.length; i++) {
+            var key = pres[i].getAttribute('data-host') || i;
+            if (saved[key]) pres[i].scrollTop = saved[key];
+        }
+    }
+
     function load(quiet, noPaint) {
         return api('GET', '/state').then(function (data) {
             state = data;
             checkPendingDownload();
-            if (!noPaint) render();
+            if (!noPaint) {
+                var where = logScrollPositions();
+                render();
+                restoreLogScroll(where);
+            }
             if (!quiet) say(null);
         }).catch(function (e) {
             say(e.message, 'error');
@@ -2244,13 +2274,52 @@
      * poor trade.
      */
     var pollingFast = false;
+
+    /**
+     * The fast tick while a download is outstanding.
+     *
+     * Deliberately does not repaint. Repainting rebuilds the log block, which
+     * throws away where you had scrolled to and interrupts whatever you were
+     * doing - and at one and a half seconds it does that constantly: clearing
+     * the search box became a race, and scrolling through a log jumped you
+     * somewhere else before you could read it. Nothing on screen needs
+     * rebuilding to notice that a host has answered; only the waiting counter
+     * changes, and that is one string, so it is written in place.
+     */
+    function fastTick() {
+        retimePoll();
+        if (!(state && state.downloads && state.downloads.length)) return;
+        load(true, true).then(tickWaitingLabels);
+    }
+
+    /**
+     * Update just the "Waiting for ... 24s" text, without touching anything
+     * else. A whole-page render to move one number is what made the page feel
+     * like it was fighting the person using it.
+     */
+    function tickWaitingLabels() {
+        var list = (state && state.downloads) || [];
+        if (!list.length) return;
+        var byHost = {};
+        for (var i = 0; i < list.length; i++) byHost[list[i].host] = list[i];
+        var btns = document.querySelectorAll('#tol-sec-logs button');
+        for (var k = 0; k < btns.length; k++) {
+            var m = /^Waiting for (.+?)\.\.\./.exec(btns[k].textContent);
+            if (!m) continue;
+            var d = byHost[m[1]];
+            if (!d) continue;
+            var secs = Math.max(0, Math.round((Date.now() - Number(d.askedAt || 0)) / 1000));
+            btns[k].textContent = 'Waiting for ' + m[1] + '... ' + secs + 's';
+        }
+    }
+
     function pollTick() {
         retimePoll();
 
         // A hidden tab is not worth polling - except while a file is on its
         // way, because coming back to a tab that quietly gave up on the
         // download you asked for is the same complaint in a different shape.
-        var awaited = !!(state && state.download && state.download.host);
+        var awaited = !!(state && state.downloads && state.downloads.length);
         if (document.hidden && !awaited) return;
 
         // Typing means do not repaint - it does NOT mean do not look. The
@@ -2259,12 +2328,13 @@
         load(true, formTouched);
     }
     function retimePoll() {
-        var waiting = !!(state && state.download && state.download.host);
+        var waiting = !!(state && state.downloads && state.downloads.length);
         if (waiting === pollingFast) return;
         pollingFast = waiting;
         if (!pollTimer) return;
         window.clearInterval(pollTimer);
-        pollTimer = window.setInterval(pollTick, waiting ? POLL_FAST_MS : POLL_MS);
+        pollTimer = window.setInterval(waiting ? fastTick : pollTick,
+                                       waiting ? POLL_FAST_MS : POLL_MS);
     }
 
     /** One host's row out of the current state, or null. */
@@ -2292,93 +2362,148 @@
      * server confirming the request is cleared, which is a poll or two wide
      * and would otherwise save the same file twice.
      */
-    var saving = false;
+    /**
+     * How long to leave an answered download for the window that asked.
+     *
+     * A download is saved by the window that asked for it, so that opening a
+     * second window does not download a log nobody just asked for. But a window
+     * can go away - most often by being reloaded, which gives the page a new
+     * identity - and the file it asked for would then sit there answered and
+     * unclaimed for ever. Nobody watching a browser knows any of this; they
+     * pressed a button and no file arrived, and pressing refresh made it worse
+     * rather than better.
+     *
+     * So ownership lapses. If the window that asked has not taken its answer
+     * within this long, any window may. Long enough that a live window always
+     * wins - it polls every 1.5s while waiting - and short enough that a
+     * reload feels like it fixed things.
+     */
+    var ADOPT_AFTER_MS = 12000;
+
+    /** Downloads this window is part way through saving, by host. */
+    var saving = {};
+
+    /**
+     * Files waiting to be handed to the browser, one at a time.
+     *
+     * Browsers throttle a page that starts several downloads at once - Chrome
+     * quietly drops all but the first unless the person allows it. Asking three
+     * hosts for their logs and getting one file is not something anybody would
+     * connect to that, so the saves are spaced instead: the answers still
+     * arrive together, they are just handed over one after another.
+     */
+    var saveQueue = [];
+    var draining = false;
+
+    function queueSave(host, lines) {
+        saveQueue.push({ host: host, lines: lines });
+        if (draining) return;
+        draining = true;
+        (function next() {
+            var item = saveQueue.shift();
+            if (!item) { draining = false; return; }
+            saveLines(item.host, item.lines);
+            say(item.host + ' sent ' + fmtBytes(byteLength(item.lines))
+                + (saveQueue.length ? '. Saving, ' + saveQueue.length + ' to go.' : '. Saving.'),
+                'info');
+            window.setTimeout(next, 1200);
+        })();
+    }
+
     function checkPendingDownload() {
-        var dl = state && state.download;
-        if (!dl || !dl.host || saving) return;
+        var list = (state && state.downloads) || [];
+        for (var i = 0; i < list.length; i++) checkOneDownload(list[i]);
+    }
 
-        // Somebody else's window asked for this. Leave it entirely alone -
-        // acting on it is how one click became a file in every open window,
-        // and how opening a window downloaded a log nobody had just asked for.
-        if (dl.client && dl.client !== CLIENT) return;
+    function finishDownload(host) {
+        api('POST', '/logdownload', { host: '', only: host, client: CLIENT })
+            .then(function () { delete saving[host]; })
+            ['catch'](function () { delete saving[host]; });
+    }
 
-        if (dl.error) {
-            pendingDownload = null;
-            say(dl.host + ' could not read its log: ' + dl.error, 'error');
-            api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
-            return;
-        }
-        var lines = dl.lines || [];
+    function checkOneDownload(dl) {
+        if (!dl || !dl.host || saving[dl.host]) return;
+
         var asked = Number(dl.askedAt || 0);
         var answered = Number(dl.answeredAt || 0);
-
-        // Whether the host has answered, which is a different question from
-        // whether it sent anything. This used to be inferred from having lines,
-        // so a host with an empty log - one that had just rotated, most often -
-        // answered with nothing and the page waited for it forever.
         var hasAnswered = answered > 0 && answered >= asked;
 
+        // Somebody else's window asked for this one. Leave it alone while they
+        // are still there to take it - acting on it is how one click became a
+        // file in every open window. Once their claim has lapsed it is fair
+        // game, which is what makes a reload work again.
+        var mine = !dl.client || dl.client === CLIENT;
+        if (!mine) {
+            if (!hasAnswered) return;
+            if (Date.now() - answered < ADOPT_AFTER_MS) return;
+        }
+
+        if (dl.error) {
+            saving[dl.host] = true;
+            say(dl.host + ' could not read its log: ' + dl.error, 'error');
+            finishDownload(dl.host);
+            return;
+        }
+
         if (!hasAnswered) {
-            // Nothing yet. Say why if the host is in no position to answer,
-            // rather than counting seconds at someone indefinitely.
+            if (!mine) return;
             var waited = Date.now() - asked;
 
-            // The one worth catching immediately rather than after three
-            // minutes, because it will never resolve on its own: this host is
-            // running an older build of the plugin than the one installed, and
-            // that older build has no idea what a download request is. It goes
-            // on answering searches perfectly well, which is what makes it so
-            // confusing - the host looks healthy and simply ignores this.
+            // Worth catching at once rather than after three minutes, because
+            // it will never resolve on its own.
             var target = hostByName(dl.host);
             if (target && target.buildStale) {
+                saving[dl.host] = true;
                 say(dl.host + ' is running plugin ' + (target.build || 'a build too old to say which')
                     + ' in its sync service, but ' + (state.build || 'a newer version')
-                    + ' is installed. IdentityIQ builds a service once and keeps it, so that '
-                    + 'host will go on running the older code - and ignoring downloads, which '
-                    + 'it does not know about - until its JVM is restarted. Searches still '
-                    + 'work there, which is why it looks fine. Restart IdentityIQ on '
-                    + dl.host + ', or download from a host that has been restarted since the '
-                    + 'upgrade.', 'error');
-                api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
-                pendingDownload = null;
+                    + ' is installed. IdentityIQ builds a service once and keeps it, so that host '
+                    + 'will go on running the older code - and ignoring downloads, which it does '
+                    + 'not know about - until its JVM is restarted. Searches still work there, '
+                    + 'which is why it looks fine. Restart IdentityIQ on ' + dl.host + '.', 'error');
+                finishDownload(dl.host);
                 return;
             }
-
             if (waited > GIVE_UP_MS) {
-                var why = dl.hostReporting === false
-                    ? dl.host + ' is not reporting to this page at all, so it cannot answer. It '
-                      + 'is either down or not running the Logger Manager sync service - check '
-                      + 'Host Configuration for an excludedServices entry naming '
-                      + 'TurnOnLoggersSync.'
+                saving[dl.host] = true;
+                say(dl.hostReporting === false
+                    ? dl.host + ' is not reporting to this page at all, so it cannot answer - it '
+                      + 'is either down or not running the Logger Manager sync service.'
                     : dl.host + ' has not answered in ' + Math.round(waited / 1000) + ' seconds. '
-                      + 'Its last sync was ' + fmtAgo(dl.hostLastSync) + ', so it is '
-                      + 'either syncing very slowly or has stopped. Giving up on this download - '
-                      + 'nothing else was affected.';
-                say(why, 'error');
-                api('POST', '/logdownload', { host: '', client: CLIENT })['catch'](function () {});
-                pendingDownload = null;
+                      + 'Its last sync was ' + fmtAgo(dl.hostLastSync) + '. Giving up on this one '
+                      + '- nothing else was affected.', 'error');
+                finishDownload(dl.host);
             }
             return;
         }
 
-        saving = true;
-        pendingDownload = null;
+        var lines = dl.lines || [];
+        saving[dl.host] = true;
 
         if (!lines.length) {
-            // Answered, with nothing. That is a result, not a wait.
             say(dl.host + ' read its log and there was nothing in it to send - most often a log '
                 + 'that has just been rotated. Nothing was downloaded.', 'info');
         } else {
-            saveLines(dl.host, lines);
-            say(dl.host + ' sent ' + fmtBytes(byteLength(lines)) + '. Saving.', 'info');
+            queueSave(dl.host, lines);
         }
-
-        // Clear the request, not a search: those megabytes would otherwise ride
-        // along on every poll from here on.
-        api('POST', '/logdownload', { host: '', client: CLIENT })
-            .then(function () { saving = false; })
-            ['catch'](function () { saving = false; });
+        finishDownload(dl.host);
     }
+
+    /** One host's row out of the current state, or null. */
+    function hostByName(name) {
+        var hosts = (state && state.hosts) || [];
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].name === name) return hosts[i];
+        }
+        return null;
+    }
+
+    /** Bytes a set of lines will occupy once written out, newlines included. */
+    function byteLength(lines) {
+        var n = 0;
+        for (var i = 0; i < lines.length; i++) n += lines[i].length + 1;
+        return n;
+    }
+
 
     /**
      * Mark every occurrence of the highlight text in the log blocks.
@@ -2775,13 +2900,15 @@
                 // While this host owes us a file, the button stops offering to
                 // ask again and starts reporting. Silence for up to a minute
                 // reads as a broken button; a count that moves reads as a wait.
-                var owed = state.download && state.download.host === h.name
-                        && (!state.download.client || state.download.client === CLIENT);
-                var waited = 0;
-                if (owed) {
-                    waited = Math.max(0, Math.round(
-                        (Date.now() - Number(state.download.askedAt || 0)) / 1000));
-                }
+                // Shown for any of this person's outstanding downloads, not
+                // only this window's: they asked for it, so they should see it
+                // is still coming wherever they happen to be looking from.
+                var owed = null;
+                ((state.downloads) || []).forEach(function (d) {
+                    if (d.host === h.name) owed = d;
+                });
+                var waited = owed ? Math.max(0, Math.round(
+                        (Date.now() - Number(owed.askedAt || 0)) / 1000)) : 0;
                 var trunc = el('button', 'tol-btn tol-btn-small',
                     owed ? 'Waiting for ' + h.name + '... ' + waited + 's'
                          : 'Download truncated log (last ' + truncMb + 'MB)');
@@ -2840,6 +2967,10 @@
                     pre.appendChild(document.createTextNode(l + '\n'));
                 });
             }
+            // Tagged so a repaint can put the scroll position back on the
+            // right block - hosts come and go between renders as they answer,
+            // so an index would restore the wrong one.
+            pre.setAttribute('data-host', h.name);
             box.appendChild(pre);
         });
 
