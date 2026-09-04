@@ -26,6 +26,15 @@
      * running while somebody is actually waiting for a file.
      */
     var POLL_FAST_MS = 1500;
+    /**
+     * How long to wait for a host before saying something is wrong.
+     *
+     * A host answers on its own sync, once a minute by default, and a slow one
+     * can take longer. Three minutes is well past any healthy interval, so past
+     * it the honest thing is to stop counting and name the likely reason rather
+     * than let a number climb until somebody gives up on the tool.
+     */
+    var GIVE_UP_MS = 180000;
 
     var state = null;
     var banner = null;
@@ -1489,6 +1498,36 @@
             'everywhere. Every host is in the table to begin with; click one to drop it, click it ' +
             'again to bring it back.'));
 
+        // Hosts running an older build of the plugin than the one installed.
+        //
+        // Worth a banner rather than a column, because it is invisible from
+        // every other angle: IdentityIQ builds a service executor once and
+        // holds it, so upgrading the plugin does not reach a host that has not
+        // restarted since. That host keeps answering everything the older
+        // version knew how to answer and silently ignores anything the release
+        // added, which looks like an intermittent fault rather than an old
+        // build. It has to be named or nobody will ever guess.
+        var behind = [];
+        (state.hosts || []).forEach(function (h) {
+            if (h.buildStale) behind.push(h.name + ' ('
+                + (h.build || 'too old to say which') + ')');
+        });
+        if (behind.length) {
+            var one2 = behind.length === 1;
+            var vb = el('div', 'tol-banner tol-warn');
+            vb.appendChild(document.createTextNode(
+                (one2 ? 'One host is' : behind.length + ' hosts are')
+                + ' running an older build of this plugin than the '
+                + (state.build || 'installed') + ' that is installed: ' + behind.join(', ')
+                + '. IdentityIQ builds a service once and keeps the instance, so a plugin '
+                + 'upgrade does not reach a host until its JVM restarts. '
+                + (one2 ? 'That host' : 'Those hosts')
+                + ' will go on doing everything the older version could and quietly ignoring '
+                + 'anything newer - which is why nothing looks wrong. Restart IdentityIQ on '
+                + (one2 ? 'it' : 'them') + ' when convenient.'));
+            box.appendChild(vb);
+        }
+
         // Status records belonging to hosts IIQ no longer lists. They are not
         // hosts any more, so they are deliberately not rows in the table - but
         // saying nothing would strand plugin data in a database no screen can
@@ -2196,6 +2235,15 @@
         pollTimer = window.setInterval(pollTick, waiting ? POLL_FAST_MS : POLL_MS);
     }
 
+    /** One host's row out of the current state, or null. */
+    function hostByName(name) {
+        var hosts = (state && state.hosts) || [];
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].name === name) return hosts[i];
+        }
+        return null;
+    }
+
     /** Bytes a set of lines will occupy once written out, newlines included. */
     function byteLength(lines) {
         var n = 0;
@@ -2224,12 +2272,70 @@
             return;
         }
         var lines = dl.lines || [];
-        if (!lines.length) return;                 // still reading
+        var asked = Number(dl.askedAt || 0);
+        var answered = Number(dl.answeredAt || 0);
+
+        // Whether the host has answered, which is a different question from
+        // whether it sent anything. This used to be inferred from having lines,
+        // so a host with an empty log - one that had just rotated, most often -
+        // answered with nothing and the page waited for it forever.
+        var hasAnswered = answered > 0 && answered >= asked;
+
+        if (!hasAnswered) {
+            // Nothing yet. Say why if the host is in no position to answer,
+            // rather than counting seconds at someone indefinitely.
+            var waited = Date.now() - asked;
+
+            // The one worth catching immediately rather than after three
+            // minutes, because it will never resolve on its own: this host is
+            // running an older build of the plugin than the one installed, and
+            // that older build has no idea what a download request is. It goes
+            // on answering searches perfectly well, which is what makes it so
+            // confusing - the host looks healthy and simply ignores this.
+            var target = hostByName(dl.host);
+            if (target && target.buildStale) {
+                say(dl.host + ' is running plugin ' + (target.build || 'a build too old to say which')
+                    + ' in its sync service, but ' + (state.build || 'a newer version')
+                    + ' is installed. IdentityIQ builds a service once and keeps it, so that '
+                    + 'host will go on running the older code - and ignoring downloads, which '
+                    + 'it does not know about - until its JVM is restarted. Searches still '
+                    + 'work there, which is why it looks fine. Restart IdentityIQ on '
+                    + dl.host + ', or download from a host that has been restarted since the '
+                    + 'upgrade.', 'error');
+                api('POST', '/logdownload', { host: '' })['catch'](function () {});
+                pendingDownload = null;
+                return;
+            }
+
+            if (waited > GIVE_UP_MS) {
+                var why = dl.hostReporting === false
+                    ? dl.host + ' is not reporting to this page at all, so it cannot answer. It '
+                      + 'is either down or not running the Logger Manager sync service - check '
+                      + 'Host Configuration for an excludedServices entry naming '
+                      + 'TurnOnLoggersSync.'
+                    : dl.host + ' has not answered in ' + Math.round(waited / 1000) + ' seconds. '
+                      + 'Its last sync was ' + fmtAgo(dl.hostLastSync) + ', so it is '
+                      + 'either syncing very slowly or has stopped. Giving up on this download - '
+                      + 'nothing else was affected.';
+                say(why, 'error');
+                api('POST', '/logdownload', { host: '' })['catch'](function () {});
+                pendingDownload = null;
+            }
+            return;
+        }
 
         saving = true;
         pendingDownload = null;
-        saveLines(dl.host, lines);
-        say(dl.host + ' sent ' + fmtBytes(byteLength(lines)) + '. Saving.', 'info');
+
+        if (!lines.length) {
+            // Answered, with nothing. That is a result, not a wait.
+            say(dl.host + ' read its log and there was nothing in it to send - most often a log '
+                + 'that has just been rotated. Nothing was downloaded.', 'info');
+        } else {
+            saveLines(dl.host, lines);
+            say(dl.host + ' sent ' + fmtBytes(byteLength(lines)) + '. Saving.', 'info');
+        }
+
         // Clear the request, not a search: those megabytes would otherwise ride
         // along on every poll from here on.
         api('POST', '/logdownload', { host: '' })

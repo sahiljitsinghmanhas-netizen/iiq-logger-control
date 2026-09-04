@@ -35,6 +35,15 @@ if exist "%~dp0%ZIP_NAME%" del /Q "%~dp0%ZIP_NAME%"
 mkdir "%CLASSES_DIR%"
 mkdir "%LIB_DIR%"
 
+REM ---- Stamp the version into the code ----------------------------------
+REM Each host publishes the version its sync service is actually RUNNING, which
+REM on a cluster is not always the version installed. See tools\stamp-version.ps1.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\stamp-version.ps1" -Manifest "%~dp0manifest.xml" -BuildJava "%~dp0src\io\github\sahiljitsinghmanhas\loggermanager\core\Build.java"
+if errorlevel 1 (
+    echo ERROR: could not stamp the plugin version into Build.java
+    exit /b 1
+)
+
 REM ---- Collect sources --------------------------------------------------
 REM javac does not recurse into directories, so build an argument file.
 if exist "%OUT_DIR%\sources.txt" del /Q "%OUT_DIR%\sources.txt"

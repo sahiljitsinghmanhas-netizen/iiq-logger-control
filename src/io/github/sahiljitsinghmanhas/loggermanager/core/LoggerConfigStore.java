@@ -75,6 +75,8 @@ public final class LoggerConfigStore {
     public static final String S_FILE_PARSED = "fileParsed";
     /** user -> { matches, answeredAt, path, error }. */
     public static final String S_LOG_ANSWERS = "logAnswers";
+    /** The plugin version the code answering on this host was built from. */
+    public static final String S_BUILD = "build";
     /** Keys inside one answer. */
     public static final String AN_MATCHES  = "matches";
     public static final String AN_ANSWERED = "answeredAt";
@@ -686,6 +688,9 @@ public final class LoggerConfigStore {
         // One answer per user who has a live query, rather than one answer for
         // whoever searched most recently. Written whole each tick, so a query
         // that has ended takes its answer with it.
+        // Whoever is actually executing here, which after an upgrade is not
+        // necessarily the version on disk. See Build.
+        st.put(S_BUILD, Build.VERSION);
         st.put(S_LOG_ANSWERS, logAnswers == null
                 ? new LinkedHashMap<String, Map<String, Object>>()
                 : new LinkedHashMap<>(logAnswers));

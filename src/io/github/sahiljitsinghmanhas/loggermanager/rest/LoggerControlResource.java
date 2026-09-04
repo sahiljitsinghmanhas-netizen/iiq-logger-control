@@ -5,6 +5,7 @@ import io.github.sahiljitsinghmanhas.loggermanager.core.CollectionStore;
 import io.github.sahiljitsinghmanhas.loggermanager.core.LogTail;
 import io.github.sahiljitsinghmanhas.loggermanager.core.HostFacts;
 import io.github.sahiljitsinghmanhas.loggermanager.core.Log4jAgent;
+import io.github.sahiljitsinghmanhas.loggermanager.core.Build;
 import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerConfigStore;
 import io.github.sahiljitsinghmanhas.loggermanager.core.LoggerSync;
 import io.github.sahiljitsinghmanhas.loggermanager.core.PluginSettings;
@@ -1236,6 +1237,7 @@ public class LoggerControlResource extends BasePluginResource {
             out.put("collections", new ArrayList<Object>());
         }
         boolean tail = PluginSettings.getBool(ctx, PluginSettings.S_LOGTAIL, true);
+        out.put("build", Build.VERSION);
         out.put("logTailEnabled", tail);
         out.put("logFiles", tail ? LogTail.files() : new ArrayList<Object>());
         out.put("logTailKb", PluginSettings.getInt(ctx, PluginSettings.S_LOGTAIL_KB, 64));
@@ -1278,6 +1280,23 @@ public class LoggerControlResource extends BasePluginResource {
                 dl.put("ready", lines instanceof List && !((List<?>) lines).isEmpty());
                 dl.put("lines", lines);
                 dl.put("error", ans == null ? "" : ans.get(LoggerConfigStore.AN_ERROR));
+
+                // When the host answered, which is not the same question as
+                // whether it sent anything. A host with an empty log answers
+                // with no lines, and without this the page cannot tell that
+                // apart from a host that has not got round to it yet - so it
+                // waited for a file that had already been decided on.
+                dl.put("answeredAt", ans == null ? "0"
+                        : String.valueOf(LoggerConfigStore.asLong(
+                                String.valueOf(ans.get(LoggerConfigStore.AN_ANSWERED)), 0L)));
+
+                // And whether the host is in a position to answer at all. One
+                // that is not running the sync service never will, and saying
+                // so beats counting seconds at somebody.
+                long hostSync = st == null ? 0L : LoggerConfigStore.asLong(
+                        String.valueOf(st.get(LoggerConfigStore.S_LAST_SYNC)), 0L);
+                dl.put("hostLastSync", String.valueOf(hostSync));
+                dl.put("hostReporting", st != null);
             }
             out.put("download", dl);
         } catch (Throwable t) {
@@ -1411,6 +1430,23 @@ public class LoggerControlResource extends BasePluginResource {
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_TICK_ERROR_AT)), 0L)));
             h.put("lastClear", String.valueOf(
                     LoggerConfigStore.asLong(String.valueOf(st.get(LoggerConfigStore.S_LAST_CLEAR)), 0L)));
+            // What this host's sync service is running, against what is
+            // installed. They differ when a plugin has been upgraded and the
+            // host has not been restarted since - IdentityIQ holds the service
+            // instance it built, so the host quietly goes on running the older
+            // code and ignores anything the release added, while looking
+            // perfectly healthy. Naming it beats leaving somebody to work out
+            // why one host behaves differently from the rest.
+            //
+            // A host running code older than the release that added this field
+            // does not publish it at all - so treating "no version" as "fine"
+            // would hide exactly the hosts worth naming. A host that is syncing
+            // and still says nothing about its build is, by definition, running
+            // something older than the build that started saying it.
+            Object hostBuild = st.get(LoggerConfigStore.S_BUILD);
+            String hostBuildStr = hostBuild == null ? "" : String.valueOf(hostBuild).trim();
+            h.put("build", hostBuildStr);
+            h.put("buildStale", lastSync > 0 && !Build.VERSION.equals(hostBuildStr));
             h.put("fileParsed", !"false".equals(String.valueOf(st.get(LoggerConfigStore.S_FILE_PARSED))));
             h.put("reporting", true);
             h.put("stale", lastSync > 0 && (now - lastSync) > STALE_AFTER_MS);

@@ -68,6 +68,7 @@
     <li><a href="#fileclear">Clearing a file-declared logger</a></li>
     <li><a href="#collections">Saved Logger Collections</a></li>
     <li><a href="#logfile">Reading the log</a></li>
+    <li><a href="#upgrading">Upgrading on a cluster</a></li>
     <li><a href="#multiuser">More than one person at once</a></li>
     <li><a href="#history">History</a></li>
     <li><a href="#levels">Levels and expiry</a></li>
@@ -544,6 +545,23 @@ always show how many lines each host found, and the lines themselves are fetched
 running a search or a tail asks automatically, and if somebody else's search is still running,
 <em>Show output</em> fetches it. A popped-out window always asks, since reading output is the only
 reason it exists.</p>
+
+<h2 id="upgrading">Upgrading on a cluster<a class="top" href="#">top</a></h2>
+
+<p><strong>Restart IdentityIQ on every host after upgrading this plugin.</strong> IdentityIQ builds
+a service executor once and holds the instance, so replacing the plugin does not rebuild it - a host
+goes on running the code it started with until its JVM restarts.</p>
+
+<p>The symptom is confusing rather than obvious. The host serving your page covers for it, because
+the REST layer runs the current classes in process, so that host behaves correctly. Every other host
+keeps doing everything the older version could do and quietly ignores anything the release added,
+which looks like an intermittent fault rather than an old build. A truncated download that works
+from one host and never completes from another is exactly this.</p>
+
+<p>You do not have to remember it. From 2.49.2 each host publishes the version its sync service is
+actually running, and <em>Host Status</em> names any host that is behind, with the version it is on.
+A host running code from before that field existed is named too - saying nothing about its build is
+itself proof that it is older.</p>
 
 <h2 id="multiuser">More than one person at once<a class="top" href="#">top</a></h2>
 

@@ -409,6 +409,22 @@ second refusal now says so.
 sailpoint.api.Provisioner=DEBUG, sailpoint.connector=TRACE@the-host-name
 ```
 
+## Upgrading on a cluster
+
+**Restart IdentityIQ on every host after upgrading the plugin.**
+
+IdentityIQ builds a service executor once and holds the instance. Replacing the
+plugin does not rebuild it, so a host goes on running the code it started with
+until its JVM restarts. The host serving the page covers for this — its REST
+layer runs the current classes in-process — which is what makes the symptom so
+confusing: that host behaves correctly while the others quietly ignore anything
+the release added, and still answer everything the older version could.
+
+You do not have to remember this. From 2.49.2 each host publishes the version
+its sync service is actually running, and **Host Status** names any host that is
+behind, with the version it is on. A host that predates that field is named too
+— saying nothing about its build is itself proof it is older.
+
 ## Reading logs
 
 Every host reads its own log file and reports what it found. No host reads
