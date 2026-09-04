@@ -900,8 +900,14 @@ without disturbing who holds the right.</p>
 
   <dt>Full download limit (MB)</dt><dd>A ceiling on streaming the log of the host serving your
   page. Ships as 0, meaning no ceiling at all. Set a number and anything past it sends the last
-  that-many megabytes instead, with the button saying so. Either way the file streams in 64 KB
-  pieces and is never held in memory.</dd>
+  that-many megabytes instead, with the button saying so.
+  <br/><br/><strong>Leaving it at 0 is safe.</strong> IdentityIQ streams the file in 64 KB pieces
+  and never reads it into memory - measured across 297MB of back-to-back downloads, heap did not
+  move with the traffic, so a five gigabyte log costs the server one connection and 64 KB rather
+  than five gigabytes. The browser is the side that has a limit: past 512MB the page writes the
+  download straight to disk where the browser allows it (you will be asked where to save), and
+  where it does not, asks for the last 512MB instead and tells you it did. Either way nothing is
+  asked to hold a file it cannot hold. Set a number here to make that choice yourself.</dd>
 
   <dt>Take the host list from IIQ only</dt><dd>On by default. The Host Status table shows exactly
   the hosts IdentityIQ lists as <code>Server</code> objects, so retiring a host in IIQ retires it

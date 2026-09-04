@@ -15,6 +15,17 @@
     var CTX = (window.SailPoint && typeof window.SailPoint === 'object' && window.SailPoint.CONTEXT_PATH) || '/identityiq';
     var REST = CTX + '/plugin/rest/TurnOnLoggers';
     var POLL_MS = 10000;
+    /**
+     * How often to look while a download is outstanding.
+     *
+     * A host other than the one serving this page answers on its own sync,
+     * once a minute, and nothing can make that happen sooner - no host can
+     * reach into another to ask. But the answer then sat in the database until
+     * the next ordinary poll, adding up to ten more seconds of nothing
+     * happening on top of a wait that already felt long. This is only ever
+     * running while somebody is actually waiting for a file.
+     */
+    var POLL_FAST_MS = 1500;
 
     var state = null;
     var banner = null;
@@ -1992,9 +2003,66 @@
      * straight to disk. That is what the Full download limit setting is for on
      * a deployment whose logs run to gigabytes.
      */
+    /**
+     * How much of a file this page is willing to hold in memory at once.
+     *
+     * The server streams from disk and never holds the file, so its size costs
+     * IdentityIQ nothing. The browser is the constraint: a fetch that ends in
+     * blob() keeps the whole response, and a tab asked to keep several
+     * gigabytes does not fail politely, it dies. Half a gigabyte is generous
+     * for a log and well inside what a tab survives.
+     *
+     * This only applies when the file cannot be streamed straight to disk.
+     */
+    var MEM_LIMIT_BYTES = 512 * 1024 * 1024;
+
+    /** Whether this browser can write a response to disk as it arrives. */
+    function canStreamToDisk() {
+        return typeof window.showSaveFilePicker === 'function'
+            && window.isSecureContext === true;
+    }
+
     function downloadFullLog(host, button) {
-        var url = CTX + '/plugin/rest/TurnOnLoggers/logfile?host=' + encodeURIComponent(host);
         var label = button ? button.textContent : '';
+        var known = Number(state.thisHostLogBytes || 0);
+
+        // The file picker has to be opened from the click itself. Asking for it
+        // after the fetch resolves loses the user gesture the browser requires
+        // and it throws instead of opening, so the choice of where to save is
+        // made first and the request follows.
+        var handle = null;
+        var picking = Promise.resolve(null);
+        if (canStreamToDisk() && known > MEM_LIMIT_BYTES) {
+            try {
+                picking = window.showSaveFilePicker({
+                    suggestedName: host + '-sailpoint.log',
+                    types: [{ description: 'Log file', accept: { 'text/plain': ['.log'] } }]
+                }).then(function (h) { handle = h; return h; });
+            } catch (e) {
+                picking = Promise.resolve(null);
+            }
+        }
+
+        return picking.then(function () {
+            // Ask for less than the whole file only when it would otherwise have
+            // to be held in one piece. A file being written straight to disk has
+            // no such limit, and neither does one that already fits.
+            var askMb = 0;
+            if (!handle && known > MEM_LIMIT_BYTES) {
+                askMb = Math.floor(MEM_LIMIT_BYTES / (1024 * 1024));
+            }
+            return fetchLog(host, button, label, known, askMb, handle);
+        })['catch'](function (e) {
+            // Cancelling the save dialog is a decision, not a failure.
+            if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return;
+            if (button) { button.disabled = false; button.textContent = label; }
+            say('Could not download ' + host + '\u2019s log: ' + e.message, 'error');
+        });
+    }
+
+    function fetchLog(host, button, label, known, askMb, handle) {
+        var url = CTX + '/plugin/rest/TurnOnLoggers/logfile?host=' + encodeURIComponent(host)
+                + (askMb > 0 ? '&mb=' + askMb : '');
         if (button) { button.disabled = true; button.textContent = 'Fetching...'; }
 
         function done(msg, kind) {
@@ -2006,7 +2074,17 @@
         var t = xsrf();
         if (t) headers['X-XSRF-TOKEN'] = t;
 
-        fetch(url, { method: 'GET', credentials: 'same-origin', headers: headers })
+        if (askMb > 0) {
+            say('This log is ' + fmtBytes(known) + '. It cannot be written straight to disk in '
+                + 'this browser, so the whole file would have to be held in the tab - and a tab '
+                + 'asked to hold that much does not survive it. Sending the last ' + askMb
+                + 'MB instead, which is the part you want when you are looking at what just '
+                + 'happened. IdentityIQ is unaffected either way: it streams the file in pieces '
+                + 'and never holds it. Set Full download limit in the plugin settings to choose '
+                + 'the size yourself.', 'info');
+        }
+
+        return fetch(url, { method: 'GET', credentials: 'same-origin', headers: headers })
             .then(function (r) {
                 var type = r.headers.get('content-type') || '';
                 // The failure mode worth naming, because it looks like success:
@@ -2022,24 +2100,57 @@
                 if (total && button) {
                     button.textContent = 'Fetching ' + fmtBytes(total) + '...';
                 }
-                return r.blob();
+                if (handle && r.body) return streamToDisk(r, handle, total, button);
+                return r.blob().then(function (blob) { return saveBlob(blob, host); });
             })
-            .then(function (blob) {
-                var link = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = link;
-                a.download = host + '-sailpoint.log';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                // On a timer, not immediately: some browsers have not finished
-                // reading the blob by the time click() returns.
-                window.setTimeout(function () { URL.revokeObjectURL(link); }, 30000);
-                done(host + ' sent ' + fmtBytes(blob.size) + '. Saving.', 'info');
+            .then(function (n) {
+                done(host + ' sent ' + fmtBytes(n) + '. Saved.', 'info');
             })
             ['catch'](function (e) {
+                if (e && e.name === 'AbortError') { done(null); return; }
                 done('Could not download ' + host + '\u2019s log: ' + e.message, 'error');
             });
+    }
+
+    /**
+     * Write a response to disk as it arrives, holding one chunk at a time.
+     *
+     * This is what makes an unbounded Full download limit safe on a browser
+     * that supports it: a five gigabyte log costs the tab a 64 KB chunk rather
+     * than five gigabytes. Where it is not supported the caller asks the server
+     * for less instead.
+     */
+    function streamToDisk(response, handle, total, button) {
+        return handle.createWritable().then(function (writable) {
+            var reader = response.body.getReader();
+            var written = 0;
+            function pump() {
+                return reader.read().then(function (chunk) {
+                    if (chunk.done) return writable.close().then(function () { return written; });
+                    written += chunk.value.length;
+                    if (button && total) {
+                        button.textContent = Math.floor(written / total * 100) + '%';
+                    }
+                    return writable.write(chunk.value).then(pump);
+                });
+            }
+            return pump();
+        });
+    }
+
+    /** Hand a blob to the browser to save. */
+    function saveBlob(blob, host) {
+        var link = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = link;
+        a.download = host + '-sailpoint.log';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // On a timer, not immediately: some browsers have not finished reading
+        // the blob by the time click() returns.
+        window.setTimeout(function () { URL.revokeObjectURL(link); }, 30000);
+        return blob.size;
     }
 
     /**
@@ -2061,6 +2172,30 @@
      * sitting in that host's status record, and until the request ends it would
      * be sent again on every ten-second poll.
      */
+    /**
+     * Run the poll fast while a download is outstanding, and slowly otherwise.
+     *
+     * Restarting the interval rather than polling fast all the time: on a large
+     * cluster every poll is a state read, and doing that every second and a
+     * half all day for the sake of a download nobody has asked for would be a
+     * poor trade.
+     */
+    var pollingFast = false;
+    function pollTick() {
+        retimePoll();
+        // Do not yank the form out from under someone mid-type.
+        if (document.hidden || formTouched) return;
+        load(true);
+    }
+    function retimePoll() {
+        var waiting = !!(state && state.download && state.download.host);
+        if (waiting === pollingFast) return;
+        pollingFast = waiting;
+        if (!pollTimer) return;
+        window.clearInterval(pollTimer);
+        pollTimer = window.setInterval(pollTick, waiting ? POLL_FAST_MS : POLL_MS);
+    }
+
     /** Bytes a set of lines will occupy once written out, newlines included. */
     function byteLength(lines) {
         var n = 0;
@@ -2494,9 +2629,27 @@
                 })(h.name);
                 acts.appendChild(dl);
             } else {
+                // While this host owes us a file, the button stops offering to
+                // ask again and starts reporting. Silence for up to a minute
+                // reads as a broken button; a count that moves reads as a wait.
+                var owed = state.download && state.download.host === h.name;
+                var waited = 0;
+                if (owed) {
+                    waited = Math.max(0, Math.round(
+                        (Date.now() - Number(state.download.askedAt || 0)) / 1000));
+                }
                 var trunc = el('button', 'tol-btn tol-btn-small',
-                    'Download truncated log (last ' + truncMb + 'MB)');
-                trunc.title = 'The last ' + truncMb + 'MB of ' + h.name + '\u2019s log, not the whole '
+                    owed ? 'Waiting for ' + h.name + '... ' + waited + 's'
+                         : 'Download truncated log (last ' + truncMb + 'MB)');
+                if (owed) trunc.disabled = true;
+                trunc.title = owed
+                    ? h.name + ' is reading its log and will publish the result on its next '
+                      + 'sync, which is once a minute by default. Nothing can make that happen '
+                      + 'sooner - no host can reach into another to ask - but this page is now '
+                      + 'checking every second and a half, so the download starts the moment it '
+                      + 'lands. Shorten the interval on the TurnOnLoggersSync service definition '
+                      + 'if a minute is too long for your deployment.'
+                    : 'The last ' + truncMb + 'MB of ' + h.name + '\u2019s log, not the whole '
                     + 'file. No host can read another host\u2019s disk - that is what lets this work '
                     + 'across Windows, Linux and containers with nothing shared - so ' + h.name
                     + ' has to read its own file and publish the result through the database. '
@@ -2512,8 +2665,11 @@
                         api('POST', '/logdownload', { host: name })
                             .then(function () {
                                 say('Asking ' + name + ' for the last ' + truncMb + 'MB of its '
-                                    + 'log. It answers on its next sync - the download starts on '
-                                    + 'its own, and nothing here changes meanwhile.', 'info');
+                                    + 'log. It answers on its next sync, so this can take up to '
+                                    + 'a minute - the button shows how long it has been, and the '
+                                    + 'download starts on its own the moment the file lands. '
+                                    + 'Nothing here changes meanwhile, so carry on.', 'info');
+                                load(true);
                             })['catch'](function (e) {
                                 pendingDownload = null;
                                 say('Could not ask ' + name + ' for its log: ' + e.message, 'error');
@@ -2819,11 +2975,7 @@
         load().then(function () {
             if (!state) return;
             if (pollTimer) window.clearInterval(pollTimer);
-            pollTimer = window.setInterval(function () {
-                // Do not yank the form out from under someone mid-type.
-                if (document.hidden || formTouched) return;
-                load(true);
-            }, POLL_MS);
+            pollTimer = window.setInterval(pollTick, POLL_MS);
         });
     }
 

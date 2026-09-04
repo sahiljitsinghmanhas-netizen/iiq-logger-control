@@ -3,7 +3,7 @@
 
 <Plugin name="TurnOnLoggers"
         displayName="Logger Manager"
-        version="2.48.0"
+        version="2.49.0"
         minSystemVersion="8.3">
 
   <!--
@@ -174,7 +174,7 @@
                      dataType="int"
                      defaultValue="0"
                      label="Full download limit (MB)"
-                     helpText="A ceiling on what this page will stream from the host serving it. Ships as 0, meaning no ceiling: Download full log sends the whole file, however large. Set a number and anything past it sends the LAST that many megabytes instead, with the button saying so rather than quietly handing over part of a file. Either way the file is streamed in 64 KB pieces and never read into memory, so size costs the person a slow download rather than costing IdentityIQ its heap - a ceiling is about not starting a five gigabyte transfer by accident, not about safety. This does not affect other hosts: they cannot stream their own files at all and are governed by Truncated download size."/>
+                     helpText="A ceiling on what this page will stream from the host serving it. Ships as 0, meaning no ceiling: Download full log sends the whole file, however large. Set a number and anything past it sends the LAST that many megabytes instead, with the button saying so rather than quietly handing over part of a file. IdentityIQ streams the file in 64 KB pieces and never reads it into memory, so its size costs the server nothing - measured across 297MB of downloads, heap did not move with the traffic. The browser is the limit that matters: past 512MB the page either writes the download straight to disk, where the browser supports that, or asks for the last 512MB instead and says so, because a tab told to hold several gigabytes does not survive it. Setting a ceiling here makes that choice yourself rather than leaving it to the page. This does not affect other hosts: they cannot stream their own files at all and are governed by Truncated download size."/>
 
             <Setting name="permanentLoggers"
                      dataType="string"

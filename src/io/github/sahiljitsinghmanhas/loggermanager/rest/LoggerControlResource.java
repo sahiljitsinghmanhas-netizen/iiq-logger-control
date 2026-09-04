@@ -837,7 +837,8 @@ public class LoggerControlResource extends BasePluginResource {
     @GET
     @Path("logfile")
     public Response logFile(@QueryParam("host") @DefaultValue("") String host,
-                            @QueryParam("index") @DefaultValue("0") int index) {
+                            @QueryParam("index") @DefaultValue("0") int index,
+                            @QueryParam("mb") @DefaultValue("0") int askMb) {
         try {
             Identity user = requireUser();
             if (user == null) return error(Response.Status.UNAUTHORIZED, "Not authenticated.");
@@ -880,7 +881,18 @@ public class LoggerControlResource extends BasePluginResource {
             // button says so rather than the download quietly being partial.
             int capMb = PluginSettings.getInt(ctx, PluginSettings.S_DL_FULL_MB, 0);
             final long total = f.length();
-            final long cap = capMb <= 0 ? total : (long) capMb * 1024L * 1024L;
+            long cap = capMb <= 0 ? total : (long) capMb * 1024L * 1024L;
+
+            // The caller may ask for less. It does that when it cannot stream
+            // the response to disk and would otherwise have to hold the whole
+            // file in the tab - a browser asked to keep five gigabytes in
+            // memory does not fail politely. Only ever downwards: this cannot
+            // be used to get past the administrator's ceiling.
+            if (askMb > 0) {
+                long asked = (long) askMb * 1024L * 1024L;
+                if (asked < cap) cap = asked;
+            }
+
             final long from = total > cap ? total - cap : 0L;
             final long sending = total - from;
 
